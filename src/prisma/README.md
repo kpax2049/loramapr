@@ -1,3 +1,3 @@
 # Prisma
 
-This directory is reserved for the Prisma schema and client setup.
+Prisma service lives in this directory. The schema is located at `prisma/schema.prisma`.
