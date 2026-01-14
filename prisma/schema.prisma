@@ -14,6 +14,7 @@ model User {
 
   devices  Device[]
   sessions Session[]
+  apiKeys  ApiKey[]
 }
 
 model Device {
@@ -71,4 +72,21 @@ model Measurement {
 
   @@index([deviceId, capturedAt])
   @@index([sessionId, capturedAt])
+}
+
+model ApiKey {
+  id        String       @id @default(uuid()) @db.Uuid
+  keyHash   String
+  label     String?
+  scopes    ApiKeyScope[]
+  ownerId   String?      @db.Uuid
+  createdAt DateTime     @default(now())
+  revokedAt DateTime?
+
+  owner User? @relation(fields: [ownerId], references: [id])
+}
+
+enum ApiKeyScope {
+  INGEST
+  QUERY
 }
