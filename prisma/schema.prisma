@@ -28,6 +28,8 @@ model Device {
   owner        User?         @relation(fields: [ownerId], references: [id])
   sessions     Session[]
   measurements Measurement[]
+
+  @@index([deviceUid])
 }
 
 model Session {
@@ -42,6 +44,8 @@ model Session {
   device       Device        @relation(fields: [deviceId], references: [id])
   owner        User?          @relation(fields: [ownerId], references: [id])
   measurements Measurement[]
+
+  @@index([deviceId, startedAt])
 }
 
 model Measurement {
@@ -64,4 +68,7 @@ model Measurement {
 
   device  Device   @relation(fields: [deviceId], references: [id])
   session Session? @relation(fields: [sessionId], references: [id])
+
+  @@index([deviceId, capturedAt])
+  @@index([sessionId, capturedAt])
 }
