@@ -9,6 +9,43 @@ export type MeasurementIngestResult = {
   deviceIds: string[];
 };
 
+export type MeasurementQueryParams = {
+  deviceId?: string;
+  sessionId?: string;
+  from?: Date;
+  to?: Date;
+  bbox?: {
+    minLon: number;
+    minLat: number;
+    maxLon: number;
+    maxLat: number;
+  };
+  limit: number;
+};
+
+export type MeasurementQueryResult = {
+  count: number;
+  limit: number;
+  items: Array<{
+    id: string;
+    deviceId: string;
+    sessionId: string | null;
+    capturedAt: Date;
+    lat: number;
+    lon: number;
+    alt: number | null;
+    hdop: number | null;
+    rssi: number | null;
+    snr: number | null;
+    sf: number | null;
+    bw: number | null;
+    freq: number | null;
+    gatewayId: string | null;
+    payloadRaw: string | null;
+    ingestedAt: Date;
+  }>;
+};
+
 type PreparedMeasurement = MeasurementIngestDto & { capturedAtDate: Date };
 
 @Injectable()
@@ -102,5 +139,44 @@ export class MeasurementsService {
         deviceIds
       };
     });
+  }
+
+  async query(params: MeasurementQueryParams): Promise<MeasurementQueryResult> {
+    const where: Record<string, unknown> = {};
+
+    if (params.deviceId) {
+      where.deviceId = params.deviceId;
+    }
+    if (params.sessionId) {
+      where.sessionId = params.sessionId;
+    }
+
+    if (params.from || params.to) {
+      const capturedAt: Record<string, Date> = {};
+      if (params.from) {
+        capturedAt.gte = params.from;
+      }
+      if (params.to) {
+        capturedAt.lte = params.to;
+      }
+      where.capturedAt = capturedAt;
+    }
+
+    if (params.bbox) {
+      where.lat = { gte: params.bbox.minLat, lte: params.bbox.maxLat };
+      where.lon = { gte: params.bbox.minLon, lte: params.bbox.maxLon };
+    }
+
+    const items = await this.prisma.measurement.findMany({
+      where,
+      orderBy: { capturedAt: 'asc' },
+      take: params.limit
+    });
+
+    return {
+      count: items.length,
+      limit: params.limit,
+      items
+    };
   }
 }
