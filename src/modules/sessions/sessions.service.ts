@@ -87,6 +87,15 @@ export class SessionsService {
       throw error;
     }
   }
+
+  async list(deviceId?: string) {
+    const where = deviceId ? { deviceId } : undefined;
+
+    return this.prisma.session.findMany({
+      where,
+      orderBy: { startedAt: 'desc' }
+    });
+  }
 }
 
 function isNotFoundError(error: unknown): boolean {
