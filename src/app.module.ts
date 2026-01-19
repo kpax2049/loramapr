@@ -5,6 +5,7 @@ import { HealthModule } from './modules/health/health.module';
 import { MeasurementsModule } from './modules/measurements/measurements.module';
 import { TracksModule } from './modules/tracks/tracks.module';
 import { DevicesModule } from './modules/devices/devices.module';
+import { SessionsModule } from './modules/sessions/sessions.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -17,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.module';
     DevicesModule,
     MeasurementsModule,
     TracksModule,
+    SessionsModule,
     PrismaModule
   ]
 })
