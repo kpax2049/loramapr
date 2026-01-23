@@ -1,4 +1,6 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { OwnerGuard } from '../../common/guards/owner.guard';
+import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
 import { TrackResult, TracksService } from './tracks.service';
 
 type TracksQuery = {
@@ -11,7 +13,12 @@ export class TracksController {
   constructor(private readonly tracksService: TracksService) {}
 
   @Get()
-  async getTrack(@Query() query: TracksQuery): Promise<TrackResult> {
+  @UseGuards(OwnerGuard)
+  async getTrack(
+    @Req() request: OwnerContextRequest,
+    @Query() query: TracksQuery
+  ): Promise<TrackResult> {
+    const ownerId = getOwnerIdFromRequest(request);
     const deviceId = getSingleValue(query.deviceId, 'deviceId');
     const sessionId = getSingleValue(query.sessionId, 'sessionId');
 
@@ -24,7 +31,8 @@ export class TracksController {
 
     return this.tracksService.getTrack({
       deviceId: deviceId ?? undefined,
-      sessionId: sessionId ?? undefined
+      sessionId: sessionId ?? undefined,
+      ownerId
     });
   }
 }

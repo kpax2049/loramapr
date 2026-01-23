@@ -9,7 +9,7 @@ import { UpdateSessionDto } from './dto/update-session.dto';
 export class SessionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async start(dto: StartSessionDto) {
+  async start(dto: StartSessionDto, ownerId?: string) {
     const device = await this.prisma.device.findUnique({
       where: { id: dto.deviceId },
       select: { id: true }
@@ -18,6 +18,7 @@ export class SessionsService {
       throw new BadRequestException('Device not found');
     }
 
+    // TODO: enforce ownerId device ownership once auth is implemented.
     return this.prisma.session.create({
       data: {
         device: {
@@ -31,7 +32,7 @@ export class SessionsService {
     });
   }
 
-  async stop(dto: StopSessionDto) {
+  async stop(dto: StopSessionDto, ownerId?: string) {
     const session = await this.prisma.session.findUnique({
       where: { id: dto.sessionId },
       select: { id: true }
@@ -40,6 +41,7 @@ export class SessionsService {
       throw new NotFoundException('Session not found');
     }
 
+    // TODO: enforce ownerId session ownership once auth is implemented.
     return this.prisma.session.update({
       where: { id: dto.sessionId },
       data: {
@@ -48,7 +50,7 @@ export class SessionsService {
     });
   }
 
-  async update(id: string, dto: UpdateSessionDto) {
+  async update(id: string, dto: UpdateSessionDto, ownerId?: string) {
     if (dto.deviceId) {
       const device = await this.prisma.device.findUnique({
         where: { id: dto.deviceId },
@@ -59,6 +61,7 @@ export class SessionsService {
       }
     }
 
+    // TODO: enforce ownerId session ownership once auth is implemented.
     const ownerUpdate =
       dto.ownerId === null
         ? { disconnect: true }
@@ -88,11 +91,18 @@ export class SessionsService {
     }
   }
 
-  async list(deviceId?: string) {
-    const where = deviceId ? { deviceId } : undefined;
+  async list(deviceId?: string, ownerId?: string) {
+    // TODO: enforce ownerId session ownership once auth is implemented.
+    const where: Record<string, unknown> = {};
+    if (deviceId) {
+      where.deviceId = deviceId;
+    }
+    if (ownerId) {
+      where.ownerId = ownerId;
+    }
 
     return this.prisma.session.findMany({
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: { startedAt: 'desc' }
     });
   }

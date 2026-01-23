@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 export type TrackQueryParams = {
   deviceId?: string;
   sessionId?: string;
+  ownerId?: string;
 };
 
 export type TrackResult = {
@@ -39,6 +40,10 @@ export class TracksService {
     }
     if (params.sessionId) {
       where.sessionId = params.sessionId;
+    }
+    if (params.ownerId) {
+      // TODO: confirm owner scoping logic once auth exists.
+      where.device = { ownerId: params.ownerId };
     }
 
     const items = await this.prisma.measurement.findMany({

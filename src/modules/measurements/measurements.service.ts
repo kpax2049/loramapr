@@ -21,6 +21,7 @@ export type MeasurementQueryParams = {
     maxLat: number;
   };
   limit: number;
+  ownerId?: string;
 };
 
 export type MeasurementQueryResult = {
@@ -149,6 +150,10 @@ export class MeasurementsService {
     }
     if (params.sessionId) {
       where.sessionId = params.sessionId;
+    }
+    if (params.ownerId) {
+      // TODO: confirm owner scoping logic (device owner vs session owner) once auth exists.
+      where.device = { ownerId: params.ownerId };
     }
 
     if (params.from || params.to) {

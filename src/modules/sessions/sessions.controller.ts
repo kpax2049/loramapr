@@ -1,4 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { OwnerGuard } from '../../common/guards/owner.guard';
+import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
 import { StartSessionDto } from './dto/start-session.dto';
 import { StopSessionDto } from './dto/stop-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -9,28 +11,33 @@ type SessionsQuery = {
 };
 
 @Controller('api/sessions')
+@UseGuards(OwnerGuard)
 export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
   @Get()
-  async list(@Query() query: SessionsQuery) {
+  async list(@Req() request: OwnerContextRequest, @Query() query: SessionsQuery) {
+    const ownerId = getOwnerIdFromRequest(request);
     const deviceId = getSingleValue(query.deviceId, 'deviceId');
-    return this.sessionsService.list(deviceId ?? undefined);
+    return this.sessionsService.list(deviceId ?? undefined, ownerId);
   }
 
   @Post('start')
-  async start(@Body() dto: StartSessionDto) {
-    return this.sessionsService.start(dto);
+  async start(@Req() request: OwnerContextRequest, @Body() dto: StartSessionDto) {
+    const ownerId = getOwnerIdFromRequest(request);
+    return this.sessionsService.start(dto, ownerId);
   }
 
   @Post('stop')
-  async stop(@Body() dto: StopSessionDto) {
-    return this.sessionsService.stop(dto);
+  async stop(@Req() request: OwnerContextRequest, @Body() dto: StopSessionDto) {
+    const ownerId = getOwnerIdFromRequest(request);
+    return this.sessionsService.stop(dto, ownerId);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
-    return this.sessionsService.update(id, dto);
+  async update(@Req() request: OwnerContextRequest, @Param('id') id: string, @Body() dto: UpdateSessionDto) {
+    const ownerId = getOwnerIdFromRequest(request);
+    return this.sessionsService.update(id, dto, ownerId);
   }
 }
 

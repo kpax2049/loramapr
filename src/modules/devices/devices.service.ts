@@ -13,8 +13,12 @@ export type DeviceListItem = {
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(): Promise<DeviceListItem[]> {
+  async list(ownerId?: string): Promise<DeviceListItem[]> {
+    // TODO: enforce owner scoping once auth context is available.
+    const where = ownerId ? { ownerId } : undefined;
+
     const devices = await this.prisma.device.findMany({
+      where,
       select: {
         id: true,
         deviceUid: true,

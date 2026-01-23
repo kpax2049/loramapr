@@ -1,9 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyScope } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
 import { ApiKeyScopes } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { OwnerGuard } from '../../common/guards/owner.guard';
+import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
 import { MeasurementBatchIngestDto, MeasurementIngestDto } from './dto/measurement-ingest.dto';
 import { MeasurementIngestResult, MeasurementQueryResult, MeasurementsService } from './measurements.service';
 
@@ -24,7 +26,12 @@ export class MeasurementsController {
   constructor(private readonly measurementsService: MeasurementsService) {}
 
   @Get()
-  async list(@Query() query: MeasurementsQuery): Promise<MeasurementQueryResult> {
+  @UseGuards(OwnerGuard)
+  async list(
+    @Req() request: OwnerContextRequest,
+    @Query() query: MeasurementsQuery
+  ): Promise<MeasurementQueryResult> {
+    const ownerId = getOwnerIdFromRequest(request);
     const deviceId = getSingleValue(query.deviceId, 'deviceId');
     const sessionId = getSingleValue(query.sessionId, 'sessionId');
 
@@ -53,7 +60,8 @@ export class MeasurementsController {
       from,
       to,
       bbox,
-      limit
+      limit,
+      ownerId
     });
   }
 
