@@ -90,3 +90,9 @@ enum ApiKeyScope {
   INGEST
   QUERY
 }
+
+model LorawanUplink {
+  id         String   @id @default(uuid()) @db.Uuid
+  payloadRaw Json
+  receivedAt DateTime @default(now())
+}
