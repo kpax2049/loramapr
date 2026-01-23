@@ -5,6 +5,7 @@ import { MeasurementsService } from './measurements.service';
 
 @Module({
   controllers: [MeasurementsController],
-  providers: [MeasurementsService, ApiKeyGuard]
+  providers: [MeasurementsService, ApiKeyGuard],
+  exports: [MeasurementsService]
 })
 export class MeasurementsModule {}
