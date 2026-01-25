@@ -1,9 +1,9 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ApiKeyScope } from '@prisma/client';
-import { createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { API_KEY_SCOPES_KEY } from '../decorators/api-key-scopes.decorator';
+import { hashApiKey, timingSafeEqualHex } from '../security/apiKey';
 
 type RequestWithHeaders = {
   headers: Record<string, string | string[] | undefined>;
@@ -37,7 +37,7 @@ export class ApiKeyGuard implements CanActivate {
       }
     });
 
-    if (!apiKeyRecord || !safeEqual(apiKeyRecord.keyHash, keyHash)) {
+    if (!apiKeyRecord || !timingSafeEqualHex(apiKeyRecord.keyHash, keyHash)) {
       throw new UnauthorizedException('Invalid API key');
     }
 
@@ -56,17 +56,4 @@ export class ApiKeyGuard implements CanActivate {
 
     return true;
   }
-}
-
-function hashApiKey(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const aBuffer = Buffer.from(a);
-  const bBuffer = Buffer.from(b);
-  if (aBuffer.length !== bBuffer.length) {
-    return false;
-  }
-  return timingSafeEqual(aBuffer, bBuffer);
 }

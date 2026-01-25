@@ -31,6 +31,18 @@ export class LorawanService {
   }
 }
 
+type RxMetadata = {
+  rssi?: number;
+  snr?: number;
+  time?: string;
+  gateway_ids?: { gateway_id?: string };
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    altitude?: number;
+  };
+};
+
 type TtsUplink = {
   received_at?: string;
   end_device_ids?: {
@@ -40,17 +52,7 @@ type TtsUplink = {
   uplink_message?: {
     received_at?: string;
     frm_payload?: string;
-    rx_metadata?: Array<{
-      rssi?: number;
-      snr?: number;
-      time?: string;
-      gateway_ids?: { gateway_id?: string };
-      location?: {
-        latitude?: number;
-        longitude?: number;
-        altitude?: number;
-      };
-    }>;
+    rx_metadata?: RxMetadata[];
     settings?: {
       data_rate?: {
         lora?: {
@@ -79,7 +81,7 @@ type LocationSelection = {
   lat: number;
   lon: number;
   alt?: number;
-  metadata?: NonNullable<TtsUplink['uplink_message']>['rx_metadata'] extends Array<infer T> ? T : never;
+  metadata?: RxMetadata;
 };
 
 function decodeUplink(payload: unknown): MeasurementIngestDto | null {

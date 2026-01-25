@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { createHash, timingSafeEqual } from 'crypto';
+import { timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { hashApiKey, timingSafeEqualHex } from '../security/apiKey';
 
 type RequestWithHeaders = {
   headers: Record<string, string | string[] | undefined>;
@@ -26,7 +27,7 @@ export class LorawanWebhookGuard implements CanActivate {
         select: { keyHash: true }
       });
 
-      if (apiKeyRecord && safeEqual(apiKeyRecord.keyHash, keyHash)) {
+      if (apiKeyRecord && timingSafeEqualHex(apiKeyRecord.keyHash, keyHash)) {
         return true;
       }
 
@@ -89,10 +90,6 @@ function parseBasicAuth(header: string): { username: string; password: string } 
     username: decoded.slice(0, separatorIndex),
     password: decoded.slice(separatorIndex + 1)
   };
-}
-
-function hashApiKey(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function safeEqual(a: string, b: string): boolean {
