@@ -25,6 +25,23 @@ npm install
 npm run start:dev
 ```
 
+## Docker dev workflow (backend)
+
+1) Start Postgres:
+```bash
+docker compose up -d postgres
+```
+
+2) Run migrations:
+```bash
+npm run db:migrate
+```
+
+3) Start Nest:
+```bash
+npm run start:dev
+```
+
 ## Build and run
 
 ```bash
