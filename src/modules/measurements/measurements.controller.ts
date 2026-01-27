@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Post, Query, Req, UseGuards
 import { ApiKeyScope } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
-import { ApiKeyScopes } from '../../common/decorators/api-key-scopes.decorator';
+import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
@@ -67,7 +67,7 @@ export class MeasurementsController {
 
   @Post()
   @UseGuards(ApiKeyGuard)
-  @ApiKeyScopes(ApiKeyScope.INGEST)
+  @RequireApiKeyScope(ApiKeyScope.INGEST)
   async ingest(@Body() body: unknown): Promise<MeasurementIngestResult> {
     const measurements = await normalizeMeasurements(body);
     return this.measurementsService.ingest(measurements);

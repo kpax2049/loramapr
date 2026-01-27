@@ -45,10 +45,13 @@ export class ApiKeyGuard implements CanActivate {
       this.reflector.getAllAndOverride<ApiKeyScope[]>(API_KEY_SCOPES_KEY, [
         context.getHandler(),
         context.getClass()
-      ]) ?? [];
+      ]);
 
-    if (requiredScopes.length > 0) {
-      const hasAllScopes = requiredScopes.every((scope) => apiKeyRecord.scopes.includes(scope));
+    const effectiveScopes =
+      requiredScopes && requiredScopes.length > 0 ? requiredScopes : [ApiKeyScope.INGEST];
+
+    if (effectiveScopes.length > 0) {
+      const hasAllScopes = effectiveScopes.every((scope) => apiKeyRecord.scopes.includes(scope));
       if (!hasAllScopes) {
         throw new ForbiddenException('Missing required API key scope');
       }
