@@ -6,7 +6,7 @@ import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decor
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
-import { MeasurementBatchIngestDto, MeasurementIngestDto } from './dto/measurement-ingest.dto';
+import { MeasurementIngestDto } from './dto/measurement-ingest.dto';
 import { MeasurementIngestResult, MeasurementQueryResult, MeasurementsService } from './measurements.service';
 
 type MeasurementsQuery = {
@@ -70,20 +70,25 @@ export class MeasurementsController {
   @RequireApiKeyScope(ApiKeyScope.INGEST)
   async ingest(@Body() body: unknown): Promise<MeasurementIngestResult> {
     const measurements = await normalizeMeasurements(body);
+    if (measurements.length === 0) {
+      throw new BadRequestException('No measurements provided');
+    }
+    const deviceUid = measurements[0].deviceUid;
+    const hasMixedDeviceUid = measurements.some((measurement) => measurement.deviceUid !== deviceUid);
+    if (hasMixedDeviceUid) {
+      throw new BadRequestException('All measurements must share the same deviceUid');
+    }
     return this.measurementsService.ingest(measurements);
   }
 }
 
 async function normalizeMeasurements(body: unknown): Promise<MeasurementIngestDto[]> {
-  if (Array.isArray(body)) {
-    return validateMeasurements(body);
-  }
-
-  if (body && typeof body === 'object' && 'measurements' in body) {
-    const payload = body as MeasurementBatchIngestDto;
-    if (Array.isArray(payload.measurements)) {
-      return validateMeasurements(payload.measurements);
+  if (body && typeof body === 'object' && 'items' in body) {
+    const payload = body as { items?: unknown };
+    if (Array.isArray(payload.items)) {
+      return validateMeasurements(payload.items);
     }
+    throw new BadRequestException('items must be an array');
   }
 
   return [await validateMeasurement(body)];

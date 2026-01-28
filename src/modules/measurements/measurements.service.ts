@@ -3,10 +3,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementIngestDto } from './dto/measurement-ingest.dto';
 
 export type MeasurementIngestResult = {
-  measurementCount: number;
-  measurementIds: string[];
-  deviceCount: number;
-  deviceIds: string[];
+  inserted: number;
+  deviceUid: string;
+  deviceId: string;
 };
 
 export type MeasurementQueryParams = {
@@ -54,90 +53,60 @@ export class MeasurementsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ingest(measurements: MeasurementIngestDto[]): Promise<MeasurementIngestResult> {
-    if (measurements.length === 0) {
-      return { measurementCount: 0, measurementIds: [], deviceCount: 0, deviceIds: [] };
-    }
-
-    const prepared = measurements.map((measurement) => ({
-      ...measurement,
-      capturedAtDate: new Date(measurement.capturedAt)
-    }));
-
-    const lastSeenByDevice = new Map<string, Date>();
-    for (const measurement of prepared) {
-      const existing = lastSeenByDevice.get(measurement.deviceUid);
-      if (!existing || measurement.capturedAtDate > existing) {
-        lastSeenByDevice.set(measurement.deviceUid, measurement.capturedAtDate);
-      }
-    }
+    const deviceUid = measurements[0].deviceUid;
+    const now = new Date();
 
     return this.prisma.$transaction(async (tx) => {
-      const deviceIdByUid = new Map<string, string>();
-      const deviceIds: string[] = [];
+      const device = await tx.device.upsert({
+        where: { deviceUid },
+        update: { lastSeenAt: now },
+        create: { deviceUid, lastSeenAt: now },
+        select: { id: true }
+      });
 
-      for (const [deviceUid, lastSeenAt] of lastSeenByDevice.entries()) {
-        const existing = await tx.device.findUnique({
-          where: { deviceUid },
-          select: { id: true, lastSeenAt: true }
-        });
+      const sessionIds = Array.from(
+        new Set(
+          measurements.map((measurement) => measurement.sessionId).filter((value) => Boolean(value))
+        )
+      ) as string[];
 
-        if (!existing) {
-          const created = await tx.device.create({
-            data: {
-              deviceUid,
-              lastSeenAt
-            },
-            select: { id: true }
-          });
-          deviceIdByUid.set(deviceUid, created.id);
-          deviceIds.push(created.id);
-          continue;
-        }
-
-        deviceIdByUid.set(deviceUid, existing.id);
-        deviceIds.push(existing.id);
-
-        if (!existing.lastSeenAt || lastSeenAt > existing.lastSeenAt) {
-          await tx.device.update({
-            where: { id: existing.id },
-            data: { lastSeenAt }
-          });
-        }
-      }
-
-      const measurementIds: string[] = [];
-      for (const measurement of prepared) {
-        const deviceId = deviceIdByUid.get(measurement.deviceUid);
-        if (!deviceId) {
-          throw new Error(`Device lookup failed for ${measurement.deviceUid}`);
-        }
-
-        const created = await tx.measurement.create({
-          data: {
-            deviceId,
-            capturedAt: measurement.capturedAtDate,
-            lat: measurement.lat,
-            lon: measurement.lon,
-            alt: measurement.alt,
-            hdop: measurement.hdop,
-            rssi: measurement.rssi,
-            snr: measurement.snr,
-            sf: measurement.sf,
-            bw: measurement.bw,
-            freq: measurement.freq,
-            gatewayId: measurement.gatewayId,
-            payloadRaw: measurement.payloadRaw
-          },
+      const validSessionIds = new Set<string>();
+      if (sessionIds.length > 0) {
+        const sessions = await tx.session.findMany({
+          where: { id: { in: sessionIds } },
           select: { id: true }
         });
-        measurementIds.push(created.id);
+        for (const session of sessions) {
+          validSessionIds.add(session.id);
+        }
       }
 
+      const data = measurements.map((measurement) => ({
+        deviceId: device.id,
+        sessionId:
+          measurement.sessionId && validSessionIds.has(measurement.sessionId)
+            ? measurement.sessionId
+            : null,
+        capturedAt: new Date(measurement.capturedAt),
+        lat: measurement.lat,
+        lon: measurement.lon,
+        alt: measurement.alt,
+        hdop: measurement.hdop,
+        rssi: measurement.rssi,
+        snr: measurement.snr,
+        sf: measurement.sf,
+        bw: measurement.bw,
+        freq: measurement.freq,
+        gatewayId: measurement.gatewayId,
+        payloadRaw: measurement.payloadRaw
+      }));
+
+      const result = await tx.measurement.createMany({ data });
+
       return {
-        measurementCount: measurementIds.length,
-        measurementIds,
-        deviceCount: deviceIds.length,
-        deviceIds
+        inserted: result.count,
+        deviceUid,
+        deviceId: device.id
       };
     });
   }

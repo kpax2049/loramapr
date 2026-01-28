@@ -1,13 +1,11 @@
-import { Type } from 'class-transformer';
 import {
-  IsArray,
   IsDateString,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
-  ValidateNested
+  IsUUID
 } from 'class-validator';
 
 export class MeasurementIngestDto {
@@ -59,11 +57,8 @@ export class MeasurementIngestDto {
   @IsOptional()
   @IsString()
   payloadRaw?: string;
-}
 
-export class MeasurementBatchIngestDto {
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => MeasurementIngestDto)
-  measurements!: MeasurementIngestDto[];
+  @IsOptional()
+  @IsUUID()
+  sessionId?: string;
 }
