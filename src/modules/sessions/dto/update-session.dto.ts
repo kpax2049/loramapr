@@ -1,28 +1,12 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UpdateSessionDto {
   @IsOptional()
-  @IsUUID()
-  deviceId?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  ownerId?: string | null;
-
-  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  name?: string | null;
+  name?: string;
 
   @IsOptional()
   @IsString()
-  notes?: string | null;
-
-  @IsOptional()
-  @IsDateString()
-  startedAt?: string | null;
-
-  @IsOptional()
-  @IsDateString()
-  endedAt?: string | null;
+  notes?: string;
 }

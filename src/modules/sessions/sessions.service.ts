@@ -1,5 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { StopSessionDto } from './dto/stop-session.dto';
@@ -9,30 +8,27 @@ import { UpdateSessionDto } from './dto/update-session.dto';
 export class SessionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async start(dto: StartSessionDto, ownerId?: string) {
+  async start(dto: StartSessionDto) {
     const device = await this.prisma.device.findUnique({
       where: { id: dto.deviceId },
       select: { id: true }
     });
     if (!device) {
-      throw new BadRequestException('Device not found');
+      throw new NotFoundException('Device not found');
     }
 
-    // TODO: enforce ownerId device ownership once auth is implemented.
     return this.prisma.session.create({
       data: {
         device: {
           connect: { id: dto.deviceId }
         },
-        owner: dto.ownerId ? { connect: { id: dto.ownerId } } : undefined,
         name: dto.name ?? undefined,
-        notes: dto.notes ?? undefined,
-        startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date()
+        startedAt: new Date()
       }
     });
   }
 
-  async stop(dto: StopSessionDto, ownerId?: string) {
+  async stop(dto: StopSessionDto) {
     const session = await this.prisma.session.findUnique({
       where: { id: dto.sessionId },
       select: { id: true }
@@ -41,41 +37,18 @@ export class SessionsService {
       throw new NotFoundException('Session not found');
     }
 
-    // TODO: enforce ownerId session ownership once auth is implemented.
     return this.prisma.session.update({
       where: { id: dto.sessionId },
       data: {
-        endedAt: dto.endedAt ? new Date(dto.endedAt) : new Date()
+        endedAt: new Date()
       }
     });
   }
 
-  async update(id: string, dto: UpdateSessionDto, ownerId?: string) {
-    if (dto.deviceId) {
-      const device = await this.prisma.device.findUnique({
-        where: { id: dto.deviceId },
-        select: { id: true }
-      });
-      if (!device) {
-        throw new BadRequestException('Device not found');
-      }
-    }
-
-    // TODO: enforce ownerId session ownership once auth is implemented.
-    const ownerUpdate =
-      dto.ownerId === null
-        ? { disconnect: true }
-        : dto.ownerId
-        ? { connect: { id: dto.ownerId } }
-        : undefined;
-
-    const data: Prisma.SessionUpdateInput = {
-      device: dto.deviceId ? { connect: { id: dto.deviceId } } : undefined,
-      owner: ownerUpdate,
+  async update(id: string, dto: UpdateSessionDto) {
+    const data = {
       name: dto.name ?? undefined,
-      notes: dto.notes ?? undefined,
-      startedAt: dto.startedAt ? new Date(dto.startedAt) : undefined,
-      endedAt: dto.endedAt ? new Date(dto.endedAt) : undefined
+      notes: dto.notes ?? undefined
     };
 
     try {
@@ -91,18 +64,10 @@ export class SessionsService {
     }
   }
 
-  async list(deviceId?: string, ownerId?: string) {
-    // TODO: enforce ownerId session ownership once auth is implemented.
-    const where: Record<string, unknown> = {};
-    if (deviceId) {
-      where.deviceId = deviceId;
-    }
-    if (ownerId) {
-      where.ownerId = ownerId;
-    }
-
+  async list(deviceId?: string) {
+    const where = deviceId ? { deviceId } : undefined;
     return this.prisma.session.findMany({
-      where: Object.keys(where).length > 0 ? where : undefined,
+      where,
       orderBy: { startedAt: 'desc' }
     });
   }
