@@ -10,7 +10,7 @@ export class LorawanController {
   @UseGuards(LorawanWebhookGuard)
   @HttpCode(200)
   async uplink(@Body() body: unknown): Promise<{ status: string }> {
-    await this.lorawanService.handleUplink(body);
+    await this.lorawanService.storeWebhook(body);
     return { status: 'ok' };
   }
 }

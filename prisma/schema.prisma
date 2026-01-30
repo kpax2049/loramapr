@@ -96,3 +96,12 @@ model LorawanUplink {
   payloadRaw Json
   receivedAt DateTime @default(now())
 }
+
+model WebhookEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  source     String
+  receivedAt DateTime @default(now())
+  payload    Json
+
+  @@index([receivedAt])
+}

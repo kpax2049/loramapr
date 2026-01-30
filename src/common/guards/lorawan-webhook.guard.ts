@@ -1,7 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { hashApiKey, timingSafeEqualHex } from '../security/apiKey';
 
 type RequestWithHeaders = {
   headers: Record<string, string | string[] | undefined>;
@@ -9,25 +7,16 @@ type RequestWithHeaders = {
 
 @Injectable()
 export class LorawanWebhookGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
-
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithHeaders>();
     const apiKeyHeader = getHeader(request, 'x-downlink-apikey');
 
     if (apiKeyHeader) {
       const envKey = process.env.TTS_WEBHOOK_API_KEY;
-      if (envKey && safeEqual(envKey, apiKeyHeader)) {
-        return true;
+      if (!envKey) {
+        throw new UnauthorizedException('Webhook API key not configured');
       }
-
-      const keyHash = hashApiKey(apiKeyHeader);
-      const apiKeyRecord = await this.prisma.apiKey.findFirst({
-        where: { keyHash, revokedAt: null },
-        select: { keyHash: true }
-      });
-
-      if (apiKeyRecord && timingSafeEqualHex(apiKeyRecord.keyHash, keyHash)) {
+      if (safeEqual(envKey, apiKeyHeader)) {
         return true;
       }
 
@@ -41,8 +30,8 @@ export class LorawanWebhookGuard implements CanActivate {
         throw new UnauthorizedException('Invalid authorization header');
       }
 
-      const expectedUser = process.env.TTS_WEBHOOK_BASIC_USER ?? process.env.TTS_WEBHOOK_BASIC_USERNAME;
-      const expectedPass = process.env.TTS_WEBHOOK_BASIC_PASSWORD ?? process.env.TTS_WEBHOOK_BASIC_PASS;
+      const expectedUser = process.env.TTS_WEBHOOK_BASIC_USER;
+      const expectedPass = process.env.TTS_WEBHOOK_BASIC_PASS;
 
       if (!expectedUser || !expectedPass) {
         throw new UnauthorizedException('Webhook credentials not configured');

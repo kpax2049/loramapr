@@ -6,7 +6,5 @@ export const validationSchema = Joi.object({
   DATABASE_URL: Joi.string().uri().required(),
   TTS_WEBHOOK_API_KEY: Joi.string().optional(),
   TTS_WEBHOOK_BASIC_USER: Joi.string().optional(),
-  TTS_WEBHOOK_BASIC_USERNAME: Joi.string().optional(),
-  TTS_WEBHOOK_BASIC_PASSWORD: Joi.string().optional(),
   TTS_WEBHOOK_BASIC_PASS: Joi.string().optional()
 });
