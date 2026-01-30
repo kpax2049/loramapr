@@ -6,7 +6,14 @@ import { TrackResult, TracksService } from './tracks.service';
 type TracksQuery = {
   deviceId?: string | string[];
   sessionId?: string | string[];
+  from?: string | string[];
+  to?: string | string[];
+  bbox?: string | string[];
+  limit?: string | string[];
 };
+
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 2000;
 
 @Controller('api/tracks')
 export class TracksController {
@@ -29,9 +36,25 @@ export class TracksController {
       throw new BadRequestException('Provide either deviceId or sessionId, not both');
     }
 
+    const from = parseDate(getSingleValue(query.from, 'from'), 'from');
+    const to = parseDate(getSingleValue(query.to, 'to'), 'to');
+    if (from && to && from > to) {
+      throw new BadRequestException('from must be before to');
+    }
+
+    const bboxValue = getSingleValue(query.bbox, 'bbox');
+    const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
+
+    const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
+    const limit = Math.min(requestedLimit, MAX_LIMIT);
+
     return this.tracksService.getTrack({
       deviceId: deviceId ?? undefined,
       sessionId: sessionId ?? undefined,
+      from,
+      to,
+      bbox,
+      limit,
       ownerId
     });
   }
@@ -48,4 +71,45 @@ function getSingleValue(value: string | string[] | undefined, name: string): str
     return value[0];
   }
   return value;
+}
+
+function parseDate(value: string | undefined, name: string): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException(`Invalid ${name} timestamp`);
+  }
+  return parsed;
+}
+
+function parseLimit(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_LIMIT;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  return parsed;
+}
+
+function parseBbox(value: string): { minLon: number; minLat: number; maxLon: number; maxLat: number } {
+  const parts = value.split(',').map((part) => part.trim());
+  if (parts.length !== 4) {
+    throw new BadRequestException('bbox must be minLon,minLat,maxLon,maxLat');
+  }
+
+  const numbers = parts.map((part) => Number(part));
+  if (numbers.some((part) => Number.isNaN(part))) {
+    throw new BadRequestException('bbox must contain valid numbers');
+  }
+
+  const [minLon, minLat, maxLon, maxLat] = numbers;
+  if (minLon > maxLon || minLat > maxLat) {
+    throw new BadRequestException('bbox min values must be <= max values');
+  }
+
+  return { minLon, minLat, maxLon, maxLat };
 }

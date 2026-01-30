@@ -34,15 +34,12 @@ export type MeasurementQueryResult = {
     lat: number;
     lon: number;
     alt: number | null;
-    hdop: number | null;
     rssi: number | null;
     snr: number | null;
     sf: number | null;
     bw: number | null;
     freq: number | null;
     gatewayId: string | null;
-    payloadRaw: string | null;
-    ingestedAt: Date;
   }>;
 };
 
@@ -144,7 +141,22 @@ export class MeasurementsService {
     const items = await this.prisma.measurement.findMany({
       where,
       orderBy: { capturedAt: 'asc' },
-      take: params.limit
+      take: params.limit,
+      select: {
+        id: true,
+        capturedAt: true,
+        lat: true,
+        lon: true,
+        alt: true,
+        rssi: true,
+        snr: true,
+        sf: true,
+        bw: true,
+        freq: true,
+        gatewayId: true,
+        deviceId: true,
+        sessionId: true
+      }
     });
 
     return {

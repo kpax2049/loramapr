@@ -19,7 +19,7 @@ type MeasurementsQuery = {
 };
 
 const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 1000;
+const MAX_LIMIT = 2000;
 
 @Controller('api/measurements')
 export class MeasurementsController {

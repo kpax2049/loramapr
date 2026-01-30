@@ -30,7 +30,12 @@ export class DevicesService {
           take: 1
         }
       },
-      orderBy: { deviceUid: 'asc' }
+      orderBy: {
+        lastSeenAt: {
+          sort: 'desc',
+          nulls: 'last'
+        }
+      }
     });
 
     return devices.map((device) => ({
