@@ -42,6 +42,22 @@ npm run db:migrate
 npm run start:dev
 ```
 
+## API key generation
+
+Create an ingestion API key:
+```bash
+npm run apikey:mint -- --scopes INGEST --label "dev ingest key"
+```
+
+Use the printed key in the `X-API-Key` header.
+
+## Simulate measurement walk
+
+Generate and ingest a synthetic walk (posts to `POST /api/measurements` in batches):
+```bash
+npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --baseLon -122.43 --minutes 15 --intervalSec 5 --seed demo
+```
+
 ## Build and run
 
 ```bash
