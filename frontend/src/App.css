@@ -1,0 +1,38 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  gap: 2rem;
+}
+
+.app__header {
+  text-align: center;
+}
+
+.app__header h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 4vw, 3.75rem);
+  letter-spacing: -0.02em;
+}
+
+.app__header p {
+  margin: 0.75rem 0 0;
+  font-size: 1.1rem;
+  color: #334155;
+}
+
+.app__content {
+  max-width: 480px;
+  text-align: center;
+  color: #475569;
+}
+
+.app__content code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: #e2e8f0;
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+}
