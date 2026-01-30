@@ -1,5 +1,7 @@
 import "dotenv/config";
-import { PrismaClient, ApiKeyScope } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { ApiKeyScope, PrismaClient } from "@prisma/client";
+import { Pool } from "pg";
 import { generateApiKey, hashApiKey } from "../src/common/security/apiKey";
 
 type Args = {
@@ -22,7 +24,10 @@ if (!args.scopes) {
 }
 
 const scopes = parseScopes(args.scopes);
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function run(): Promise<void> {
   const plaintextKey = generateApiKey();
@@ -55,10 +60,11 @@ run()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });
 
 function parseArgs(argv: string[]): Args {
-  const parsed: Args = {};
+  const parsed: Record<string, string | boolean> = {};
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
     if (value === "--help" || value === "-h") {
@@ -69,14 +75,14 @@ function parseArgs(argv: string[]): Args {
       const key = value.slice(2);
       const next = argv[i + 1];
       if (next && !next.startsWith("--")) {
-        parsed[key as keyof Args] = next;
+        parsed[key] = next;
         i += 1;
       } else {
-        parsed[key as keyof Args] = "true" as unknown as never;
+        parsed[key] = true;
       }
     }
   }
-  return parsed;
+  return parsed as Args;
 }
 
 function parseScopes(value: string): ApiKeyScope[] {
