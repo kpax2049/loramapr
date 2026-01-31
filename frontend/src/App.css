@@ -7,6 +7,11 @@
   --panel-accent: #f59e0b;
   --panel-surface: rgba(2, 6, 23, 0.55);
   --panel-radius: 10px;
+  --map-point-strong: #22c55e;
+  --map-point-medium: #f59e0b;
+  --map-point-weak: #ef4444;
+  --map-point-unknown: #94a3b8;
+  --map-point-default: #38bdf8;
 }
 
 .app {
@@ -338,4 +343,40 @@
   gap: 0.2rem;
   font-size: 0.75rem;
   color: var(--panel-muted);
+}
+
+.map-point {
+  stroke: var(--map-point-default);
+  fill: var(--map-point-default);
+  fill-opacity: 0.85;
+  stroke-width: 2px;
+}
+
+.map-point--strong {
+  stroke: var(--map-point-strong);
+  fill: var(--map-point-strong);
+}
+
+.map-point--medium {
+  stroke: var(--map-point-medium);
+  fill: var(--map-point-medium);
+}
+
+.map-point--weak {
+  stroke: var(--map-point-weak);
+  fill: var(--map-point-weak);
+}
+
+.map-point--unknown {
+  stroke: var(--map-point-unknown);
+  fill: var(--map-point-unknown);
+}
+
+.map-point--default {
+  stroke: var(--map-point-default);
+  fill: var(--map-point-default);
+}
+
+.map-point.is-selected {
+  stroke-width: 3px;
 }

@@ -127,6 +127,7 @@ function App() {
         onBoundsChange={setBbox}
         onSelectPoint={setSelectedPointId}
         onZoomChange={setCurrentZoom}
+        selectedPointId={selectedPointId}
       />
       {measurementsQuery.data &&
         measurementsQuery.data.items.length === measurementsQuery.data.limit && (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CircleMarker, MapContainer, Polyline, TileLayer, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import simplify from 'simplify-js';
 
@@ -22,6 +22,7 @@ type MapViewProps = {
   showTrack?: boolean;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
   onZoomChange?: (zoom: number) => void;
+  selectedPointId?: string | null;
   onSelectPoint?: (id: string) => void;
 };
 
@@ -29,6 +30,9 @@ type MapPoint = {
   id: string;
   lat: number;
   lon: number;
+  capturedAt?: string;
+  rssi?: number | null;
+  snr?: number | null;
 };
 
 type TrackPoint = {
@@ -85,6 +89,48 @@ function zoomToTolerance(zoom: number): number {
   return Math.max(0.00005, Math.min(0.05, tolerance));
 }
 
+type RssiBucket = 'strong' | 'medium' | 'weak' | 'unknown' | 'default';
+
+function getRssiBucket(rssi?: number | null): RssiBucket {
+  if (rssi === null || rssi === undefined) {
+    return 'default';
+  }
+  if (!Number.isFinite(rssi)) {
+    return 'unknown';
+  }
+  if (rssi >= -70) {
+    return 'strong';
+  }
+  if (rssi >= -90) {
+    return 'medium';
+  }
+  return 'weak';
+}
+
+type PointPalette = Record<RssiBucket, string>;
+
+function readPalette(): PointPalette {
+  if (typeof window === 'undefined') {
+    return {
+      strong: '',
+      medium: '',
+      weak: '',
+      unknown: '',
+      default: ''
+    };
+  }
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name: string) => styles.getPropertyValue(name).trim();
+
+  return {
+    strong: read('--map-point-strong'),
+    medium: read('--map-point-medium'),
+    weak: read('--map-point-weak'),
+    unknown: read('--map-point-unknown'),
+    default: read('--map-point-default')
+  };
+}
+
 function configureLeafletIcons() {
   L.Icon.Default.mergeOptions({
     iconUrl: markerIconUrl,
@@ -102,9 +148,11 @@ export default function MapView({
   showTrack = true,
   onBoundsChange,
   onZoomChange,
+  selectedPointId = null,
   onSelectPoint
 }: MapViewProps) {
   const [currentZoom, setCurrentZoom] = useState(zoom);
+  const palette = useMemo(() => readPalette(), []);
 
   useEffect(() => {
     configureLeafletIcons();
@@ -158,17 +206,55 @@ export default function MapView({
         />
       )}
       {showPoints &&
-        measurements.map((measurement) => (
-          <CircleMarker
-            key={measurement.id}
-            center={[measurement.lat, measurement.lon]}
-            radius={6}
-            pathOptions={{ color: '#2563eb', fillColor: '#60a5fa', fillOpacity: 0.8 }}
-            eventHandlers={{
-              click: () => onSelectPoint?.(measurement.id)
-            }}
-          />
-        ))}
+        measurements.map((measurement) => {
+          const bucket = getRssiBucket(measurement.rssi);
+          const color = palette[bucket] || palette.default;
+          const isSelected = measurement.id === selectedPointId;
+          const className = ['map-point', `map-point--${bucket}`, isSelected ? 'is-selected' : '']
+            .filter(Boolean)
+            .join(' ');
+
+          return (
+            <CircleMarker
+              key={measurement.id}
+              center={[measurement.lat, measurement.lon]}
+              radius={isSelected ? 8 : 6}
+              pathOptions={{
+                color,
+                weight: isSelected ? 3 : 2,
+                fillColor: color,
+                fillOpacity: 0.85,
+                className
+              }}
+              eventHandlers={{
+                click: () => onSelectPoint?.(measurement.id)
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -6]} opacity={0.9}>
+                <div>
+                  <div>{formatTimestamp(measurement.capturedAt)}</div>
+                  {measurement.rssi !== null && measurement.rssi !== undefined && (
+                    <div>RSSI: {measurement.rssi}</div>
+                  )}
+                  {measurement.snr !== null && measurement.snr !== undefined && (
+                    <div>SNR: {measurement.snr}</div>
+                  )}
+                </div>
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
     </MapContainer>
   );
+}
+
+function formatTimestamp(value?: string): string {
+  if (!value) {
+    return 'Unknown time';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
 }
