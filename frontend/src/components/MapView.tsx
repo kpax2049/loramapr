@@ -15,7 +15,7 @@ const markerShadowUrl = new URL('leaflet/dist/images/marker-shadow.png', import.
 type MapViewProps = {
   center?: [number, number];
   zoom?: number;
-  measurements?: MeasurementPoint[];
+  measurements?: MapPoint[];
   track?: TrackPoint[];
   showPoints?: boolean;
   showTrack?: boolean;
@@ -23,13 +23,10 @@ type MapViewProps = {
   onSelectPoint?: (id: string) => void;
 };
 
-type MeasurementPoint = {
+type MapPoint = {
   id: string;
   lat: number;
   lon: number;
-  capturedAt: string;
-  rssi?: number | null;
-  snr?: number | null;
 };
 
 type TrackPoint = {

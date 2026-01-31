@@ -76,6 +76,65 @@
   }
 }
 
+.point-details {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  width: min(320px, calc(100vw - 3rem));
+  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.point-details h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.point-details dl {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.point-details div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.point-details dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.point-details dd {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #f8fafc;
+}
+
+.point-details__empty {
+  font-size: 0.95rem;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+@media (max-width: 720px) {
+  .point-details {
+    position: static;
+    width: auto;
+    margin: 1rem auto 0;
+  }
+}
+
 .status {
   position: absolute;
   left: 1.5rem;

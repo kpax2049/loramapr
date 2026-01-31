@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MeasurementQueryParams } from './api/endpoints';
+import type { Measurement } from './api/types';
 import Controls from './components/Controls';
 import MapView from './components/MapView';
+import PointDetails from './components/PointDetails';
 import { useMeasurements, useTrack } from './query/hooks';
 import './App.css';
 
@@ -16,6 +18,7 @@ function App() {
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [showPoints, setShowPoints] = useState(true);
   const [showTrack, setShowTrack] = useState(true);
+  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -60,6 +63,19 @@ function App() {
     enabled: Boolean(deviceId)
   });
 
+  const selectedMeasurement = useMemo<Measurement | null>(() => {
+    if (!selectedPointId) {
+      return null;
+    }
+    return measurementsQuery.data?.items.find((item) => item.id === selectedPointId) ?? null;
+  }, [measurementsQuery.data?.items, selectedPointId]);
+
+  useEffect(() => {
+    if (selectedPointId && !selectedMeasurement) {
+      setSelectedPointId(null);
+    }
+  }, [selectedMeasurement, selectedPointId]);
+
   const isLoading = measurementsQuery.isLoading || trackQuery.isLoading;
   const error = measurementsQuery.error ?? trackQuery.error;
 
@@ -71,7 +87,9 @@ function App() {
         showPoints={showPoints}
         showTrack={showTrack}
         onBoundsChange={setBbox}
+        onSelectPoint={setSelectedPointId}
       />
+      <PointDetails measurement={selectedMeasurement} />
       <Controls
         deviceId={deviceId}
         onDeviceChange={setDeviceId}
