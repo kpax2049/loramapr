@@ -69,6 +69,39 @@
   height: 16px;
 }
 
+.controls__segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.controls__segment {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: #1e293b;
+  cursor: pointer;
+  user-select: none;
+}
+
+.controls__segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.controls__segment.is-active {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
 @media (max-width: 720px) {
   .controls {
     left: 50%;

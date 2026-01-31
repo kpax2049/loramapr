@@ -12,6 +12,8 @@ const BBOX_DEBOUNCE_MS = 300;
 
 function App() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<'time' | 'session'>('time');
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
@@ -28,9 +30,24 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [bbox]);
 
+  const handleFilterModeChange = (mode: 'time' | 'session') => {
+    setFilterMode(mode);
+    if (mode === 'session') {
+      setFrom('');
+      setTo('');
+    } else {
+      setSelectedSessionId(null);
+    }
+  };
+
+  const queryDeviceId =
+    filterMode === 'session' && selectedSessionId ? undefined : deviceId ?? undefined;
+  const querySessionId = filterMode === 'session' ? selectedSessionId ?? undefined : undefined;
+
   const measurementsParams = useMemo<MeasurementQueryParams>(
     () => ({
-      deviceId: deviceId ?? undefined,
+      deviceId: queryDeviceId,
+      sessionId: querySessionId,
       from: from || undefined,
       to: to || undefined,
       bbox: debouncedBbox
@@ -43,17 +60,18 @@ function App() {
         : undefined,
       limit: DEFAULT_LIMIT
     }),
-    [deviceId, from, to, debouncedBbox]
+    [queryDeviceId, querySessionId, from, to, debouncedBbox]
   );
 
   const trackParams = useMemo<MeasurementQueryParams>(
     () => ({
-      deviceId: deviceId ?? undefined,
+      deviceId: queryDeviceId,
+      sessionId: querySessionId,
       from: from || undefined,
       to: to || undefined,
       limit: DEFAULT_LIMIT
     }),
-    [deviceId, from, to]
+    [queryDeviceId, querySessionId, from, to]
   );
 
   const measurementsQuery = useMeasurements(measurementsParams, {
@@ -93,6 +111,10 @@ function App() {
       <Controls
         deviceId={deviceId}
         onDeviceChange={setDeviceId}
+        filterMode={filterMode}
+        onFilterModeChange={handleFilterModeChange}
+        selectedSessionId={selectedSessionId}
+        onSelectedSessionIdChange={setSelectedSessionId}
         from={from}
         to={to}
         onFromChange={setFrom}
