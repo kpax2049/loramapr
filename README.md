@@ -25,6 +25,28 @@ npm install
 npm run start:dev
 ```
 
+## Full-stack dev (backend + frontend)
+
+Run both servers together:
+```bash
+npm run dev:all
+```
+
+Or run them separately:
+```bash
+npm run start:dev
+npm --prefix frontend run dev
+```
+
+## See data in the map
+
+1) Run the simulator to ingest sample points:
+```bash
+npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --baseLon -122.43 --minutes 15 --intervalSec 5 --seed demo
+```
+2) Open the frontend dev server in your browser.
+3) Select the device in the dropdown to see points and track.
+
 ## Docker dev workflow (backend)
 
 1) Start Postgres:

@@ -1,4 +1,5 @@
-const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
+const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
+const baseUrl = import.meta.env.DEV ? '' : rawBaseUrl;
 
 type RequestOptions = Omit<RequestInit, 'body'> & {
   json?: unknown;
