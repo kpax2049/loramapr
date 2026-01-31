@@ -8,6 +8,8 @@ import { useMeasurements, useTrack } from './query/hooks';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
+const LOW_ZOOM_LIMIT = 1000;
+const LIMIT_ZOOM_THRESHOLD = 12;
 const BBOX_DEBOUNCE_MS = 300;
 
 function App() {
@@ -18,6 +20,7 @@ function App() {
   const [to, setTo] = useState('');
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(12);
   const [showPoints, setShowPoints] = useState(true);
   const [showTrack, setShowTrack] = useState(true);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -55,22 +58,24 @@ function App() {
 
   const isSessionMode = filterMode === 'session' && Boolean(selectedSessionId);
 
+  const effectiveLimit = currentZoom <= LIMIT_ZOOM_THRESHOLD ? LOW_ZOOM_LIMIT : DEFAULT_LIMIT;
+
   const measurementsParams = useMemo<MeasurementQueryParams>(
     () =>
       isSessionMode
         ? {
             sessionId: selectedSessionId ?? undefined,
             bbox: bboxPayload,
-            limit: DEFAULT_LIMIT
+            limit: effectiveLimit
           }
         : {
             deviceId: deviceId ?? undefined,
             from: from || undefined,
             to: to || undefined,
             bbox: bboxPayload,
-            limit: DEFAULT_LIMIT
+            limit: effectiveLimit
           },
-    [isSessionMode, selectedSessionId, bboxPayload, deviceId, from, to]
+    [isSessionMode, selectedSessionId, bboxPayload, deviceId, from, to, effectiveLimit]
   );
 
   const trackParams = useMemo<MeasurementQueryParams>(
@@ -78,15 +83,15 @@ function App() {
       isSessionMode
         ? {
             sessionId: selectedSessionId ?? undefined,
-            limit: DEFAULT_LIMIT
+            limit: effectiveLimit
           }
         : {
             deviceId: deviceId ?? undefined,
             from: from || undefined,
             to: to || undefined,
-            limit: DEFAULT_LIMIT
+            limit: effectiveLimit
           },
-    [isSessionMode, selectedSessionId, deviceId, from, to]
+    [isSessionMode, selectedSessionId, deviceId, from, to, effectiveLimit]
   );
 
   const measurementsQuery = useMeasurements(measurementsParams, {
@@ -121,7 +126,12 @@ function App() {
         showTrack={showTrack}
         onBoundsChange={setBbox}
         onSelectPoint={setSelectedPointId}
+        onZoomChange={setCurrentZoom}
       />
+      {measurementsQuery.data &&
+        measurementsQuery.data.items.length === measurementsQuery.data.limit && (
+          <div className="limit-banner">Result limited; zoom in or narrow filters</div>
+        )}
       <PointDetails measurement={selectedMeasurement} />
       <Controls
         deviceId={deviceId}

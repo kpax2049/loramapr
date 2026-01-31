@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import simplify from 'simplify-js';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -20,6 +21,7 @@ type MapViewProps = {
   showPoints?: boolean;
   showTrack?: boolean;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
+  onZoomChange?: (zoom: number) => void;
   onSelectPoint?: (id: string) => void;
 };
 
@@ -42,7 +44,13 @@ function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] 
   return [southWest.lng, southWest.lat, northEast.lng, northEast.lat];
 }
 
-function BoundsListener({ onChange }: { onChange?: (bbox: [number, number, number, number]) => void }) {
+function BoundsListener({
+  onChange,
+  onZoomChange
+}: {
+  onChange?: (bbox: [number, number, number, number]) => void;
+  onZoomChange?: (zoom: number) => void;
+}) {
   const map = useMapEvents({
     moveend: () => {
       if (onChange) {
@@ -53,6 +61,9 @@ function BoundsListener({ onChange }: { onChange?: (bbox: [number, number, numbe
       if (onChange) {
         onChange(boundsToBbox(map.getBounds()));
       }
+      if (onZoomChange) {
+        onZoomChange(map.getZoom());
+      }
     }
   });
 
@@ -60,9 +71,18 @@ function BoundsListener({ onChange }: { onChange?: (bbox: [number, number, numbe
     if (onChange) {
       onChange(boundsToBbox(map.getBounds()));
     }
+    if (onZoomChange) {
+      onZoomChange(map.getZoom());
+    }
   }, [map, onChange]);
 
   return null;
+}
+
+function zoomToTolerance(zoom: number): number {
+  const clampedZoom = Math.min(Math.max(zoom, 1), 20);
+  const tolerance = 0.5 / Math.pow(2, clampedZoom);
+  return Math.max(0.00005, Math.min(0.05, tolerance));
 }
 
 function configureLeafletIcons() {
@@ -81,11 +101,43 @@ export default function MapView({
   showPoints = true,
   showTrack = true,
   onBoundsChange,
+  onZoomChange,
   onSelectPoint
 }: MapViewProps) {
+  const [currentZoom, setCurrentZoom] = useState(zoom);
+
   useEffect(() => {
     configureLeafletIcons();
   }, []);
+
+  const trackPositions = useMemo(() => {
+    if (!showTrack || track.length === 0) {
+      return [];
+    }
+    if (track.length <= 2) {
+      return track.map((point) => [point.lat, point.lon] as [number, number]);
+    }
+
+    const tolerance = zoomToTolerance(currentZoom);
+    const points = track.map((point) => ({ x: point.lon, y: point.lat }));
+    const simplified = simplify(points, tolerance, true);
+    const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
+
+    const first = [track[0].lat, track[0].lon] as [number, number];
+    const last = [track[track.length - 1].lat, track[track.length - 1].lon] as [number, number];
+    if (positions.length > 0) {
+      positions[0] = first;
+      positions[positions.length - 1] = last;
+    }
+
+    return positions;
+  }, [track, currentZoom, showTrack]);
+
+  useEffect(() => {
+    if (onZoomChange) {
+      onZoomChange(currentZoom);
+    }
+  }, [currentZoom, onZoomChange]);
 
   return (
     <MapContainer
@@ -94,14 +146,14 @@ export default function MapView({
       preferCanvas={true}
       style={{ height: '100vh', width: '100%' }}
     >
-      <BoundsListener onChange={onBoundsChange} />
+      <BoundsListener onChange={onBoundsChange} onZoomChange={setCurrentZoom} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {showTrack && track.length > 0 && (
+      {showTrack && trackPositions.length > 0 && (
         <Polyline
-          positions={track.map((point) => [point.lat, point.lon] as [number, number])}
+          positions={trackPositions}
           pathOptions={{ color: '#0f172a', weight: 3, opacity: 0.7 }}
         />
       )}
