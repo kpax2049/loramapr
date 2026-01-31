@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { CircleMarker, MapContainer, Polyline, TileLayer } from 'react-leaflet';
+import { CircleMarker, MapContainer, Polyline, TileLayer, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import type { Bbox } from '../api/endpoints';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -19,6 +20,7 @@ type MapViewProps = {
   track?: TrackPoint[];
   showPoints?: boolean;
   showTrack?: boolean;
+  onBoundsChange?: (bbox: Bbox) => void;
   onSelectPoint?: (id: string) => void;
 };
 
@@ -37,6 +39,41 @@ type TrackPoint = {
   capturedAt: string;
 };
 
+function boundsToBbox(bounds: L.LatLngBounds): Bbox {
+  const southWest = bounds.getSouthWest();
+  const northEast = bounds.getNorthEast();
+
+  return {
+    minLon: southWest.lng,
+    minLat: southWest.lat,
+    maxLon: northEast.lng,
+    maxLat: northEast.lat
+  };
+}
+
+function BoundsListener({ onChange }: { onChange?: (bbox: Bbox) => void }) {
+  const map = useMapEvents({
+    moveend: () => {
+      if (onChange) {
+        onChange(boundsToBbox(map.getBounds()));
+      }
+    },
+    zoomend: () => {
+      if (onChange) {
+        onChange(boundsToBbox(map.getBounds()));
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (onChange) {
+      onChange(boundsToBbox(map.getBounds()));
+    }
+  }, [map, onChange]);
+
+  return null;
+}
+
 function configureLeafletIcons() {
   L.Icon.Default.mergeOptions({
     iconUrl: markerIconUrl,
@@ -52,6 +89,7 @@ export default function MapView({
   track = [],
   showPoints = true,
   showTrack = true,
+  onBoundsChange,
   onSelectPoint
 }: MapViewProps) {
   useEffect(() => {
@@ -64,6 +102,7 @@ export default function MapView({
       zoom={zoom}
       style={{ height: '100vh', width: '100%' }}
     >
+      <BoundsListener onChange={onBoundsChange} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

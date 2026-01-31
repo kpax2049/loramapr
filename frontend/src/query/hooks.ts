@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import type { UseQueryOptions } from '@tanstack/react-query';
 import { getMeasurements, getTrack, listDevices } from '../api/endpoints';
 import type { MeasurementQueryParams, MeasurementsResponse, TrackResponse } from '../api/endpoints';
 import type { Device } from '../api/types';
@@ -38,20 +39,28 @@ export function useDevices() {
   });
 }
 
-export function useMeasurements(params: MeasurementQueryParams) {
+type QueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
+
+export function useMeasurements(params: MeasurementQueryParams, options?: QueryOptions<MeasurementsResponse>) {
   const keyParams = normalizeMeasurementParams(params);
+  const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
 
   return useQuery<MeasurementsResponse>({
     queryKey: ['measurements', keyParams],
-    queryFn: () => getMeasurements(params)
+    queryFn: () => getMeasurements(params),
+    ...options,
+    enabled
   });
 }
 
-export function useTrack(params: MeasurementQueryParams) {
+export function useTrack(params: MeasurementQueryParams, options?: QueryOptions<TrackResponse>) {
   const keyParams = normalizeMeasurementParams(params);
+  const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
 
   return useQuery<TrackResponse>({
     queryKey: ['track', keyParams],
-    queryFn: () => getTrack(params)
+    queryFn: () => getTrack(params),
+    ...options,
+    enabled
   });
 }

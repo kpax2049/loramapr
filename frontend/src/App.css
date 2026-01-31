@@ -1,38 +1,95 @@
 .app {
+  position: relative;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1.5rem;
-  gap: 2rem;
+  color: #0f172a;
 }
 
-.app__header {
-  text-align: center;
+.controls {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 1000;
+  width: min(340px, calc(100vw - 3rem));
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(248, 250, 252, 0.92);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(12px);
 }
 
-.app__header h1 {
-  margin: 0;
-  font-size: clamp(2.5rem, 4vw, 3.75rem);
-  letter-spacing: -0.02em;
+.controls__group {
+  display: grid;
+  gap: 0.4rem;
 }
 
-.app__header p {
-  margin: 0.75rem 0 0;
-  font-size: 1.1rem;
-  color: #334155;
+.controls__row {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
-.app__content {
-  max-width: 480px;
-  text-align: center;
+.controls label,
+.controls__label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: #475569;
 }
 
-.app__content code {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  background: #e2e8f0;
-  padding: 0.15rem 0.35rem;
-  border-radius: 6px;
+.controls select,
+.controls input[type='datetime-local'] {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: #ffffff;
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+.controls select:disabled,
+.controls input[type='datetime-local']:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.controls__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.controls__toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 720px) {
+  .controls {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+.status {
+  position: absolute;
+  left: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 1000;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.status__error {
+  color: #fecaca;
 }
