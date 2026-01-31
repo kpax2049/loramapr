@@ -91,6 +91,7 @@ export default function MapView({
     <MapContainer
       center={center}
       zoom={zoom}
+      preferCanvas={true}
       style={{ height: '100vh', width: '100%' }}
     >
       <BoundsListener onChange={onBoundsChange} />

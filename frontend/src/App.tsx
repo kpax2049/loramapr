@@ -40,17 +40,9 @@ function App() {
     }
   };
 
-  const queryDeviceId =
-    filterMode === 'session' && selectedSessionId ? undefined : deviceId ?? undefined;
-  const querySessionId = filterMode === 'session' ? selectedSessionId ?? undefined : undefined;
-
-  const measurementsParams = useMemo<MeasurementQueryParams>(
-    () => ({
-      deviceId: queryDeviceId,
-      sessionId: querySessionId,
-      from: from || undefined,
-      to: to || undefined,
-      bbox: debouncedBbox
+  const bboxPayload = useMemo(
+    () =>
+      debouncedBbox
         ? {
             minLon: debouncedBbox[0],
             minLat: debouncedBbox[1],
@@ -58,27 +50,50 @@ function App() {
             maxLat: debouncedBbox[3]
           }
         : undefined,
-      limit: DEFAULT_LIMIT
-    }),
-    [queryDeviceId, querySessionId, from, to, debouncedBbox]
+    [debouncedBbox]
+  );
+
+  const isSessionMode = filterMode === 'session' && Boolean(selectedSessionId);
+
+  const measurementsParams = useMemo<MeasurementQueryParams>(
+    () =>
+      isSessionMode
+        ? {
+            sessionId: selectedSessionId ?? undefined,
+            bbox: bboxPayload,
+            limit: DEFAULT_LIMIT
+          }
+        : {
+            deviceId: deviceId ?? undefined,
+            from: from || undefined,
+            to: to || undefined,
+            bbox: bboxPayload,
+            limit: DEFAULT_LIMIT
+          },
+    [isSessionMode, selectedSessionId, bboxPayload, deviceId, from, to]
   );
 
   const trackParams = useMemo<MeasurementQueryParams>(
-    () => ({
-      deviceId: queryDeviceId,
-      sessionId: querySessionId,
-      from: from || undefined,
-      to: to || undefined,
-      limit: DEFAULT_LIMIT
-    }),
-    [queryDeviceId, querySessionId, from, to]
+    () =>
+      isSessionMode
+        ? {
+            sessionId: selectedSessionId ?? undefined,
+            limit: DEFAULT_LIMIT
+          }
+        : {
+            deviceId: deviceId ?? undefined,
+            from: from || undefined,
+            to: to || undefined,
+            limit: DEFAULT_LIMIT
+          },
+    [isSessionMode, selectedSessionId, deviceId, from, to]
   );
 
   const measurementsQuery = useMeasurements(measurementsParams, {
-    enabled: Boolean(deviceId)
+    enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
   const trackQuery = useTrack(trackParams, {
-    enabled: Boolean(deviceId)
+    enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
 
   const selectedMeasurement = useMemo<Measurement | null>(() => {

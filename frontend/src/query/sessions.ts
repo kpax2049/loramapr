@@ -15,7 +15,7 @@ export function useSessions(deviceId?: string, options?: QueryOptions<Session[]>
 
   return useQuery<Session[]>({
     queryKey: ['sessions', key],
-    queryFn: () => listSessions(deviceId as string),
+    queryFn: ({ signal }) => listSessions(deviceId as string, { signal }),
     ...options,
     enabled
   });

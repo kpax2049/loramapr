@@ -1,9 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  color: #0f172a;
-  background-color: #f8fafc;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', monospace;
+  color: #e2e8f0;
+  background-color: #0b1220;
   line-height: 1.5;
   font-weight: 400;
 }
@@ -17,5 +19,10 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at top, #e0f2fe 0%, #f8fafc 55%, #f1f5f9 100%);
+  background-color: #0b1220;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.08), transparent 45%),
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 120px 120px, 48px 48px, 48px 48px;
 }

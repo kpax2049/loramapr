@@ -1,8 +1,9 @@
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
 const baseUrl = import.meta.env.DEV ? '' : rawBaseUrl;
 
-type RequestOptions = Omit<RequestInit, 'body'> & {
+type RequestOptions = Omit<RequestInit, 'body' | 'signal'> & {
   json?: unknown;
+  signal?: AbortSignal;
 };
 
 export class ApiError extends Error {
@@ -63,21 +64,37 @@ async function parseBody(response: Response): Promise<unknown> {
 }
 
 export async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { json, headers, ...init } = options;
+  const { json, headers, signal, ...init } = options;
 
   const requestHeaders: HeadersInit = {
     ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...headers
   };
 
+  const controller = new AbortController();
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
   let response: Response;
   try {
     response = await fetch(buildUrl(path), {
       ...init,
       headers: requestHeaders,
-      body: json !== undefined ? JSON.stringify(json) : init.body
+      body: json !== undefined ? JSON.stringify(json) : init.body,
+      signal: controller.signal
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+    if (typeof error === 'object' && error && 'name' in error && (error as { name?: string }).name === 'AbortError') {
+      throw error;
+    }
     throw new ApiError('Network request failed', 0, error);
   }
 

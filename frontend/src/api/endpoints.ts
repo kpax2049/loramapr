@@ -27,6 +27,10 @@ export type TrackResponse = {
   items: TrackPoint[];
 };
 
+type RequestOptions = {
+  signal?: AbortSignal;
+};
+
 function toIso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -57,13 +61,13 @@ function buildQuery(params: MeasurementQueryParams): string {
   return searchParams.toString();
 }
 
-export async function listDevices(): Promise<Device[]> {
-  return getJson<Device[]>('/api/devices');
+export async function listDevices(options?: RequestOptions): Promise<Device[]> {
+  return getJson<Device[]>('/api/devices', options);
 }
 
-export async function listSessions(deviceId: string): Promise<Session[]> {
+export async function listSessions(deviceId: string, options?: RequestOptions): Promise<Session[]> {
   const params = new URLSearchParams({ deviceId });
-  return getJson<Session[]>(`/api/sessions?${params.toString()}`);
+  return getJson<Session[]>(`/api/sessions?${params.toString()}`, options);
 }
 
 export async function startSession(input: { deviceId: string; name?: string }): Promise<Session> {
@@ -81,14 +85,17 @@ export async function updateSession(
   return requestJson<Session>(`/api/sessions/${id}`, { method: 'PATCH', json: input });
 }
 
-export async function getMeasurements(params: MeasurementQueryParams): Promise<MeasurementsResponse> {
+export async function getMeasurements(
+  params: MeasurementQueryParams,
+  options?: RequestOptions
+): Promise<MeasurementsResponse> {
   const query = buildQuery(params);
   const path = query ? `/api/measurements?${query}` : '/api/measurements';
-  return getJson<MeasurementsResponse>(path);
+  return getJson<MeasurementsResponse>(path, options);
 }
 
-export async function getTrack(params: MeasurementQueryParams): Promise<TrackResponse> {
+export async function getTrack(params: MeasurementQueryParams, options?: RequestOptions): Promise<TrackResponse> {
   const query = buildQuery(params);
   const path = query ? `/api/tracks?${query}` : '/api/tracks';
-  return getJson<TrackResponse>(path);
+  return getJson<TrackResponse>(path, options);
 }

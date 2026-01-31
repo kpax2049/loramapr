@@ -35,7 +35,7 @@ function normalizeMeasurementParams(params: MeasurementQueryParams): Measurement
 export function useDevices() {
   return useQuery<Device[]>({
     queryKey: ['devices'],
-    queryFn: listDevices
+    queryFn: ({ signal }) => listDevices({ signal })
   });
 }
 
@@ -47,7 +47,7 @@ export function useMeasurements(params: MeasurementQueryParams, options?: QueryO
 
   return useQuery<MeasurementsResponse>({
     queryKey: ['measurements', keyParams],
-    queryFn: () => getMeasurements(params),
+    queryFn: ({ signal }) => getMeasurements(params, { signal }),
     ...options,
     enabled
   });
@@ -59,7 +59,7 @@ export function useTrack(params: MeasurementQueryParams, options?: QueryOptions<
 
   return useQuery<TrackResponse>({
     queryKey: ['track', keyParams],
-    queryFn: () => getTrack(params),
+    queryFn: ({ signal }) => getTrack(params, { signal }),
     ...options,
     enabled
   });
