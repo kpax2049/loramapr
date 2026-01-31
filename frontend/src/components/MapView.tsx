@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import type { Bbox } from '../api/endpoints';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -20,7 +19,7 @@ type MapViewProps = {
   track?: TrackPoint[];
   showPoints?: boolean;
   showTrack?: boolean;
-  onBoundsChange?: (bbox: Bbox) => void;
+  onBoundsChange?: (bbox: [number, number, number, number]) => void;
   onSelectPoint?: (id: string) => void;
 };
 
@@ -39,19 +38,14 @@ type TrackPoint = {
   capturedAt: string;
 };
 
-function boundsToBbox(bounds: L.LatLngBounds): Bbox {
+function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] {
   const southWest = bounds.getSouthWest();
   const northEast = bounds.getNorthEast();
 
-  return {
-    minLon: southWest.lng,
-    minLat: southWest.lat,
-    maxLon: northEast.lng,
-    maxLat: northEast.lat
-  };
+  return [southWest.lng, southWest.lat, northEast.lng, northEast.lat];
 }
 
-function BoundsListener({ onChange }: { onChange?: (bbox: Bbox) => void }) {
+function BoundsListener({ onChange }: { onChange?: (bbox: [number, number, number, number]) => void }) {
   const map = useMapEvents({
     moveend: () => {
       if (onChange) {
