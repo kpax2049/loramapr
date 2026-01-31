@@ -1,5 +1,5 @@
-import { getJson } from './http';
-import type { Device, Measurement, TrackPoint } from './types';
+import { getJson, requestJson } from './http';
+import type { Device, Measurement, Session, TrackPoint } from './types';
 
 export type Bbox = {
   minLon: number;
@@ -59,6 +59,26 @@ function buildQuery(params: MeasurementQueryParams): string {
 
 export async function listDevices(): Promise<Device[]> {
   return getJson<Device[]>('/api/devices');
+}
+
+export async function listSessions(deviceId: string): Promise<Session[]> {
+  const params = new URLSearchParams({ deviceId });
+  return getJson<Session[]>(`/api/sessions?${params.toString()}`);
+}
+
+export async function startSession(input: { deviceId: string; name?: string }): Promise<Session> {
+  return requestJson<Session>('/api/sessions/start', { method: 'POST', json: input });
+}
+
+export async function stopSession(input: { sessionId: string }): Promise<Session> {
+  return requestJson<Session>('/api/sessions/stop', { method: 'POST', json: input });
+}
+
+export async function updateSession(
+  id: string,
+  input: { name?: string; notes?: string }
+): Promise<Session> {
+  return requestJson<Session>(`/api/sessions/${id}`, { method: 'PATCH', json: input });
 }
 
 export async function getMeasurements(params: MeasurementQueryParams): Promise<MeasurementsResponse> {

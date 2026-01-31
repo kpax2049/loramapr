@@ -22,6 +22,15 @@ export type Measurement = {
   gatewayId: string | null;
 };
 
+export type Session = {
+  id: string;
+  deviceId: string;
+  name?: string | null;
+  startedAt: string;
+  endedAt?: string | null;
+  notes?: string | null;
+};
+
 export type TrackPoint = {
   capturedAt: string;
   lat: number;
