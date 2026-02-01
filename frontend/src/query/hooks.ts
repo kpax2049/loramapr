@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryOptions } from '@tanstack/react-query';
-import { getMeasurements, getTrack, listDevices } from '../api/endpoints';
-import type { MeasurementQueryParams, MeasurementsResponse, TrackResponse } from '../api/endpoints';
+import { getMeasurements, getStats, getTrack, listDevices } from '../api/endpoints';
+import type { MeasurementQueryParams, MeasurementsResponse, StatsResponse, TrackResponse } from '../api/endpoints';
 import type { Device } from '../api/types';
 
 type MeasurementKeyParams = {
@@ -60,6 +60,18 @@ export function useTrack(params: MeasurementQueryParams, options?: QueryOptions<
   return useQuery<TrackResponse>({
     queryKey: ['track', keyParams],
     queryFn: ({ signal }) => getTrack(params, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useStats(params: MeasurementQueryParams, options?: QueryOptions<StatsResponse>) {
+  const keyParams = normalizeMeasurementParams(params);
+  const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
+
+  return useQuery<StatsResponse>({
+    queryKey: ['stats', keyParams],
+    queryFn: ({ signal }) => getStats(params, { signal }),
     ...options,
     enabled
   });

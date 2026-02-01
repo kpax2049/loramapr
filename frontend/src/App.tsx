@@ -4,7 +4,8 @@ import type { Measurement } from './api/types';
 import Controls from './components/Controls';
 import MapView from './components/MapView';
 import PointDetails from './components/PointDetails';
-import { useMeasurements, useTrack } from './query/hooks';
+import StatsCard from './components/StatsCard';
+import { useMeasurements, useStats, useTrack } from './query/hooks';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -12,17 +13,71 @@ const LOW_ZOOM_LIMIT = 1000;
 const LIMIT_ZOOM_THRESHOLD = 12;
 const BBOX_DEBOUNCE_MS = 300;
 
+type InitialQueryState = {
+  deviceId: string | null;
+  filterMode: 'time' | 'session';
+  sessionId: string | null;
+  from: string;
+  to: string;
+  showPoints: boolean;
+  showTrack: boolean;
+};
+
+function parseBoolean(value: string | null, defaultValue: boolean): boolean {
+  if (value === null) {
+    return defaultValue;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+  return defaultValue;
+}
+
+function readInitialQueryState(): InitialQueryState {
+  if (typeof window === 'undefined') {
+    return {
+      deviceId: null,
+      filterMode: 'time',
+      sessionId: null,
+      from: '',
+      to: '',
+      showPoints: true,
+      showTrack: true
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const filterModeParam = params.get('filterMode');
+  const filterMode = filterModeParam === 'session' ? 'session' : 'time';
+
+  return {
+    deviceId: params.get('deviceId'),
+    filterMode,
+    sessionId: params.get('sessionId'),
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
+    showPoints: parseBoolean(params.get('showPoints'), true),
+    showTrack: parseBoolean(params.get('showTrack'), true)
+  };
+}
+
 function App() {
-  const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [filterMode, setFilterMode] = useState<'time' | 'session'>('time');
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const initial = useMemo(() => readInitialQueryState(), []);
+
+  const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
+  const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(initial.sessionId);
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
-  const [showPoints, setShowPoints] = useState(true);
-  const [showTrack, setShowTrack] = useState(true);
+  const [showPoints, setShowPoints] = useState(initial.showPoints);
+  const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +87,37 @@ function App() {
 
     return () => window.clearTimeout(handle);
   }, [bbox]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (deviceId) {
+      params.set('deviceId', deviceId);
+    }
+    params.set('filterMode', filterMode);
+    if (selectedSessionId) {
+      params.set('sessionId', selectedSessionId);
+    }
+    if (from) {
+      params.set('from', from);
+    }
+    if (to) {
+      params.set('to', to);
+    }
+    if (!showPoints) {
+      params.set('showPoints', 'false');
+    }
+    if (!showTrack) {
+      params.set('showTrack', 'false');
+    }
+
+    const search = params.toString();
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    window.history.replaceState(null, '', nextUrl);
+  }, [deviceId, filterMode, selectedSessionId, from, to, showPoints, showTrack]);
 
   const handleFilterModeChange = (mode: 'time' | 'session') => {
     setFilterMode(mode);
@@ -100,6 +186,22 @@ function App() {
   const trackQuery = useTrack(trackParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
+  const statsParams = useMemo<MeasurementQueryParams>(
+    () =>
+      isSessionMode
+        ? {
+            sessionId: selectedSessionId ?? undefined
+          }
+        : {
+            deviceId: deviceId ?? undefined,
+            from: from || undefined,
+            to: to || undefined
+          },
+    [isSessionMode, selectedSessionId, deviceId, from, to]
+  );
+  const statsQuery = useStats(statsParams, {
+    enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
+  });
 
   const selectedMeasurement = useMemo<Measurement | null>(() => {
     if (!selectedPointId) {
@@ -113,6 +215,10 @@ function App() {
       setSelectedPointId(null);
     }
   }, [selectedMeasurement, selectedPointId]);
+
+  useEffect(() => {
+    setSelectedSessionId(null);
+  }, [deviceId]);
 
   const isLoading = measurementsQuery.isLoading || trackQuery.isLoading;
   const error = measurementsQuery.error ?? trackQuery.error;
@@ -134,13 +240,18 @@ function App() {
           <div className="limit-banner">Result limited; zoom in or narrow filters</div>
         )}
       <PointDetails measurement={selectedMeasurement} />
+      <StatsCard
+        stats={statsQuery.data}
+        isLoading={statsQuery.isLoading}
+        error={statsQuery.error as Error | null}
+      />
       <Controls
         deviceId={deviceId}
         onDeviceChange={setDeviceId}
         filterMode={filterMode}
         onFilterModeChange={handleFilterModeChange}
         selectedSessionId={selectedSessionId}
-        onSelectedSessionIdChange={setSelectedSessionId}
+        onSelectSessionId={setSelectedSessionId}
         from={from}
         to={to}
         onFromChange={setFrom}

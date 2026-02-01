@@ -209,8 +209,79 @@
   color: var(--panel-muted);
 }
 
+.stats-card {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 1000;
+  width: min(280px, calc(100vw - 3rem));
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  box-shadow: var(--panel-shadow);
+  border-left: 3px solid var(--panel-accent);
+}
+
+.stats-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.stats-card__grid {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.stats-card__grid div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.stats-card__grid dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
+.stats-card__grid dd {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.stats-card__status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--panel-muted);
+}
+
+.stats-card__error {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #fecaca;
+}
+
 @media (max-width: 720px) {
   .point-details {
+    position: static;
+    width: auto;
+    margin: 1rem auto 0;
+  }
+
+  .stats-card {
     position: static;
     width: auto;
     margin: 1rem auto 0;
@@ -307,15 +378,30 @@
 }
 
 .sessions-panel__active {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--panel-muted);
 }
 
 .sessions-panel__active strong {
   color: var(--panel-text);
+}
+
+.sessions-panel__stop {
+  align-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(239, 68, 68, 0.15);
+  color: #fecaca;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+}
+
+.sessions-panel__stop:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .sessions-panel__list {

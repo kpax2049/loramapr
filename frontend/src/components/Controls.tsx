@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useDevices } from '../query/hooks';
+import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
   deviceId: string | null;
@@ -7,7 +8,7 @@ type ControlsProps = {
   filterMode: 'time' | 'session';
   onFilterModeChange: (mode: 'time' | 'session') => void;
   selectedSessionId: string | null;
-  onSelectedSessionIdChange: (sessionId: string | null) => void;
+  onSelectSessionId: (sessionId: string | null) => void;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -24,7 +25,7 @@ export default function Controls({
   filterMode,
   onFilterModeChange,
   selectedSessionId,
-  onSelectedSessionIdChange,
+  onSelectSessionId,
   from,
   to,
   onFromChange,
@@ -113,15 +114,15 @@ export default function Controls({
         </div>
       ) : (
         <div className="controls__group">
-          <label htmlFor="session-select">Session</label>
-          <select
-            id="session-select"
-            value={selectedSessionId ?? ''}
-            onChange={(event) => onSelectedSessionIdChange(event.target.value || null)}
-            disabled
-          >
-            <option value="">Session picker coming soon</option>
-          </select>
+          {deviceId ? (
+            <SessionsPanel
+              deviceId={deviceId}
+              selectedSessionId={selectedSessionId}
+              onSelectSessionId={onSelectSessionId}
+            />
+          ) : (
+            <span className="controls__label">Select a device</span>
+          )}
         </div>
       )}
 

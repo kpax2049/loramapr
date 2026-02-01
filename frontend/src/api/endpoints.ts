@@ -27,6 +27,13 @@ export type TrackResponse = {
   items: TrackPoint[];
 };
 
+export type StatsResponse = {
+  count: number;
+  minCapturedAt: string | null;
+  maxCapturedAt: string | null;
+  gatewayCount: number;
+};
+
 type RequestOptions = {
   signal?: AbortSignal;
 };
@@ -56,6 +63,25 @@ function buildQuery(params: MeasurementQueryParams): string {
   }
   if (typeof params.limit === 'number') {
     searchParams.set('limit', String(params.limit));
+  }
+
+  return searchParams.toString();
+}
+
+function buildStatsQuery(params: MeasurementQueryParams): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.deviceId) {
+    searchParams.set('deviceId', params.deviceId);
+  }
+  if (params.sessionId) {
+    searchParams.set('sessionId', params.sessionId);
+  }
+  if (params.from) {
+    searchParams.set('from', toIso(params.from));
+  }
+  if (params.to) {
+    searchParams.set('to', toIso(params.to));
   }
 
   return searchParams.toString();
@@ -98,4 +124,13 @@ export async function getTrack(params: MeasurementQueryParams, options?: Request
   const query = buildQuery(params);
   const path = query ? `/api/tracks?${query}` : '/api/tracks';
   return getJson<TrackResponse>(path, options);
+}
+
+export async function getStats(
+  params: MeasurementQueryParams,
+  options?: RequestOptions
+): Promise<StatsResponse> {
+  const query = buildStatsQuery(params);
+  const path = query ? `/api/stats?${query}` : '/api/stats';
+  return getJson<StatsResponse>(path, options);
 }

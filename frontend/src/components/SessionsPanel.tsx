@@ -37,6 +37,10 @@ export default function SessionsPanel({
     () => sessions.find((session) => !session.endedAt) ?? null,
     [sessions]
   );
+  const pastSessions = useMemo(
+    () => sessions.filter((session) => Boolean(session.endedAt)),
+    [sessions]
+  );
 
   const handleStart = () => {
     if (!deviceId || startMutation.isPending) {
@@ -46,8 +50,9 @@ export default function SessionsPanel({
     startMutation.mutate(
       { deviceId, name: name || undefined },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
           setSessionName('');
+          onSelectSessionId(created.id);
         }
       }
     );
@@ -83,20 +88,33 @@ export default function SessionsPanel({
           <button type="button" onClick={handleStart} disabled={!deviceId || startMutation.isPending}>
             {startMutation.isPending ? 'Starting…' : 'Start session'}
           </button>
-          <button
-            type="button"
-            onClick={handleStop}
-            disabled={!activeSession || stopMutation.isPending}
-          >
-            {stopMutation.isPending ? 'Stopping…' : 'Stop session'}
-          </button>
         </div>
       </div>
 
       {activeSession && (
         <div className="sessions-panel__active">
-          <span>Active:</span>
-          <strong>{sessionLabel(activeSession)}</strong>
+          <button
+            type="button"
+            className={`sessions-panel__item ${
+              selectedSessionId === activeSession.id ? 'is-selected' : ''
+            }`}
+            onClick={() => onSelectSessionId(activeSession.id)}
+          >
+            <div className="sessions-panel__title">
+              {activeSession.name?.trim() || 'Active session'}
+            </div>
+            <div className="sessions-panel__meta">
+              <span>Start: {formatTimestamp(activeSession.startedAt)}</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="sessions-panel__stop"
+            onClick={handleStop}
+            disabled={stopMutation.isPending}
+          >
+            {stopMutation.isPending ? 'Stopping…' : 'Stop'}
+          </button>
         </div>
       )}
 
@@ -107,7 +125,7 @@ export default function SessionsPanel({
         {!isLoading && sessions.length === 0 && (
           <div className="sessions-panel__empty">No sessions yet.</div>
         )}
-        {sessions.map((session) => (
+        {pastSessions.map((session) => (
           <button
             type="button"
             key={session.id}
