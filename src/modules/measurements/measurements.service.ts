@@ -43,6 +43,21 @@ export type MeasurementQueryResult = {
   }>;
 };
 
+export type MeasurementStatsParams = {
+  deviceId?: string;
+  sessionId?: string;
+  from?: Date;
+  to?: Date;
+  ownerId?: string;
+};
+
+export type MeasurementStatsResult = {
+  count: number;
+  minCapturedAt: Date | null;
+  maxCapturedAt: Date | null;
+  gatewayCount: number;
+};
+
 type PreparedMeasurement = MeasurementIngestDto & { capturedAtDate: Date };
 
 @Injectable()
@@ -163,6 +178,54 @@ export class MeasurementsService {
       count: items.length,
       limit: params.limit,
       items
+    };
+  }
+
+  async stats(params: MeasurementStatsParams): Promise<MeasurementStatsResult> {
+    const where: Record<string, unknown> = {};
+
+    if (params.deviceId) {
+      where.deviceId = params.deviceId;
+    }
+    if (params.sessionId) {
+      where.sessionId = params.sessionId;
+    }
+    if (params.from || params.to) {
+      const capturedAt: Record<string, Date> = {};
+      if (params.from) {
+        capturedAt.gte = params.from;
+      }
+      if (params.to) {
+        capturedAt.lte = params.to;
+      }
+      where.capturedAt = capturedAt;
+    }
+    if (params.ownerId) {
+      // TODO: confirm owner scoping logic once auth exists.
+      where.device = { ownerId: params.ownerId };
+    }
+
+    const [aggregate, gatewayGroups] = await Promise.all([
+      this.prisma.measurement.aggregate({
+        where,
+        _count: { _all: true },
+        _min: { capturedAt: true },
+        _max: { capturedAt: true }
+      }),
+      this.prisma.measurement.groupBy({
+        by: ['gatewayId'],
+        where: {
+          ...where,
+          gatewayId: { not: null }
+        }
+      })
+    ]);
+
+    return {
+      count: aggregate._count._all,
+      minCapturedAt: aggregate._min.capturedAt ?? null,
+      maxCapturedAt: aggregate._max.capturedAt ?? null,
+      gatewayCount: gatewayGroups.length
     };
   }
 }

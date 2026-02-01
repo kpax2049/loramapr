@@ -3,9 +3,10 @@ import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { MeasurementsController } from './measurements.controller';
 import { MeasurementsService } from './measurements.service';
+import { StatsController } from './stats.controller';
 
 @Module({
-  controllers: [MeasurementsController],
+  controllers: [MeasurementsController, StatsController],
   providers: [MeasurementsService, ApiKeyGuard, OwnerGuard],
   exports: [MeasurementsService]
 })
