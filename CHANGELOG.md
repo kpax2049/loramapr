@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.0 - 2026-02-01
+
+### Highlights
+- Session-based filtering with a sessions panel (start/stop/select) and URL query sync for filters.
+- Map performance/UX upgrades: canvas rendering, zoom-based track simplification, RSSI bucket coloring, and hover tooltips.
+- Safer data fetching: abortable requests and zoom-aware result limiting with a “result limited” banner.
+
+### Notes
+- No breaking changes.
+
 ## v0.1.0 - 2026-01-31
 
 ### Highlights
