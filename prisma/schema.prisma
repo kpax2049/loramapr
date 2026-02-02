@@ -65,6 +65,7 @@ model Measurement {
   freq       Float?
   gatewayId  String?
   payloadRaw String?
+  rxMetadata Json?
   ingestedAt DateTime @default(now())
 
   device  Device   @relation(fields: [deviceId], references: [id])

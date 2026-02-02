@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
+import { LorawanRateLimitGuard } from '../../common/guards/lorawan-rate-limit.guard';
 import { LorawanWebhookGuard } from '../../common/guards/lorawan-webhook.guard';
 import { LorawanService } from './lorawan.service';
 import { parseTtsUplink } from './tts-uplink.schema';
@@ -21,7 +22,7 @@ export class LorawanController {
   }
 
   @Post('uplink')
-  @UseGuards(LorawanWebhookGuard)
+  @UseGuards(LorawanRateLimitGuard, LorawanWebhookGuard)
   @HttpCode(200)
   async uplink(@Body() body: unknown): Promise<{ status: string }> {
     let parsed;

@@ -10,6 +10,7 @@ type TracksQuery = {
   to?: string | string[];
   bbox?: string | string[];
   limit?: string | string[];
+  gatewayId?: string | string[];
 };
 
 const DEFAULT_LIMIT = 500;
@@ -45,6 +46,8 @@ export class TracksController {
     const bboxValue = getSingleValue(query.bbox, 'bbox');
     const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
 
+    const gatewayId = getSingleValue(query.gatewayId, 'gatewayId');
+
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
     const limit = Math.min(requestedLimit, MAX_LIMIT);
 
@@ -55,6 +58,7 @@ export class TracksController {
       to,
       bbox,
       limit,
+      gatewayId: gatewayId ?? undefined,
       ownerId
     });
   }

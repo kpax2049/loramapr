@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementIngestDto } from './dto/measurement-ingest.dto';
 
@@ -21,6 +22,7 @@ export type CanonicalMeasurementInput = {
   freq?: number;
   gatewayId?: string;
   payloadRaw?: string | Record<string, unknown>;
+  rxMetadata?: Prisma.InputJsonValue;
   sessionId?: string;
 };
 
@@ -40,6 +42,7 @@ export type MeasurementQueryParams = {
     maxLon: number;
     maxLat: number;
   };
+  gatewayId?: string;
   limit: number;
   ownerId?: string;
 };
@@ -180,7 +183,8 @@ export class MeasurementsService {
             ? undefined
             : typeof item.payloadRaw === 'string'
             ? item.payloadRaw
-            : JSON.stringify(item.payloadRaw)
+            : JSON.stringify(item.payloadRaw),
+        rxMetadata: item.rxMetadata ?? undefined
       }));
 
       const result = await tx.measurement.createMany({ data });
@@ -220,6 +224,9 @@ export class MeasurementsService {
     if (params.bbox) {
       where.lat = { gte: params.bbox.minLat, lte: params.bbox.maxLat };
       where.lon = { gte: params.bbox.minLon, lte: params.bbox.maxLon };
+    }
+    if (params.gatewayId) {
+      where.gatewayId = params.gatewayId;
     }
 
     const items = await this.prisma.measurement.findMany({

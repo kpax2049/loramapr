@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { TtsUplink } from './tts-uplink.schema';
 
 type NormalizedMeasurement = {
@@ -13,6 +14,7 @@ type NormalizedMeasurement = {
   bw?: number;
   freq?: number;
   gatewayId?: string;
+  rxMetadata?: Prisma.InputJsonValue;
   payloadRaw: {
     received_at: string;
     correlation_ids?: string[];
@@ -86,6 +88,7 @@ export function normalizeTtsUplinkToMeasurement(parsedPayload: TtsUplink): Norma
       bw,
       freq: typeof freq === 'number' ? freq : undefined,
       gatewayId,
+      rxMetadata: parsedPayload.uplink_message?.rx_metadata as Prisma.InputJsonValue | undefined,
       payloadRaw
     }
   };

@@ -12,6 +12,7 @@ export type TrackQueryParams = {
     maxLon: number;
     maxLat: number;
   };
+  gatewayId?: string;
   limit: number;
   ownerId?: string;
 };
@@ -49,6 +50,9 @@ export class TracksService {
     if (params.bbox) {
       where.lat = { gte: params.bbox.minLat, lte: params.bbox.maxLat };
       where.lon = { gte: params.bbox.minLon, lte: params.bbox.maxLon };
+    }
+    if (params.gatewayId) {
+      where.gatewayId = params.gatewayId;
     }
     if (params.ownerId) {
       // TODO: confirm owner scoping logic once auth exists.
