@@ -102,6 +102,12 @@ model WebhookEvent {
   source     String
   receivedAt DateTime @default(now())
   payload    Json
+  processedAt DateTime?
+  processingError String?
+  eventType  String?
+  deviceUid  String?
+  uplinkId   String?  @unique
 
   @@index([receivedAt])
+  @@index([processedAt])
 }
