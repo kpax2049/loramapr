@@ -43,3 +43,12 @@ export type DeviceLatest = {
   lastWebhookAt: string | null;
   lastWebhookError: string | null;
 };
+
+export type LorawanEvent = {
+  id: string;
+  receivedAt: string;
+  processedAt: string | null;
+  deviceUid: string | null;
+  processingError: string | null;
+  uplinkId: string | null;
+};

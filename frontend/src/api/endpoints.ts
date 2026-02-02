@@ -1,5 +1,5 @@
 import { getJson, requestJson } from './http';
-import type { Device, DeviceLatest, Measurement, Session, TrackPoint } from './types';
+import type { Device, DeviceLatest, LorawanEvent, Measurement, Session, TrackPoint } from './types';
 
 export type Bbox = {
   minLon: number;
@@ -97,6 +97,22 @@ export async function listDevices(options?: RequestOptions): Promise<Device[]> {
 
 export async function getDeviceLatest(deviceId: string, options?: RequestOptions): Promise<DeviceLatest> {
   return getJson<DeviceLatest>(`/api/devices/${deviceId}/latest`, options);
+}
+
+export async function listLorawanEvents(
+  params: { deviceUid?: string; limit?: number },
+  options?: RequestOptions
+): Promise<LorawanEvent[]> {
+  const searchParams = new URLSearchParams();
+  if (params.deviceUid) {
+    searchParams.set('deviceUid', params.deviceUid);
+  }
+  if (typeof params.limit === 'number') {
+    searchParams.set('limit', String(params.limit));
+  }
+  const query = searchParams.toString();
+  const path = query ? `/api/lorawan/events?${query}` : '/api/lorawan/events';
+  return getJson<LorawanEvent[]>(path, options);
 }
 
 export async function listSessions(deviceId: string, options?: RequestOptions): Promise<Session[]> {

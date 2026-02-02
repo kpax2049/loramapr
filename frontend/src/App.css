@@ -20,6 +20,20 @@
   color: var(--panel-text);
 }
 
+.right-column {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  width: min(320px, calc(100vw - 3rem));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+  min-height: 0;
+}
+
 .controls {
   position: absolute;
   top: 1.5rem;
@@ -184,11 +198,8 @@
 }
 
 .point-details {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  z-index: 1000;
-  width: min(320px, calc(100vw - 3rem));
+  position: static;
+  width: 100%;
   padding: 1.1rem 1.25rem;
   border-radius: var(--panel-radius);
   border: 1px solid var(--panel-border);
@@ -237,11 +248,8 @@
 }
 
 .stats-card {
-  position: absolute;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  z-index: 1000;
-  width: min(280px, calc(100vw - 3rem));
+  position: static;
+  width: 100%;
   padding: 1.1rem 1.25rem;
   border-radius: var(--panel-radius);
   border: 1px solid var(--panel-border);
@@ -301,6 +309,81 @@
   color: #fecaca;
 }
 
+.lorawan-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  box-shadow: var(--panel-shadow);
+  border-left: 3px solid var(--panel-accent);
+}
+
+.lorawan-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.lorawan-panel__header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.lorawan-panel__header button {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+}
+
+.lorawan-panel__header button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lorawan-panel__empty {
+  font-size: 0.85rem;
+  color: var(--panel-muted);
+}
+
+.lorawan-panel__table-wrapper {
+  overflow-x: auto;
+}
+
+.lorawan-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.lorawan-panel__table th,
+.lorawan-panel__table td {
+  text-align: left;
+  padding: 0.4rem 0.25rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  white-space: nowrap;
+}
+
+.lorawan-panel__table th {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
 @media (max-width: 720px) {
   .point-details {
     position: static;
@@ -311,6 +394,14 @@
   .stats-card {
     position: static;
     width: auto;
+    margin: 1rem auto 0;
+  }
+
+  .right-column {
+    position: static;
+    width: auto;
+    max-height: none;
+    overflow: visible;
     margin: 1rem auto 0;
   }
 }

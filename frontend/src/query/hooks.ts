@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { getDeviceLatest, getMeasurements, getStats, getTrack, listDevices } from '../api/endpoints';
 import type { MeasurementQueryParams, MeasurementsResponse, StatsResponse, TrackResponse } from '../api/endpoints';
@@ -39,6 +40,16 @@ export function useDevices() {
     queryKey: ['devices'],
     queryFn: ({ signal }) => listDevices({ signal })
   });
+}
+
+export function useDevice(deviceId?: string | null) {
+  const devicesQuery = useDevices();
+  const device = useMemo(
+    () => devicesQuery.data?.find((item) => item.id === deviceId) ?? null,
+    [devicesQuery.data, deviceId]
+  );
+
+  return { ...devicesQuery, device };
 }
 
 export function useDeviceLatest(deviceId?: string) {

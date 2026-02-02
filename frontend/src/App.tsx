@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
+import LorawanEventsPanel from './components/LorawanEventsPanel';
 import MapView from './components/MapView';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
-import { useMeasurements, useStats, useTrack } from './query/hooks';
+import { useDevice, useMeasurements, useStats, useTrack } from './query/hooks';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -218,6 +219,7 @@ function App() {
   const statsQuery = useStats(statsParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
+  const { device: selectedDevice } = useDevice(deviceId);
 
   const selectedMeasurement = useMemo<Measurement | null>(() => {
     if (!selectedPointId) {
@@ -259,12 +261,15 @@ function App() {
         measurementsQuery.data.items.length === measurementsQuery.data.limit && (
           <div className="limit-banner">Result limited; zoom in or narrow filters</div>
         )}
-      <PointDetails measurement={selectedMeasurement} />
-      <StatsCard
+      <div className="right-column">
+        <PointDetails measurement={selectedMeasurement} />
+        <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
+        <StatsCard
         stats={statsQuery.data}
         isLoading={statsQuery.isLoading}
         error={statsQuery.error as Error | null}
-      />
+        />
+      </div>
       <Controls
         deviceId={deviceId}
         onDeviceChange={setDeviceId}
