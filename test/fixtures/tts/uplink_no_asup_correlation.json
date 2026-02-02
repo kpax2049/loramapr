@@ -1,0 +1,42 @@
+{
+  "received_at": "2026-02-02T20:00:00.000Z",
+  "end_device_ids": {
+    "device_id": "tracker-01"
+  },
+  "correlation_ids": [
+    "rpc:/ttn.lorawan.v3.ApplicationUplinkQueue"
+  ],
+  "uplink_message": {
+    "f_cnt": 42,
+    "frm_payload": "AQIDBA==",
+    "decoded_payload": {
+      "latitude": 37.771,
+      "longitude": -122.431
+    },
+    "rx_metadata": [
+      {
+        "gateway_ids": {
+          "gateway_id": "gw-north"
+        },
+        "rssi": -88,
+        "snr": 4.3
+      },
+      {
+        "gateway_ids": {
+          "gateway_id": "gw-south"
+        },
+        "rssi": -92,
+        "snr": 3.5
+      }
+    ],
+    "settings": {
+      "frequency": "915200000",
+      "data_rate": {
+        "lora": {
+          "bandwidth": 125000,
+          "spreading_factor": 9
+        }
+      }
+    }
+  }
+}
