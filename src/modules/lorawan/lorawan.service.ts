@@ -1,58 +1,92 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-
-type TtsWebhookPayload = {
-  end_device_ids?: {
-    device_id?: string;
-    dev_eui?: string;
-  };
-  uplink_message?: {
-    uplink_token?: string;
-    f_cnt?: number;
-  };
-};
+import { MeasurementsService } from '../measurements/measurements.service';
+import { normalizeTtsUplinkToMeasurement } from './tts-normalize';
+import type { TtsUplink } from './tts-uplink.schema';
+import { deriveUplinkId } from './uplink-id';
 
 @Injectable()
 export class LorawanService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly measurementsService: MeasurementsService
+  ) {}
 
-  async storeWebhook(payload: unknown): Promise<void> {
-    const deviceUid = extractDeviceUid(payload);
-    const uplinkId = extractUplinkId(payload, deviceUid);
+  async handleUplink(parsed: TtsUplink): Promise<void> {
+    const deviceUid =
+      parsed.end_device_ids?.dev_eui ?? parsed.end_device_ids?.device_id ?? undefined;
+    const uplinkId = deriveUplinkId(parsed);
 
-    await this.prisma.webhookEvent.create({
+    let webhookEventId: string | null = null;
+
+    try {
+      const created = await this.prisma.webhookEvent.create({
+        data: {
+          source: 'tts',
+          eventType: 'uplink',
+          deviceUid,
+          uplinkId,
+          payload: parsed as Prisma.InputJsonValue
+        },
+        select: { id: true }
+      });
+      webhookEventId = created.id;
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        return;
+      }
+      throw error;
+    }
+
+    const normalized = normalizeTtsUplinkToMeasurement(parsed);
+    if (!normalized.ok) {
+      await this.prisma.webhookEvent.update({
+        where: { id: webhookEventId },
+        data: {
+          processedAt: new Date(),
+          processingError: normalized.reason
+        }
+      });
+      return;
+    }
+
+    await this.measurementsService.ingestCanonical(deviceUid ?? normalized.item.deviceUid, [
+      normalized.item
+    ]);
+
+    await this.prisma.webhookEvent.update({
+      where: { id: webhookEventId },
       data: {
-        source: 'tts',
-        eventType: 'uplink',
-        deviceUid,
-        uplinkId,
-        payload: payload as Prisma.InputJsonValue
+        processedAt: new Date(),
+        processingError: null
+      }
+    });
+  }
+
+  async listEvents(params: { deviceUid?: string; limit: number }) {
+    const where = params.deviceUid ? { deviceUid: params.deviceUid } : undefined;
+    return this.prisma.webhookEvent.findMany({
+      where,
+      orderBy: { receivedAt: 'desc' },
+      take: params.limit,
+      select: {
+        id: true,
+        receivedAt: true,
+        processedAt: true,
+        processingError: true,
+        deviceUid: true,
+        uplinkId: true
       }
     });
   }
 }
 
-function extractDeviceUid(payload: unknown): string | undefined {
-  if (!payload || typeof payload !== 'object') {
-    return undefined;
-  }
-  const tts = payload as TtsWebhookPayload;
-  return tts.end_device_ids?.device_id ?? tts.end_device_ids?.dev_eui ?? undefined;
-}
-
-function extractUplinkId(payload: unknown, deviceUid?: string): string | undefined {
-  if (!payload || typeof payload !== 'object') {
-    return undefined;
-  }
-  const tts = payload as TtsWebhookPayload;
-  const uplinkToken = tts.uplink_message?.uplink_token;
-  if (typeof uplinkToken === 'string' && uplinkToken.length > 0) {
-    return uplinkToken;
-  }
-  const frameCount = tts.uplink_message?.f_cnt;
-  if (typeof frameCount === 'number' && Number.isFinite(frameCount)) {
-    return deviceUid ? `${deviceUid}:${frameCount}` : `f_cnt:${frameCount}`;
-  }
-  return undefined;
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
 }

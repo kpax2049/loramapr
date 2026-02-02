@@ -25,6 +25,8 @@ export type NormalizeResult =
   | { ok: true; item: NormalizedMeasurement }
   | { ok: false; reason: string };
 
+type RxMetadata = NonNullable<NonNullable<TtsUplink['uplink_message']>['rx_metadata']>[number];
+
 export function normalizeTtsUplinkToMeasurement(parsedPayload: TtsUplink): NormalizeResult {
   const deviceUid =
     parsedPayload.end_device_ids?.dev_eui ?? parsedPayload.end_device_ids?.device_id ?? undefined;
@@ -127,9 +129,7 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function pickGateway(
-  rxMetadata: TtsUplink['uplink_message'] extends { rx_metadata?: infer R } ? R : never
-): {
+function pickGateway(rxMetadata?: RxMetadata[]): {
   gatewayId?: string;
   rssi?: number;
   snr?: number;

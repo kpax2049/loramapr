@@ -8,6 +8,27 @@ export type MeasurementIngestResult = {
   deviceId: string;
 };
 
+export type CanonicalMeasurementInput = {
+  capturedAt: string | Date;
+  lat: number;
+  lon: number;
+  alt?: number;
+  hdop?: number;
+  rssi?: number;
+  snr?: number;
+  sf?: number;
+  bw?: number;
+  freq?: number;
+  gatewayId?: string;
+  payloadRaw?: string | Record<string, unknown>;
+  sessionId?: string;
+};
+
+export type CanonicalIngestResult = {
+  inserted: number;
+  deviceId: string;
+};
+
 export type MeasurementQueryParams = {
   deviceId?: string;
   sessionId?: string;
@@ -68,18 +89,62 @@ export class MeasurementsService {
     const deviceUid = measurements[0].deviceUid;
     const now = new Date();
 
+    const result = await this.ingestCanonical(
+      deviceUid,
+      measurements.map((measurement) => ({
+        capturedAt: measurement.capturedAt,
+        lat: measurement.lat,
+        lon: measurement.lon,
+        alt: measurement.alt,
+        hdop: measurement.hdop,
+        rssi: measurement.rssi,
+        snr: measurement.snr,
+        sf: measurement.sf,
+        bw: measurement.bw,
+        freq: measurement.freq,
+        gatewayId: measurement.gatewayId,
+        payloadRaw: measurement.payloadRaw,
+        sessionId: measurement.sessionId
+      })),
+      now
+    );
+
+    return {
+      inserted: result.inserted,
+      deviceUid,
+      deviceId: result.deviceId
+    };
+  }
+
+  async ingestCanonical(
+    deviceUid: string,
+    items: CanonicalMeasurementInput[],
+    timestamp: Date = new Date()
+  ): Promise<CanonicalIngestResult> {
     return this.prisma.$transaction(async (tx) => {
       const device = await tx.device.upsert({
         where: { deviceUid },
-        update: { lastSeenAt: now },
-        create: { deviceUid, lastSeenAt: now },
+        update: { lastSeenAt: timestamp },
+        create: { deviceUid, lastSeenAt: timestamp },
         select: { id: true }
       });
 
+      let fallbackSessionId: string | null = null;
+      const hasAnySessionId = items.some((item) => Boolean(item.sessionId));
+      if (!hasAnySessionId) {
+        const activeSession = await tx.session.findFirst({
+          where: {
+            deviceId: device.id,
+            endedAt: null
+          },
+          orderBy: { startedAt: 'desc' },
+          select: { id: true }
+        });
+        fallbackSessionId = activeSession?.id ?? null;
+      }
+
       const sessionIds = Array.from(
-        new Set(
-          measurements.map((measurement) => measurement.sessionId).filter((value) => Boolean(value))
-        )
+        new Set(items.map((item) => item.sessionId).filter((value) => Boolean(value)))
       ) as string[];
 
       const validSessionIds = new Set<string>();
@@ -93,31 +158,35 @@ export class MeasurementsService {
         }
       }
 
-      const data = measurements.map((measurement) => ({
+      const data = items.map((item) => ({
         deviceId: device.id,
         sessionId:
-          measurement.sessionId && validSessionIds.has(measurement.sessionId)
-            ? measurement.sessionId
-            : null,
-        capturedAt: new Date(measurement.capturedAt),
-        lat: measurement.lat,
-        lon: measurement.lon,
-        alt: measurement.alt,
-        hdop: measurement.hdop,
-        rssi: measurement.rssi,
-        snr: measurement.snr,
-        sf: measurement.sf,
-        bw: measurement.bw,
-        freq: measurement.freq,
-        gatewayId: measurement.gatewayId,
-        payloadRaw: measurement.payloadRaw
+          item.sessionId && validSessionIds.has(item.sessionId)
+            ? item.sessionId
+            : fallbackSessionId,
+        capturedAt: item.capturedAt instanceof Date ? item.capturedAt : new Date(item.capturedAt),
+        lat: item.lat,
+        lon: item.lon,
+        alt: item.alt,
+        hdop: item.hdop,
+        rssi: item.rssi,
+        snr: item.snr,
+        sf: item.sf,
+        bw: item.bw,
+        freq: item.freq,
+        gatewayId: item.gatewayId,
+        payloadRaw:
+          item.payloadRaw === undefined
+            ? undefined
+            : typeof item.payloadRaw === 'string'
+            ? item.payloadRaw
+            : JSON.stringify(item.payloadRaw)
       }));
 
       const result = await tx.measurement.createMany({ data });
 
       return {
         inserted: result.count,
-        deviceUid,
         deviceId: device.id
       };
     });
