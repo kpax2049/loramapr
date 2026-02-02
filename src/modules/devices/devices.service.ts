@@ -9,6 +9,12 @@ export type DeviceListItem = {
   latestMeasurementAt: Date | null;
 };
 
+export type DeviceLatestStatus = {
+  latestMeasurementAt: Date | null;
+  latestWebhookReceivedAt: Date | null;
+  latestWebhookError: string | null;
+};
+
 @Injectable()
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,5 +51,36 @@ export class DevicesService {
       lastSeenAt: device.lastSeenAt,
       latestMeasurementAt: device.measurements[0]?.capturedAt ?? null
     }));
+  }
+
+  async getLatestStatus(deviceId: string, ownerId?: string): Promise<DeviceLatestStatus | null> {
+    // TODO: enforce owner scoping once auth context is available.
+    const device = await this.prisma.device.findFirst({
+      where: ownerId ? { id: deviceId, ownerId } : { id: deviceId },
+      select: { id: true, deviceUid: true }
+    });
+
+    if (!device) {
+      return null;
+    }
+
+    const [latestMeasurement, latestWebhook] = await Promise.all([
+      this.prisma.measurement.findFirst({
+        where: { deviceId: device.id },
+        orderBy: { capturedAt: 'desc' },
+        select: { capturedAt: true }
+      }),
+      this.prisma.webhookEvent.findFirst({
+        where: { deviceUid: device.deviceUid },
+        orderBy: { receivedAt: 'desc' },
+        select: { receivedAt: true, processingError: true }
+      })
+    ]);
+
+    return {
+      latestMeasurementAt: latestMeasurement?.capturedAt ?? null,
+      latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
+      latestWebhookError: latestWebhook?.processingError ?? null
+    };
   }
 }

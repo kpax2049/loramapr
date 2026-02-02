@@ -1,7 +1,7 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Req, UseGuards } from '@nestjs/common';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
-import { DeviceListItem, DevicesService } from './devices.service';
+import { DeviceLatestStatus, DeviceListItem, DevicesService } from './devices.service';
 
 @Controller('api/devices')
 export class DevicesController {
@@ -13,4 +13,32 @@ export class DevicesController {
     const ownerId = getOwnerIdFromRequest(request);
     return this.devicesService.list(ownerId);
   }
+
+  @Get(':id/latest')
+  @UseGuards(OwnerGuard)
+  async latest(
+    @Req() request: OwnerContextRequest,
+    @Param('id') id: string
+  ): Promise<{
+    latestMeasurementAt: string | null;
+    latestWebhookReceivedAt: string | null;
+    latestWebhookError: string | null;
+  }> {
+    const ownerId = getOwnerIdFromRequest(request);
+    const latest = await this.devicesService.getLatestStatus(id, ownerId);
+    if (!latest) {
+      throw new NotFoundException('Device not found');
+    }
+    return formatLatestResponse(latest);
+  }
+}
+
+function formatLatestResponse(latest: DeviceLatestStatus) {
+  return {
+    latestMeasurementAt: latest.latestMeasurementAt ? latest.latestMeasurementAt.toISOString() : null,
+    latestWebhookReceivedAt: latest.latestWebhookReceivedAt
+      ? latest.latestWebhookReceivedAt.toISOString()
+      : null,
+    latestWebhookError: latest.latestWebhookError ?? null
+  };
 }
