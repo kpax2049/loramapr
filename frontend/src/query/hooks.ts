@@ -10,6 +10,7 @@ type MeasurementKeyParams = {
   from: string | null;
   to: string | null;
   bbox: string | null;
+  gatewayId: string | null;
   limit: number | null;
 };
 
@@ -28,6 +29,7 @@ function normalizeMeasurementParams(params: MeasurementQueryParams): Measurement
     from: params.from ? toIso(params.from) : null,
     to: params.to ? toIso(params.to) : null,
     bbox,
+    gatewayId: params.gatewayId ?? null,
     limit: typeof params.limit === 'number' ? params.limit : null
   };
 }

@@ -79,6 +79,7 @@ function App() {
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [selectedGatewayId, setSelectedGatewayId] = useState<string | null>(null);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -152,6 +153,7 @@ function App() {
         ? {
             sessionId: selectedSessionId ?? undefined,
             bbox: bboxPayload,
+            gatewayId: selectedGatewayId ?? undefined,
             limit: effectiveLimit
           }
         : {
@@ -159,9 +161,10 @@ function App() {
             from: from || undefined,
             to: to || undefined,
             bbox: bboxPayload,
+            gatewayId: selectedGatewayId ?? undefined,
             limit: effectiveLimit
           },
-    [isSessionMode, selectedSessionId, bboxPayload, deviceId, from, to, effectiveLimit]
+    [isSessionMode, selectedSessionId, bboxPayload, deviceId, from, to, selectedGatewayId, effectiveLimit]
   );
 
   const trackParams = useMemo<MeasurementQueryParams>(
@@ -169,15 +172,17 @@ function App() {
       isSessionMode
         ? {
             sessionId: selectedSessionId ?? undefined,
+            gatewayId: selectedGatewayId ?? undefined,
             limit: effectiveLimit
           }
         : {
             deviceId: deviceId ?? undefined,
             from: from || undefined,
             to: to || undefined,
+            gatewayId: selectedGatewayId ?? undefined,
             limit: effectiveLimit
           },
-    [isSessionMode, selectedSessionId, deviceId, from, to, effectiveLimit]
+    [isSessionMode, selectedSessionId, deviceId, from, to, selectedGatewayId, effectiveLimit]
   );
 
   const measurementsQuery = useMeasurements(measurementsParams, {
@@ -186,6 +191,17 @@ function App() {
   const trackQuery = useTrack(trackParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
+
+  const gatewayIds = useMemo(() => {
+    const items = measurementsQuery.data?.items ?? [];
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (item.gatewayId) {
+        ids.add(item.gatewayId);
+      }
+    }
+    return Array.from(ids).sort((a, b) => a.localeCompare(b));
+  }, [measurementsQuery.data?.items]);
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
       isSessionMode
@@ -220,6 +236,10 @@ function App() {
     setSelectedSessionId(null);
   }, [deviceId]);
 
+  useEffect(() => {
+    setSelectedGatewayId(null);
+  }, [deviceId, selectedSessionId]);
+
   const isLoading = measurementsQuery.isLoading || trackQuery.isLoading;
   const error = measurementsQuery.error ?? trackQuery.error;
 
@@ -252,6 +272,9 @@ function App() {
         onFilterModeChange={handleFilterModeChange}
         selectedSessionId={selectedSessionId}
         onSelectSessionId={setSelectedSessionId}
+        gatewayIds={gatewayIds}
+        selectedGatewayId={selectedGatewayId}
+        onSelectGatewayId={setSelectedGatewayId}
         from={from}
         to={to}
         onFromChange={setFrom}

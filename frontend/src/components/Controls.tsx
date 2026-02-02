@@ -9,6 +9,9 @@ type ControlsProps = {
   onFilterModeChange: (mode: 'time' | 'session') => void;
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
+  gatewayIds: string[];
+  selectedGatewayId: string | null;
+  onSelectGatewayId: (gatewayId: string | null) => void;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -26,6 +29,9 @@ export default function Controls({
   onFilterModeChange,
   selectedSessionId,
   onSelectSessionId,
+  gatewayIds,
+  selectedGatewayId,
+  onSelectGatewayId,
   from,
   to,
   onFromChange,
@@ -126,6 +132,23 @@ export default function Controls({
           )}
         </div>
       )}
+
+      <div className="controls__group">
+        <label htmlFor="gateway-select">Gateway</label>
+        <select
+          id="gateway-select"
+          value={selectedGatewayId ?? ''}
+          onChange={(event) => onSelectGatewayId(event.target.value || null)}
+          disabled={gatewayIds.length === 0}
+        >
+          <option value="">All gateways</option>
+          {gatewayIds.map((gatewayId) => (
+            <option key={gatewayId} value={gatewayId}>
+              {gatewayId}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className="controls__group">
         <span className="controls__label">Layers</span>

@@ -14,6 +14,7 @@ export type MeasurementQueryParams = {
   from?: string | Date;
   to?: string | Date;
   bbox?: Bbox;
+  gatewayId?: string;
   limit?: number;
 };
 
@@ -60,6 +61,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   if (params.bbox) {
     const { minLon, minLat, maxLon, maxLat } = params.bbox;
     searchParams.set('bbox', `${minLon},${minLat},${maxLon},${maxLat}`);
+  }
+  if (params.gatewayId) {
+    searchParams.set('gatewayId', params.gatewayId);
   }
   if (typeof params.limit === 'number') {
     searchParams.set('limit', String(params.limit));
