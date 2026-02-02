@@ -36,3 +36,10 @@ export type TrackPoint = {
   lat: number;
   lon: number;
 };
+
+export type DeviceLatest = {
+  deviceId: string;
+  lastMeasurementAt: string | null;
+  lastWebhookAt: string | null;
+  lastWebhookError: string | null;
+};

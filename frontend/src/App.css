@@ -128,6 +128,33 @@
   color: #0b1220;
 }
 
+.controls__status {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: var(--panel-surface);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+
+.controls__status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--panel-muted);
+}
+
+.controls__status-row strong {
+  color: var(--panel-text);
+  font-weight: 500;
+}
+
+.controls__status-error strong {
+  color: #fecaca;
+}
+
 @media (max-width: 720px) {
   .controls {
     left: 50%;

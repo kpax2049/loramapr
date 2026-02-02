@@ -1,5 +1,5 @@
 import { getJson, requestJson } from './http';
-import type { Device, Measurement, Session, TrackPoint } from './types';
+import type { Device, DeviceLatest, Measurement, Session, TrackPoint } from './types';
 
 export type Bbox = {
   minLon: number;
@@ -89,6 +89,10 @@ function buildStatsQuery(params: MeasurementQueryParams): string {
 
 export async function listDevices(options?: RequestOptions): Promise<Device[]> {
   return getJson<Device[]>('/api/devices', options);
+}
+
+export async function getDeviceLatest(deviceId: string, options?: RequestOptions): Promise<DeviceLatest> {
+  return getJson<DeviceLatest>(`/api/devices/${deviceId}/latest`, options);
 }
 
 export async function listSessions(deviceId: string, options?: RequestOptions): Promise<Session[]> {

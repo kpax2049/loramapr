@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useDevices } from '../query/hooks';
+import { useDeviceLatest, useDevices } from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
@@ -37,6 +37,7 @@ export default function Controls({
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = Array.isArray(devicesData) ? devicesData : [];
+  const { data: latest } = useDeviceLatest(deviceId ?? undefined);
 
   useEffect(() => {
     if (!deviceId && devices.length > 0) {
@@ -145,6 +146,70 @@ export default function Controls({
           Show track
         </label>
       </div>
+
+      {(latest?.lastMeasurementAt || latest?.lastWebhookAt || latest?.lastWebhookError) && (
+        <div className="controls__status" aria-live="polite">
+          {latest?.lastMeasurementAt && (
+            <div className="controls__status-row">
+              <span>Last measurement:</span>
+              <strong>{formatRelativeTime(latest.lastMeasurementAt)}</strong>
+            </div>
+          )}
+          {(latest?.lastWebhookAt || latest?.lastWebhookError) && (
+            <div
+              className={`controls__status-row ${
+                latest?.lastWebhookError ? 'controls__status-error' : ''
+              }`}
+            >
+              <span>Last webhook:</span>
+              <strong>
+                {latest?.lastWebhookAt ? formatRelativeTime(latest.lastWebhookAt) : '—'}
+                {latest?.lastWebhookError ? ` (${latest.lastWebhookError})` : ''}
+              </strong>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
+}
+
+function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const absSeconds = Math.abs(seconds);
+
+  if (typeof Intl !== 'undefined' && 'RelativeTimeFormat' in Intl) {
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+    if (absSeconds < 60) {
+      return rtf.format(seconds, 'second');
+    }
+    const minutes = Math.round(seconds / 60);
+    if (Math.abs(minutes) < 60) {
+      return rtf.format(minutes, 'minute');
+    }
+    const hours = Math.round(minutes / 60);
+    if (Math.abs(hours) < 24) {
+      return rtf.format(hours, 'hour');
+    }
+    const days = Math.round(hours / 24);
+    return rtf.format(days, 'day');
+  }
+
+  const minutes = Math.round(absSeconds / 60);
+  if (minutes < 1) {
+    return `${absSeconds}s ago`;
+  }
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
 }

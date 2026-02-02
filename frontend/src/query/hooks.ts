@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryOptions } from '@tanstack/react-query';
-import { getMeasurements, getStats, getTrack, listDevices } from '../api/endpoints';
+import { getDeviceLatest, getMeasurements, getStats, getTrack, listDevices } from '../api/endpoints';
 import type { MeasurementQueryParams, MeasurementsResponse, StatsResponse, TrackResponse } from '../api/endpoints';
-import type { Device } from '../api/types';
+import type { Device, DeviceLatest } from '../api/types';
 
 type MeasurementKeyParams = {
   deviceId: string | null;
@@ -36,6 +36,17 @@ export function useDevices() {
   return useQuery<Device[]>({
     queryKey: ['devices'],
     queryFn: ({ signal }) => listDevices({ signal })
+  });
+}
+
+export function useDeviceLatest(deviceId?: string) {
+  const enabled = Boolean(deviceId);
+
+  return useQuery<DeviceLatest>({
+    queryKey: ['device-latest', deviceId ?? null],
+    queryFn: ({ signal }) => getDeviceLatest(deviceId as string, { signal }),
+    enabled,
+    refetchInterval: enabled ? 3000 : false
   });
 }
 
