@@ -29,6 +29,10 @@ export default function PointDetails({ measurement }: PointDetailsProps) {
           <dd>{formatValue(measurement.capturedAt)}</dd>
         </div>
         <div>
+          <dt>Session ID</dt>
+          <dd>{measurement.sessionId ?? 'none'}</dd>
+        </div>
+        <div>
           <dt>Latitude</dt>
           <dd>{formatValue(measurement.lat)}</dd>
         </div>

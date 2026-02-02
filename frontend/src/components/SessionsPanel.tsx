@@ -6,6 +6,7 @@ type SessionsPanelProps = {
   deviceId: string | null;
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
+  onStartSession: (sessionId: string) => void;
 };
 
 function formatTimestamp(value?: string | null): string {
@@ -26,7 +27,8 @@ function sessionLabel(session: Session): string {
 export default function SessionsPanel({
   deviceId,
   selectedSessionId,
-  onSelectSessionId
+  onSelectSessionId,
+  onStartSession
 }: SessionsPanelProps) {
   const [sessionName, setSessionName] = useState('');
   const { data: sessions = [], isLoading, error } = useSessions(deviceId ?? undefined);
@@ -53,6 +55,7 @@ export default function SessionsPanel({
         onSuccess: (created) => {
           setSessionName('');
           onSelectSessionId(created.id);
+          onStartSession(created.id);
         }
       }
     );

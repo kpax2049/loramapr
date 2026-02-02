@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
@@ -6,7 +7,7 @@ import LorawanEventsPanel from './components/LorawanEventsPanel';
 import MapView from './components/MapView';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
-import { useDevice, useMeasurements, useStats, useTrack } from './query/hooks';
+import { useDevice, useDeviceLatest, useMeasurements, useStats, useTrack } from './query/hooks';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -68,6 +69,9 @@ function readInitialQueryState(): InitialQueryState {
 
 function App() {
   const initial = useMemo(() => readInitialQueryState(), []);
+
+  const queryClient = useQueryClient();
+  const prevLatestMeasurementAt = useRef<string | null>(null);
 
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
@@ -131,6 +135,11 @@ function App() {
     }
   };
 
+  const handleSessionStart = (sessionId: string) => {
+    handleFilterModeChange('session');
+    setSelectedSessionId(sessionId);
+  };
+
   const bboxPayload = useMemo(
     () =>
       debouncedBbox
@@ -186,12 +195,22 @@ function App() {
     [isSessionMode, selectedSessionId, deviceId, from, to, selectedGatewayId, effectiveLimit]
   );
 
-  const measurementsQuery = useMeasurements(measurementsParams, {
-    enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
-  });
-  const trackQuery = useTrack(trackParams, {
-    enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
-  });
+  const sessionPolling = isSessionMode ? 2000 : false;
+
+  const measurementsQuery = useMeasurements(
+    measurementsParams,
+    {
+      enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
+    },
+    { filterMode, refetchIntervalMs: sessionPolling }
+  );
+  const trackQuery = useTrack(
+    trackParams,
+    {
+      enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
+    },
+    { filterMode, refetchIntervalMs: sessionPolling }
+  );
 
   const gatewayIds = useMemo(() => {
     const items = measurementsQuery.data?.items ?? [];
@@ -220,6 +239,7 @@ function App() {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
   const { device: selectedDevice } = useDevice(deviceId);
+  const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
 
   const selectedMeasurement = useMemo<Measurement | null>(() => {
     if (!selectedPointId) {
@@ -241,6 +261,65 @@ function App() {
   useEffect(() => {
     setSelectedGatewayId(null);
   }, [deviceId, selectedSessionId]);
+
+  useEffect(() => {
+    if (!deviceId) {
+      prevLatestMeasurementAt.current = null;
+      return;
+    }
+
+    const latestMeasurementAt = latestDeviceQuery.data?.lastMeasurementAt ?? null;
+    if (!latestMeasurementAt) {
+      prevLatestMeasurementAt.current = latestMeasurementAt;
+      return;
+    }
+
+    const prev = prevLatestMeasurementAt.current;
+    if (prev) {
+      const latestTime = new Date(latestMeasurementAt).getTime();
+      const prevTime = new Date(prev).getTime();
+      if (Number.isFinite(latestTime) && Number.isFinite(prevTime) && latestTime > prevTime) {
+        const bboxKey = bboxPayload
+          ? `${bboxPayload.minLon},${bboxPayload.minLat},${bboxPayload.maxLon},${bboxPayload.maxLat}`
+          : null;
+        const normalizeTime = (value?: string | Date) =>
+          value ? (value instanceof Date ? value.toISOString() : value) : null;
+        const measurementsKey = {
+          deviceId: measurementsParams.deviceId ?? null,
+          sessionId: measurementsParams.sessionId ?? null,
+          from: normalizeTime(measurementsParams.from),
+          to: normalizeTime(measurementsParams.to),
+          bbox: bboxKey,
+          gatewayId: measurementsParams.gatewayId ?? null,
+          limit: typeof measurementsParams.limit === 'number' ? measurementsParams.limit : null,
+          filterMode
+        };
+        const trackKey = {
+          deviceId: trackParams.deviceId ?? null,
+          sessionId: trackParams.sessionId ?? null,
+          from: normalizeTime(trackParams.from),
+          to: normalizeTime(trackParams.to),
+          bbox: null,
+          gatewayId: trackParams.gatewayId ?? null,
+          limit: typeof trackParams.limit === 'number' ? trackParams.limit : null,
+          filterMode
+        };
+
+        queryClient.invalidateQueries({ queryKey: ['measurements', measurementsKey] });
+        queryClient.invalidateQueries({ queryKey: ['track', trackKey] });
+      }
+    }
+
+    prevLatestMeasurementAt.current = latestMeasurementAt;
+  }, [
+    deviceId,
+    latestDeviceQuery.data?.lastMeasurementAt,
+    measurementsParams,
+    trackParams,
+    bboxPayload,
+    filterMode,
+    queryClient
+  ]);
 
   const isLoading = measurementsQuery.isLoading || trackQuery.isLoading;
   const error = measurementsQuery.error ?? trackQuery.error;
@@ -277,9 +356,11 @@ function App() {
         onFilterModeChange={handleFilterModeChange}
         selectedSessionId={selectedSessionId}
         onSelectSessionId={setSelectedSessionId}
+        onStartSession={handleSessionStart}
         gatewayIds={gatewayIds}
         selectedGatewayId={selectedGatewayId}
         onSelectGatewayId={setSelectedGatewayId}
+        latest={latestDeviceQuery.data}
         from={from}
         to={to}
         onFromChange={setFrom}

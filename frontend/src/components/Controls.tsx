@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { useDeviceLatest, useDevices } from '../query/hooks';
+import type { DeviceLatest } from '../api/types';
+import { useDevices } from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
@@ -9,9 +10,11 @@ type ControlsProps = {
   onFilterModeChange: (mode: 'time' | 'session') => void;
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
+  onStartSession: (sessionId: string) => void;
   gatewayIds: string[];
   selectedGatewayId: string | null;
   onSelectGatewayId: (gatewayId: string | null) => void;
+  latest?: DeviceLatest;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -29,9 +32,11 @@ export default function Controls({
   onFilterModeChange,
   selectedSessionId,
   onSelectSessionId,
+  onStartSession,
   gatewayIds,
   selectedGatewayId,
   onSelectGatewayId,
+  latest,
   from,
   to,
   onFromChange,
@@ -43,7 +48,6 @@ export default function Controls({
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = Array.isArray(devicesData) ? devicesData : [];
-  const { data: latest } = useDeviceLatest(deviceId ?? undefined);
 
   useEffect(() => {
     if (!deviceId && devices.length > 0) {
@@ -126,6 +130,7 @@ export default function Controls({
               deviceId={deviceId}
               selectedSessionId={selectedSessionId}
               onSelectSessionId={onSelectSessionId}
+              onStartSession={onStartSession}
             />
           ) : (
             <span className="controls__label">Select a device</span>

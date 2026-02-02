@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { getDeviceLatest, getMeasurements, getStats, getTrack, listDevices } from '../api/endpoints';
+import { ApiError } from '../api/http';
 import type { MeasurementQueryParams, MeasurementsResponse, StatsResponse, TrackResponse } from '../api/endpoints';
 import type { Device, DeviceLatest } from '../api/types';
 
@@ -13,16 +14,20 @@ type MeasurementKeyParams = {
   bbox: string | null;
   gatewayId: string | null;
   limit: number | null;
+  filterMode: 'time' | 'session' | null;
 };
 
 function toIso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function normalizeMeasurementParams(params: MeasurementQueryParams): MeasurementKeyParams {
+function normalizeMeasurementParams(
+  params: MeasurementQueryParams,
+  context?: { filterMode?: 'time' | 'session' }
+): MeasurementKeyParams {
   const bbox = params.bbox
     ? `${params.bbox.minLon},${params.bbox.minLat},${params.bbox.maxLon},${params.bbox.maxLat}`
-    : null;
+    : 'none';
 
   return {
     deviceId: params.deviceId ?? null,
@@ -31,7 +36,8 @@ function normalizeMeasurementParams(params: MeasurementQueryParams): Measurement
     to: params.to ? toIso(params.to) : null,
     bbox,
     gatewayId: params.gatewayId ?? null,
-    limit: typeof params.limit === 'number' ? params.limit : null
+    limit: typeof params.limit === 'number' ? params.limit : null,
+    filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
   };
 }
 
@@ -53,37 +59,59 @@ export function useDevice(deviceId?: string | null) {
 }
 
 export function useDeviceLatest(deviceId?: string) {
-  const enabled = Boolean(deviceId);
+  const [unsupported, setUnsupported] = useState(false);
+  const enabled = Boolean(deviceId) && !unsupported;
 
   return useQuery<DeviceLatest>({
     queryKey: ['device-latest', deviceId ?? null],
     queryFn: ({ signal }) => getDeviceLatest(deviceId as string, { signal }),
     enabled,
-    refetchInterval: enabled ? 3000 : false
+    refetchInterval: enabled ? 3000 : false,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        setUnsupported(true);
+      }
+    }
   });
 }
 
 type QueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
 
-export function useMeasurements(params: MeasurementQueryParams, options?: QueryOptions<MeasurementsResponse>) {
-  const keyParams = normalizeMeasurementParams(params);
+export function useMeasurements(
+  params: MeasurementQueryParams,
+  options?: QueryOptions<MeasurementsResponse>,
+  context?: { filterMode?: 'time' | 'session'; refetchIntervalMs?: number | false }
+) {
+  const keyParams = normalizeMeasurementParams(params, context);
   const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
 
   return useQuery<MeasurementsResponse>({
     queryKey: ['measurements', keyParams],
     queryFn: ({ signal }) => getMeasurements(params, { signal }),
+    refetchInterval: context?.refetchIntervalMs ?? false,
     ...options,
     enabled
   });
 }
 
-export function useTrack(params: MeasurementQueryParams, options?: QueryOptions<TrackResponse>) {
-  const keyParams = normalizeMeasurementParams(params);
+export function useTrack(
+  params: MeasurementQueryParams,
+  options?: QueryOptions<TrackResponse>,
+  context?: { filterMode?: 'time' | 'session'; refetchIntervalMs?: number | false }
+) {
+  const keyParams = normalizeMeasurementParams(params, context);
   const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
 
   return useQuery<TrackResponse>({
     queryKey: ['track', keyParams],
     queryFn: ({ signal }) => getTrack(params, { signal }),
+    refetchInterval: context?.refetchIntervalMs ?? false,
     ...options,
     enabled
   });

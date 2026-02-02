@@ -56,6 +56,14 @@ function BoundsListener({
   onZoomChange?: (zoom: number) => void;
 }) {
   const map = useMapEvents({
+    load: () => {
+      if (onChange) {
+        onChange(boundsToBbox(map.getBounds()));
+      }
+      if (onZoomChange) {
+        onZoomChange(map.getZoom());
+      }
+    },
     moveend: () => {
       if (onChange) {
         onChange(boundsToBbox(map.getBounds()));
