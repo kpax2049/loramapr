@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0 - 2026-02-03
+
+### Highlights
+- Async LoRaWAN ingest pipeline with idempotent webhook event storage, worker processing, and rate limiting.
+- Ops visibility in the UI: LoRaWAN events table with drilldown, summary stats, and reprocess actions.
+- Device + map UX upgrades: latest status polling, device UID copy, gateway filters, and fit-to-data behavior.
+- Dev tooling/docs for live testing (payload formatter guide, fixtures, and webhook setup docs).
+
+### Notes
+- LoRaWAN debug endpoints require an X-API-Key with QUERY scope.
+- No breaking changes.
+
 ## v0.2.0 - 2026-02-01
 
 ### Highlights
