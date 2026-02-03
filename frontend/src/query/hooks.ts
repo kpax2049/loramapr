@@ -1,10 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { UseQueryOptions } from '@tanstack/react-query';
-import { getDeviceLatest, getMeasurements, getStats, getTrack, listDevices } from '../api/endpoints';
+import {
+  getCoverageBins,
+  getDeviceLatest,
+  getMeasurements,
+  getStats,
+  getTrack,
+  listDevices
+} from '../api/endpoints';
 import { ApiError } from '../api/http';
-import type { MeasurementQueryParams, MeasurementsResponse, StatsResponse, TrackResponse } from '../api/endpoints';
-import type { Device, DeviceLatest } from '../api/types';
+import type {
+  CoverageQueryParams,
+  MeasurementQueryParams,
+  MeasurementsResponse,
+  StatsResponse,
+  TrackResponse
+} from '../api/endpoints';
+import type { CoverageBinsResponse, Device, DeviceLatest } from '../api/types';
 
 type MeasurementKeyParams = {
   deviceId: string | null;
@@ -14,6 +27,15 @@ type MeasurementKeyParams = {
   bbox: string | null;
   gatewayId: string | null;
   limit: number | null;
+  filterMode: 'time' | 'session' | null;
+};
+
+type CoverageKeyParams = {
+  deviceId: string | null;
+  sessionId: string | null;
+  day: string | null;
+  bbox: string | null;
+  gatewayId: string | null;
   filterMode: 'time' | 'session' | null;
 };
 
@@ -37,6 +59,24 @@ function normalizeMeasurementParams(
     bbox,
     gatewayId: params.gatewayId ?? null,
     limit: typeof params.limit === 'number' ? params.limit : null,
+    filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
+  };
+}
+
+function normalizeCoverageParams(
+  params: CoverageQueryParams,
+  context?: { filterMode?: 'time' | 'session' }
+): CoverageKeyParams {
+  const bbox = params.bbox
+    ? `${params.bbox.minLon},${params.bbox.minLat},${params.bbox.maxLon},${params.bbox.maxLat}`
+    : 'none';
+
+  return {
+    deviceId: params.deviceId ?? null,
+    sessionId: params.sessionId ?? null,
+    day: params.day ? toIso(params.day) : null,
+    bbox,
+    gatewayId: params.gatewayId ?? null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
   };
 }
@@ -124,6 +164,24 @@ export function useStats(params: MeasurementQueryParams, options?: QueryOptions<
   return useQuery<StatsResponse>({
     queryKey: ['stats', keyParams],
     queryFn: ({ signal }) => getStats(params, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useCoverageBins(
+  params: CoverageQueryParams,
+  options?: QueryOptions<CoverageBinsResponse>,
+  context?: { filterMode?: 'time' | 'session' }
+) {
+  const keyParams = normalizeCoverageParams(params, context);
+  const enabled =
+    options?.enabled ??
+    (Boolean(params.deviceId || params.sessionId) && Boolean(params.bbox));
+
+  return useQuery<CoverageBinsResponse>({
+    queryKey: ['coverage-bins', keyParams],
+    queryFn: ({ signal }) => getCoverageBins(params, { signal }),
     ...options,
     enabled
   });

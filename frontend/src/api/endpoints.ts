@@ -2,6 +2,7 @@ import { getJson, requestJson } from './http';
 import type {
   Device,
   DeviceLatest,
+  CoverageBinsResponse,
   LorawanEvent,
   LorawanEventDetail,
   LorawanSummary,
@@ -42,6 +43,14 @@ export type StatsResponse = {
   minCapturedAt: string | null;
   maxCapturedAt: string | null;
   gatewayCount: number;
+};
+
+export type CoverageQueryParams = {
+  deviceId?: string;
+  sessionId?: string;
+  day?: string | Date;
+  bbox?: Bbox;
+  gatewayId?: string;
 };
 
 type RequestOptions = {
@@ -95,6 +104,29 @@ function buildStatsQuery(params: MeasurementQueryParams): string {
   }
   if (params.to) {
     searchParams.set('to', toIso(params.to));
+  }
+
+  return searchParams.toString();
+}
+
+function buildCoverageQuery(params: CoverageQueryParams): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.deviceId) {
+    searchParams.set('deviceId', params.deviceId);
+  }
+  if (params.sessionId) {
+    searchParams.set('sessionId', params.sessionId);
+  }
+  if (params.day) {
+    searchParams.set('day', toIso(params.day));
+  }
+  if (params.bbox) {
+    const { minLon, minLat, maxLon, maxLat } = params.bbox;
+    searchParams.set('bbox', `${minLon},${minLat},${maxLon},${maxLat}`);
+  }
+  if (params.gatewayId) {
+    searchParams.set('gatewayId', params.gatewayId);
   }
 
   return searchParams.toString();
@@ -218,4 +250,13 @@ export async function getStats(
   const query = buildStatsQuery(params);
   const path = query ? `/api/stats?${query}` : '/api/stats';
   return getJson<StatsResponse>(path, options);
+}
+
+export async function getCoverageBins(
+  params: CoverageQueryParams,
+  options?: RequestOptions
+): Promise<CoverageBinsResponse> {
+  const query = buildCoverageQuery(params);
+  const path = query ? `/api/coverage/bins?${query}` : '/api/coverage/bins';
+  return getJson<CoverageBinsResponse>(path, options);
 }

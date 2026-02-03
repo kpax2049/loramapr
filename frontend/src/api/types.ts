@@ -37,6 +37,23 @@ export type TrackPoint = {
   lon: number;
 };
 
+export type CoverageBin = {
+  latBin: number;
+  lonBin: number;
+  count: number;
+  rssiAvg: number | null;
+  snrAvg: number | null;
+  rssiMin: number | null;
+  rssiMax: number | null;
+  snrMin: number | null;
+  snrMax: number | null;
+};
+
+export type CoverageBinsResponse = {
+  binSize: number;
+  bins: CoverageBin[];
+};
+
 export type DeviceLatest = {
   deviceId: string;
   lastMeasurementAt: string | null;

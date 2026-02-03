@@ -1,7 +1,16 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMapEvents } from 'react-leaflet';
+import {
+  CircleMarker,
+  MapContainer,
+  Polyline,
+  Rectangle,
+  TileLayer,
+  Tooltip,
+  useMapEvents
+} from 'react-leaflet';
 import L from 'leaflet';
 import simplify from 'simplify-js';
+import type { CoverageBin } from '../api/types';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -16,8 +25,12 @@ const markerShadowUrl = new URL('leaflet/dist/images/marker-shadow.png', import.
 type MapViewProps = {
   center?: [number, number];
   zoom?: number;
+  mapMode?: 'points' | 'coverage';
+  coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
   track?: TrackPoint[];
+  coverageBins?: CoverageBin[];
+  coverageBinSize?: number | null;
   showPoints?: boolean;
   showTrack?: boolean;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
@@ -128,6 +141,35 @@ function getRssiBucket(rssi?: number | null): RssiBucket {
   return 'weak';
 }
 
+function getSnrBucket(snr?: number | null): RssiBucket {
+  if (snr === null || snr === undefined) {
+    return 'unknown';
+  }
+  if (!Number.isFinite(snr)) {
+    return 'unknown';
+  }
+  if (snr >= 10) {
+    return 'strong';
+  }
+  if (snr >= 5) {
+    return 'medium';
+  }
+  return 'weak';
+}
+
+function getCountBucket(count: number): RssiBucket {
+  if (!Number.isFinite(count)) {
+    return 'unknown';
+  }
+  if (count >= 21) {
+    return 'strong';
+  }
+  if (count >= 6) {
+    return 'medium';
+  }
+  return 'weak';
+}
+
 type PointPalette = Record<RssiBucket, string>;
 
 function readPalette(): PointPalette {
@@ -164,8 +206,12 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 {
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
+  mapMode = 'points',
+  coverageMetric = 'count',
   measurements = [],
   track = [],
+  coverageBins = [],
+  coverageBinSize = 0.001,
   showPoints = true,
   showTrack = true,
   onBoundsChange,
@@ -221,6 +267,41 @@ ref
     }
   }, [currentZoom, onZoomChange]);
 
+  const coverageData = useMemo(() => {
+    if (mapMode !== 'coverage' || coverageBins.length === 0 || !coverageBinSize) {
+      return { bins: [], maxCount: 1 };
+    }
+    let maxCount = 1;
+    const bins = coverageBins.map((bin) => {
+      if (bin.count > maxCount) {
+        maxCount = bin.count;
+      }
+      const minLat = bin.latBin * coverageBinSize;
+      const minLon = bin.lonBin * coverageBinSize;
+      const maxLat = minLat + coverageBinSize;
+      const maxLon = minLon + coverageBinSize;
+      let bucket: RssiBucket =
+        coverageMetric === 'count'
+          ? getCountBucket(bin.count)
+          : coverageMetric === 'snrAvg'
+            ? getSnrBucket(bin.snrAvg)
+            : getRssiBucket(bin.rssiAvg);
+      if (bucket === 'default') {
+        bucket = 'unknown';
+      }
+      return {
+        ...bin,
+        bucket,
+        bounds: [
+          [minLat, minLon],
+          [maxLat, maxLon]
+        ] as [[number, number], [number, number]]
+      };
+    });
+
+    return { bins, maxCount };
+  }, [mapMode, coverageBins, coverageBinSize, coverageMetric]);
+
   return (
     <MapContainer
       center={center}
@@ -246,7 +327,26 @@ ref
           pathOptions={{ color: '#0f172a', weight: 3, opacity: 0.7 }}
         />
       )}
-      {showPoints &&
+      {mapMode === 'coverage' &&
+        coverageData.bins.map((bin) => {
+          const intensity = Math.min(1, 0.2 + (bin.count / coverageData.maxCount) * 0.8);
+          const className = ['coverage-bin', `coverage-bin--${bin.bucket}`].join(' ');
+
+          return (
+            <Rectangle
+              key={`${bin.latBin}-${bin.lonBin}`}
+              bounds={bin.bounds}
+              pathOptions={{
+                weight: 1,
+                opacity: 0.7,
+                fillOpacity: intensity,
+                className
+              }}
+            />
+          );
+        })}
+      {mapMode === 'points' &&
+        showPoints &&
         measurements.map((measurement) => {
           const bucket = getRssiBucket(measurement.rssi);
           const color = palette[bucket] || palette.default;

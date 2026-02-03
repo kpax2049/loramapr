@@ -16,6 +16,10 @@ type ControlsProps = {
   onSelectGatewayId: (gatewayId: string | null) => void;
   latest?: DeviceLatest;
   onFitToData: () => void;
+  mapMode: 'points' | 'coverage';
+  onMapModeChange: (mode: 'points' | 'coverage') => void;
+  coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
+  onCoverageMetricChange: (metric: 'count' | 'rssiAvg' | 'snrAvg') => void;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -39,6 +43,10 @@ export default function Controls({
   onSelectGatewayId,
   latest,
   onFitToData,
+  mapMode,
+  onMapModeChange,
+  coverageMetric,
+  onCoverageMetricChange,
   from,
   to,
   onFromChange,
@@ -117,6 +125,48 @@ export default function Controls({
         </div>
       </div>
 
+      <div className="controls__group">
+        <span className="controls__label">Map layer</span>
+        <div className="controls__segmented" role="radiogroup" aria-label="Map layer">
+          <label className={`controls__segment ${mapMode === 'points' ? 'is-active' : ''}`}>
+            <input
+              type="radio"
+              name="map-mode"
+              value="points"
+              checked={mapMode === 'points'}
+              onChange={() => onMapModeChange('points')}
+            />
+            Points
+          </label>
+          <label className={`controls__segment ${mapMode === 'coverage' ? 'is-active' : ''}`}>
+            <input
+              type="radio"
+              name="map-mode"
+              value="coverage"
+              checked={mapMode === 'coverage'}
+              onChange={() => onMapModeChange('coverage')}
+            />
+            Coverage
+          </label>
+        </div>
+      </div>
+
+      {mapMode === 'coverage' ? (
+        <div className="controls__group">
+          <label htmlFor="coverage-metric">Coverage metric</label>
+          <select
+            id="coverage-metric"
+            value={coverageMetric}
+            onChange={(event) => onCoverageMetricChange(event.target.value as 'count' | 'rssiAvg' | 'snrAvg')}
+          >
+            <option value="count">Count</option>
+            <option value="rssiAvg">RSSI avg</option>
+            <option value="snrAvg">SNR avg</option>
+          </select>
+          <CoverageLegend metric={coverageMetric} />
+        </div>
+      ) : null}
+
       {filterMode === 'time' ? (
         <div className="controls__row">
           <div className="controls__group">
@@ -184,6 +234,7 @@ export default function Controls({
             type="checkbox"
             checked={showPoints}
             onChange={(event) => onShowPointsChange(event.target.checked)}
+            disabled={mapMode === 'coverage'}
           />
           Show points
         </label>
@@ -290,4 +341,43 @@ function copyDeviceUid(deviceUid: string) {
   } catch {
     // no-op: avoid noisy errors
   }
+}
+
+type CoverageLegendItem = {
+  label: string;
+  bucket: 'strong' | 'medium' | 'weak' | 'unknown';
+};
+
+function CoverageLegend({ metric }: { metric: 'count' | 'rssiAvg' | 'snrAvg' }) {
+  const items: CoverageLegendItem[] =
+    metric === 'count'
+      ? [
+          { label: '1-5', bucket: 'weak' },
+          { label: '6-20', bucket: 'medium' },
+          { label: '21+', bucket: 'strong' }
+        ]
+      : metric === 'snrAvg'
+        ? [
+            { label: '< 5 dB', bucket: 'weak' },
+            { label: '5-9 dB', bucket: 'medium' },
+            { label: '>= 10 dB', bucket: 'strong' },
+            { label: 'Unknown', bucket: 'unknown' }
+          ]
+        : [
+            { label: '< -90 dBm', bucket: 'weak' },
+            { label: '-90 to -71 dBm', bucket: 'medium' },
+            { label: '>= -70 dBm', bucket: 'strong' },
+            { label: 'Unknown', bucket: 'unknown' }
+          ];
+
+  return (
+    <div className="controls__legend" aria-label="Coverage legend">
+      {items.map((item) => (
+        <div key={item.label} className="controls__legend-row">
+          <span className={`controls__legend-swatch coverage-bin coverage-bin--${item.bucket}`} />
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
 }

@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { MeasurementQueryParams } from './api/endpoints';
+import type { CoverageQueryParams, MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
 import LorawanEventsPanel from './components/LorawanEventsPanel';
 import MapView, { type MapViewHandle } from './components/MapView';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
-import { useDevice, useDeviceLatest, useMeasurements, useStats, useTrack } from './query/hooks';
+import {
+  useCoverageBins,
+  useDevice,
+  useDeviceLatest,
+  useMeasurements,
+  useStats,
+  useTrack
+} from './query/hooks';
 import { useLorawanEvents } from './query/lorawan';
 import './App.css';
 
@@ -85,6 +92,8 @@ function App() {
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
+  const [mapMode, setMapMode] = useState<'points' | 'coverage'>('points');
+  const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -243,6 +252,31 @@ function App() {
   const statsQuery = useStats(statsParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
+  const coverageParams = useMemo<CoverageQueryParams>(
+    () =>
+      isSessionMode
+        ? {
+            sessionId: selectedSessionId ?? undefined,
+            bbox: bboxPayload,
+            gatewayId: selectedGatewayId ?? undefined
+          }
+        : {
+            deviceId: deviceId ?? undefined,
+            bbox: bboxPayload,
+            gatewayId: selectedGatewayId ?? undefined
+          },
+    [isSessionMode, selectedSessionId, bboxPayload, deviceId, selectedGatewayId]
+  );
+  const coverageQuery = useCoverageBins(
+    coverageParams,
+    {
+      enabled:
+        mapMode === 'coverage' &&
+        Boolean(bboxPayload) &&
+        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+    },
+    { filterMode }
+  );
   const { device: selectedDevice } = useDevice(deviceId);
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
   const latestMeasurementAt =
@@ -416,8 +450,12 @@ function App() {
     <div className="app">
       <MapView
         ref={mapRef}
+        mapMode={mapMode}
+        coverageMetric={coverageMetric}
         measurements={measurementsQuery.data?.items ?? []}
         track={trackQuery.data?.items ?? []}
+        coverageBins={coverageQuery.data?.bins ?? []}
+        coverageBinSize={coverageQuery.data?.binSize ?? null}
         showPoints={showPoints}
         showTrack={showTrack}
         onBoundsChange={setBbox}
@@ -461,6 +499,10 @@ function App() {
         onSelectGatewayId={setSelectedGatewayId}
         latest={latestDeviceQuery.data}
         onFitToData={handleFitToData}
+        mapMode={mapMode}
+        onMapModeChange={setMapMode}
+        coverageMetric={coverageMetric}
+        onCoverageMetricChange={setCoverageMetric}
         from={from}
         to={to}
         onFromChange={setFrom}

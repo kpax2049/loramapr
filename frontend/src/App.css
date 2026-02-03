@@ -151,6 +151,31 @@
   accent-color: var(--panel-accent);
 }
 
+.controls__legend {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--panel-surface);
+  font-size: 0.72rem;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
+.controls__legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.controls__legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
 .controls__segmented {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -760,4 +785,34 @@
 
 .map-point.is-selected {
   stroke-width: 3px;
+}
+
+.coverage-bin {
+  stroke: var(--map-point-default);
+  fill: var(--map-point-default);
+  background: var(--map-point-default);
+}
+
+.coverage-bin--strong {
+  stroke: var(--map-point-strong);
+  fill: var(--map-point-strong);
+  background: var(--map-point-strong);
+}
+
+.coverage-bin--medium {
+  stroke: var(--map-point-medium);
+  fill: var(--map-point-medium);
+  background: var(--map-point-medium);
+}
+
+.coverage-bin--weak {
+  stroke: var(--map-point-weak);
+  fill: var(--map-point-weak);
+  background: var(--map-point-weak);
+}
+
+.coverage-bin--unknown {
+  stroke: var(--map-point-unknown);
+  fill: var(--map-point-unknown);
+  background: var(--map-point-unknown);
 }
