@@ -29,6 +29,7 @@ model Device {
   owner        User?         @relation(fields: [ownerId], references: [id])
   sessions     Session[]
   measurements Measurement[]
+  coverageBins CoverageBin[]
 
   @@index([deviceUid])
 }
@@ -45,6 +46,7 @@ model Session {
   device       Device        @relation(fields: [deviceId], references: [id])
   owner        User?          @relation(fields: [ownerId], references: [id])
   measurements Measurement[]
+  coverageBins CoverageBin[]
 
   @@index([deviceId, startedAt])
 }
@@ -113,4 +115,30 @@ model WebhookEvent {
 
   @@index([receivedAt])
   @@index([processedAt])
+}
+
+model CoverageBin {
+  id        String   @id @default(uuid()) @db.Uuid
+  deviceId  String   @db.Uuid
+  sessionId String?  @db.Uuid
+  gatewayId String?
+  day       DateTime
+  latBin    Int
+  lonBin    Int
+  count     Int
+  rssiAvg   Float?
+  snrAvg    Float?
+  rssiMin   Int?
+  rssiMax   Int?
+  snrMin    Float?
+  snrMax    Float?
+  updatedAt DateTime @updatedAt
+
+  device  Device   @relation(fields: [deviceId], references: [id])
+  session Session? @relation(fields: [sessionId], references: [id])
+
+  @@index([deviceId, day])
+  @@index([sessionId, day])
+  @@index([gatewayId, day])
+  @@unique([deviceId, sessionId, gatewayId, day, latBin, lonBin])
 }

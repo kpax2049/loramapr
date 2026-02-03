@@ -7,6 +7,7 @@ import { TracksModule } from './modules/tracks/tracks.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { LorawanModule } from './modules/lorawan/lorawan.module';
+import { CoverageModule } from './modules/coverage/coverage.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
     TracksModule,
     SessionsModule,
     LorawanModule,
+    CoverageModule,
     PrismaModule
   ]
 })
