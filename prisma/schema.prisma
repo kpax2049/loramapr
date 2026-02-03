@@ -103,6 +103,8 @@ model WebhookEvent {
   source     String
   receivedAt DateTime @default(now())
   payload    Json
+  processingStartedAt DateTime?
+  processingWorkerId String?
   processedAt DateTime?
   processingError String?
   eventType  String?

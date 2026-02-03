@@ -52,6 +52,35 @@ export class LorawanController {
     return event;
   }
 
+  @Post('events/:id/reprocess')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  @HttpCode(200)
+  async reprocessEvent(@Param('id') id: string): Promise<{ status: string }> {
+    const updated = await this.lorawanService.reprocessEvent(id);
+    if (!updated) {
+      throw new NotFoundException('Webhook event not found');
+    }
+    return { status: 'ok' };
+  }
+
+  @Post('reprocess')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  @HttpCode(200)
+  async reprocessEvents(
+    @Body() body: { deviceUid?: string; since?: string; processingError?: string }
+  ): Promise<{ resetCount: number }> {
+    const since = body?.since ? parseDate(body.since, 'since') : undefined;
+    const resetCount = await this.lorawanService.reprocessEvents({
+      deviceUid: body?.deviceUid,
+      since,
+      processingError: body?.processingError,
+      limit: 500
+    });
+    return { resetCount };
+  }
+
   @Post('uplink')
   @UseGuards(LorawanRateLimitGuard, LorawanWebhookGuard)
   @HttpCode(200)
@@ -93,4 +122,12 @@ function parseOptionalBoolean(value: string | undefined, name: string): boolean 
     return false;
   }
   throw new BadRequestException(`${name} must be true or false`);
+}
+
+function parseDate(value: string, name: string): Date {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException(`${name} must be a valid timestamp`);
+  }
+  return parsed;
 }

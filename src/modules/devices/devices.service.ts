@@ -15,6 +15,13 @@ export type DeviceLatestStatus = {
   latestWebhookError: string | null;
 };
 
+export type DeviceSummary = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  lastSeenAt: Date | null;
+};
+
 @Injectable()
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -82,5 +89,18 @@ export class DevicesService {
       latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
       latestWebhookError: latestWebhook?.processingError ?? null
     };
+  }
+
+  async getByUid(deviceUid: string, ownerId?: string): Promise<DeviceSummary | null> {
+    // TODO: enforce owner scoping once auth context is available.
+    return this.prisma.device.findFirst({
+      where: ownerId ? { deviceUid, ownerId } : { deviceUid },
+      select: {
+        id: true,
+        deviceUid: true,
+        name: true,
+        lastSeenAt: true
+      }
+    });
   }
 }

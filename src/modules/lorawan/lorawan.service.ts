@@ -1,4 +1,5 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementsService } from '../measurements/measurements.service';
@@ -10,6 +11,7 @@ import { deriveUplinkId } from './uplink-id';
 export class LorawanService implements OnModuleInit, OnModuleDestroy {
   private workerTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
+  private readonly workerId = randomUUID();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -101,24 +103,111 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async reprocessEvent(id: string): Promise<boolean> {
+    const result = await this.prisma.webhookEvent.updateMany({
+      where: { id },
+      data: {
+        processedAt: null,
+        processingError: null,
+        processingStartedAt: null,
+        processingWorkerId: null
+      }
+    });
+    return result.count > 0;
+  }
+
+  async reprocessEvents(params: {
+    deviceUid?: string;
+    since?: Date;
+    processingError?: string;
+    limit: number;
+  }): Promise<number> {
+    const where: Record<string, unknown> = {};
+    if (params.deviceUid) {
+      where.deviceUid = params.deviceUid;
+    }
+    if (params.processingError) {
+      where.processingError = params.processingError;
+    }
+    if (params.since) {
+      where.receivedAt = { gte: params.since };
+    }
+
+    const ids = await this.prisma.webhookEvent.findMany({
+      where: Object.keys(where).length > 0 ? where : undefined,
+      orderBy: { receivedAt: 'asc' },
+      take: params.limit,
+      select: { id: true }
+    });
+
+    if (ids.length === 0) {
+      return 0;
+    }
+
+    const result = await this.prisma.webhookEvent.updateMany({
+      where: { id: { in: ids.map((row) => row.id) } },
+      data: {
+        processedAt: null,
+        processingError: null,
+        processingStartedAt: null,
+        processingWorkerId: null
+      }
+    });
+
+    return result.count;
+  }
+
   private async runWorkerOnce(): Promise<void> {
     if (this.isProcessing) {
       return;
     }
     this.isProcessing = true;
     try {
-      const batch = await this.prisma.webhookEvent.findMany({
-        where: { processedAt: null },
-        orderBy: { receivedAt: 'asc' },
-        take: 25,
-        select: {
-          id: true,
-          deviceUid: true,
-          payload: true
+      const now = new Date();
+      const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
+      const claimed = await this.prisma.$transaction(async (tx) => {
+        const candidates = await tx.webhookEvent.findMany({
+          where: {
+            processedAt: null,
+            OR: [{ processingStartedAt: null }, { processingStartedAt: { lt: staleBefore } }]
+          },
+          orderBy: { receivedAt: 'asc' },
+          take: 25,
+          select: { id: true }
+        });
+
+        if (candidates.length === 0) {
+          return [] as Array<{ id: string; deviceUid: string | null; payload: Prisma.JsonValue }>;
         }
+
+        const candidateIds = candidates.map((row) => row.id);
+        await tx.webhookEvent.updateMany({
+          where: {
+            id: { in: candidateIds },
+            processedAt: null,
+            OR: [{ processingStartedAt: null }, { processingStartedAt: { lt: staleBefore } }]
+          },
+          data: {
+            processingStartedAt: now,
+            processingWorkerId: this.workerId
+          }
+        });
+
+        return tx.webhookEvent.findMany({
+          where: {
+            id: { in: candidateIds },
+            processingWorkerId: this.workerId,
+            processingStartedAt: now
+          },
+          select: {
+            id: true,
+            deviceUid: true,
+            payload: true
+          }
+        });
       });
 
-      for (const event of batch) {
+      for (const event of claimed) {
         await this.processEvent(event.id, event.deviceUid ?? undefined, event.payload);
       }
     } finally {

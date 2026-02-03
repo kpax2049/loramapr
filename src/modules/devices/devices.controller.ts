@@ -1,7 +1,7 @@
 import { Controller, Get, NotFoundException, Param, Req, UseGuards } from '@nestjs/common';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
-import { DeviceLatestStatus, DeviceListItem, DevicesService } from './devices.service';
+import { DeviceLatestStatus, DeviceListItem, DeviceSummary, DevicesService } from './devices.service';
 
 @Controller('api/devices')
 export class DevicesController {
@@ -30,6 +30,20 @@ export class DevicesController {
       throw new NotFoundException('Device not found');
     }
     return formatLatestResponse(latest);
+  }
+
+  @Get('by-uid/:deviceUid')
+  @UseGuards(OwnerGuard)
+  async getByUid(
+    @Req() request: OwnerContextRequest,
+    @Param('deviceUid') deviceUid: string
+  ): Promise<DeviceSummary> {
+    const ownerId = getOwnerIdFromRequest(request);
+    const device = await this.devicesService.getByUid(deviceUid, ownerId);
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+    return device;
   }
 }
 
