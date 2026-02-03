@@ -15,6 +15,7 @@ type ControlsProps = {
   selectedGatewayId: string | null;
   onSelectGatewayId: (gatewayId: string | null) => void;
   latest?: DeviceLatest;
+  onFitToData: () => void;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -37,6 +38,7 @@ export default function Controls({
   selectedGatewayId,
   onSelectGatewayId,
   latest,
+  onFitToData,
   from,
   to,
   onFromChange,
@@ -48,6 +50,7 @@ export default function Controls({
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = Array.isArray(devicesData) ? devicesData : [];
+  const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
 
   useEffect(() => {
     if (!deviceId && devices.length > 0) {
@@ -70,10 +73,22 @@ export default function Controls({
           </option>
           {devices.map((device) => (
             <option key={device.id} value={device.id}>
-              {device.name ?? device.deviceUid}
+              {formatDeviceLabel(device.name, device.deviceUid)}
             </option>
           ))}
         </select>
+        {selectedDevice ? (
+          <div className="controls__device-meta">
+            <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
+            <button
+              type="button"
+              className="controls__button controls__button--compact"
+              onClick={() => copyDeviceUid(selectedDevice.deviceUid)}
+            >
+              Copy deviceUid
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="controls__group">
@@ -153,6 +168,13 @@ export default function Controls({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="controls__group">
+        <span className="controls__label">Map</span>
+        <button type="button" className="controls__button" onClick={onFitToData}>
+          Fit to data
+        </button>
       </div>
 
       <div className="controls__group">
@@ -240,4 +262,32 @@ function formatRelativeTime(value: string): string {
   }
   const days = Math.round(hours / 24);
   return `${days}d ago`;
+}
+
+function formatDeviceLabel(name: string | null | undefined, deviceUid: string): string {
+  const trimmedName = name?.trim();
+  if (!trimmedName) {
+    return deviceUid;
+  }
+  if (trimmedName.toLowerCase() === deviceUid.toLowerCase()) {
+    return deviceUid;
+  }
+  return `${trimmedName} (${deviceUid})`;
+}
+
+function copyDeviceUid(deviceUid: string) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(deviceUid).catch(() => undefined);
+    return;
+  }
+  try {
+    const input = document.createElement('input');
+    input.value = deviceUid;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  } catch {
+    // no-op: avoid noisy errors
+  }
 }

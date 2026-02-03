@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import simplify from 'simplify-js';
@@ -24,6 +24,7 @@ type MapViewProps = {
   onZoomChange?: (zoom: number) => void;
   selectedPointId?: string | null;
   onSelectPoint?: (id: string) => void;
+  onUserInteraction?: () => void;
 };
 
 type MapPoint = {
@@ -41,6 +42,10 @@ type TrackPoint = {
   capturedAt: string;
 };
 
+export type MapViewHandle = {
+  fitBounds: (bounds: L.LatLngBoundsExpression) => void;
+};
+
 function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] {
   const southWest = bounds.getSouthWest();
   const northEast = bounds.getNorthEast();
@@ -50,10 +55,12 @@ function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] 
 
 function BoundsListener({
   onChange,
-  onZoomChange
+  onZoomChange,
+  onUserInteraction
 }: {
   onChange?: (bbox: [number, number, number, number]) => void;
   onZoomChange?: (zoom: number) => void;
+  onUserInteraction?: () => void;
 }) {
   const map = useMapEvents({
     load: () => {
@@ -68,6 +75,12 @@ function BoundsListener({
       if (onChange) {
         onChange(boundsToBbox(map.getBounds()));
       }
+    },
+    dragstart: () => {
+      onUserInteraction?.();
+    },
+    zoomstart: () => {
+      onUserInteraction?.();
     },
     zoomend: () => {
       if (onChange) {
@@ -147,7 +160,8 @@ function configureLeafletIcons() {
   });
 }
 
-export default function MapView({
+const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
+{
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
   measurements = [],
@@ -157,14 +171,26 @@ export default function MapView({
   onBoundsChange,
   onZoomChange,
   selectedPointId = null,
-  onSelectPoint
-}: MapViewProps) {
+  onSelectPoint,
+  onUserInteraction
+},
+ref
+) {
   const [currentZoom, setCurrentZoom] = useState(zoom);
   const palette = useMemo(() => readPalette(), []);
+  const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
     configureLeafletIcons();
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    fitBounds: (bounds) => {
+      if (mapRef.current) {
+        mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+      }
+    }
+  }));
 
   const trackPositions = useMemo(() => {
     if (!showTrack || track.length === 0) {
@@ -201,8 +227,15 @@ export default function MapView({
       zoom={zoom}
       preferCanvas={true}
       style={{ height: '100vh', width: '100%' }}
+      whenCreated={(mapInstance) => {
+        mapRef.current = mapInstance;
+      }}
     >
-      <BoundsListener onChange={onBoundsChange} onZoomChange={setCurrentZoom} />
+      <BoundsListener
+        onChange={onBoundsChange}
+        onZoomChange={setCurrentZoom}
+        onUserInteraction={onUserInteraction}
+      />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -254,7 +287,9 @@ export default function MapView({
         })}
     </MapContainer>
   );
-}
+});
+
+export default MapView;
 
 function formatTimestamp(value?: string): string {
   if (!value) {

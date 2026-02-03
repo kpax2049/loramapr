@@ -4,7 +4,7 @@ import type { MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
 import LorawanEventsPanel from './components/LorawanEventsPanel';
-import MapView from './components/MapView';
+import MapView, { type MapViewHandle } from './components/MapView';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
 import { useDevice, useDeviceLatest, useMeasurements, useStats, useTrack } from './query/hooks';
@@ -74,6 +74,8 @@ function App() {
 
   const queryClient = useQueryClient();
   const prevLatestMeasurementAt = useRef<string | null>(null);
+  const mapRef = useRef<MapViewHandle | null>(null);
+  const hasAutoFitRef = useRef(false);
 
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
@@ -87,6 +89,7 @@ function App() {
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedGatewayId, setSelectedGatewayId] = useState<string | null>(null);
+  const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -269,8 +272,62 @@ function App() {
   }, [deviceId]);
 
   useEffect(() => {
+    setUserInteractedWithMap(false);
+    hasAutoFitRef.current = false;
+  }, [deviceId, selectedSessionId]);
+
+  useEffect(() => {
     setSelectedGatewayId(null);
   }, [deviceId, selectedSessionId]);
+
+  const measurementBounds = useMemo(() => {
+    const items = measurementsQuery.data?.items ?? [];
+    if (items.length === 0) {
+      return null;
+    }
+    let minLat = items[0].lat;
+    let maxLat = items[0].lat;
+    let minLon = items[0].lon;
+    let maxLon = items[0].lon;
+
+    for (const item of items) {
+      if (item.lat < minLat) minLat = item.lat;
+      if (item.lat > maxLat) maxLat = item.lat;
+      if (item.lon < minLon) minLon = item.lon;
+      if (item.lon > maxLon) maxLon = item.lon;
+    }
+
+    return [
+      [minLat, minLon],
+      [maxLat, maxLon]
+    ] as [[number, number], [number, number]];
+  }, [measurementsQuery.data?.items]);
+
+  useEffect(() => {
+    if (!measurementBounds) {
+      return;
+    }
+    if (measurementsQuery.isFetching) {
+      return;
+    }
+    if (userInteractedWithMap) {
+      return;
+    }
+    if (hasAutoFitRef.current) {
+      return;
+    }
+    mapRef.current?.fitBounds(measurementBounds);
+    hasAutoFitRef.current = true;
+  }, [measurementBounds, userInteractedWithMap, measurementsQuery.isFetching]);
+
+  const handleFitToData = () => {
+    if (!measurementBounds) {
+      return;
+    }
+    mapRef.current?.fitBounds(measurementBounds);
+    setUserInteractedWithMap(true);
+    hasAutoFitRef.current = true;
+  };
 
   useEffect(() => {
     if (!deviceId) {
@@ -358,6 +415,7 @@ function App() {
   return (
     <div className="app">
       <MapView
+        ref={mapRef}
         measurements={measurementsQuery.data?.items ?? []}
         track={trackQuery.data?.items ?? []}
         showPoints={showPoints}
@@ -366,6 +424,7 @@ function App() {
         onSelectPoint={setSelectedPointId}
         onZoomChange={setCurrentZoom}
         selectedPointId={selectedPointId}
+        onUserInteraction={() => setUserInteractedWithMap(true)}
       />
       {measurementsQuery.data &&
         measurementsQuery.data.items.length === measurementsQuery.data.limit && (
@@ -401,6 +460,7 @@ function App() {
         selectedGatewayId={selectedGatewayId}
         onSelectGatewayId={setSelectedGatewayId}
         latest={latestDeviceQuery.data}
+        onFitToData={handleFitToData}
         from={from}
         to={to}
         onFromChange={setFrom}
