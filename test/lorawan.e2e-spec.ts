@@ -1,9 +1,11 @@
 import { INestApplication } from '@nestjs/common';
+import { ApiKeyScope } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { deriveUplinkId } from '../src/modules/lorawan/uplink-id';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { hashApiKey } from '../src/common/security/apiKey';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -20,6 +22,8 @@ describe('LoRaWAN uplink e2e', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   const apiKey = 'test-webhook-key';
+  const queryKeyPlain = 'test-query-key';
+  let queryKeyId: string | null = null;
   let trackedDeviceUids: string[] = [];
   let trackedUplinkIds: string[] = [];
 
@@ -35,6 +39,15 @@ describe('LoRaWAN uplink e2e', () => {
     await app.init();
 
     prisma = moduleRef.get(PrismaService);
+
+    const key = await prisma.apiKey.create({
+      data: {
+        keyHash: hashApiKey(queryKeyPlain),
+        scopes: [ApiKeyScope.QUERY]
+      },
+      select: { id: true }
+    });
+    queryKeyId = key.id;
   });
 
   afterEach(async () => {
@@ -74,6 +87,9 @@ describe('LoRaWAN uplink e2e', () => {
   });
 
   afterAll(async () => {
+    if (queryKeyId) {
+      await prisma.apiKey.delete({ where: { id: queryKeyId } });
+    }
     await app.close();
   });
 
@@ -93,6 +109,7 @@ describe('LoRaWAN uplink e2e', () => {
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);
@@ -129,12 +146,14 @@ describe('LoRaWAN uplink e2e', () => {
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);
@@ -169,6 +188,7 @@ describe('LoRaWAN uplink e2e', () => {
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);
@@ -193,12 +213,14 @@ describe('LoRaWAN uplink e2e', () => {
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);
@@ -240,6 +262,7 @@ describe('LoRaWAN uplink e2e', () => {
 
     await request(app.getHttpServer())
       .post('/api/lorawan/uplink')
+      .set('x-api-key', queryKeyPlain)
       .set('x-downlink-apikey', apiKey)
       .send(payload)
       .expect(200);

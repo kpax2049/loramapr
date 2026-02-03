@@ -10,6 +10,7 @@ type TracksQuery = {
   to?: string | string[];
   bbox?: string | string[];
   limit?: string | string[];
+  sample?: string | string[];
   gatewayId?: string | string[];
 };
 
@@ -50,6 +51,7 @@ export class TracksController {
 
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
     const limit = Math.min(requestedLimit, MAX_LIMIT);
+    const sample = parseSample(getSingleValue(query.sample, 'sample'));
 
     return this.tracksService.getTrack({
       deviceId: deviceId ?? undefined,
@@ -58,6 +60,7 @@ export class TracksController {
       to,
       bbox,
       limit,
+      sample,
       gatewayId: gatewayId ?? undefined,
       ownerId
     });
@@ -95,6 +98,17 @@ function parseLimit(value: string | undefined): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new BadRequestException('limit must be a positive integer');
+  }
+  return parsed;
+}
+
+function parseSample(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('sample must be a positive integer');
   }
   return parsed;
 }

@@ -13,11 +13,14 @@ export type TrackQueryParams = {
     maxLat: number;
   };
   gatewayId?: string;
+  sample?: number;
   limit: number;
   ownerId?: string;
 };
 
 export type TrackResult = {
+  totalBeforeSample: number;
+  returnedAfterSample: number;
   items: Array<{
     capturedAt: Date;
     lat: number;
@@ -70,8 +73,32 @@ export class TracksService {
       }
     });
 
+    const totalBeforeSample = items.length;
+    const sampled = params.sample ? sampleItems(items, params.sample) : items;
+
     return {
-      items
+      totalBeforeSample,
+      returnedAfterSample: sampled.length,
+      items: sampled
     };
   }
+}
+
+function sampleItems<T>(items: T[], sample: number): T[] {
+  if (sample <= 0 || items.length === 0) {
+    return [];
+  }
+  if (sample >= items.length) {
+    return items;
+  }
+  if (sample === 1) {
+    return [items[0]];
+  }
+  const lastIndex = items.length - 1;
+  const result: T[] = [];
+  for (let i = 0; i < sample; i += 1) {
+    const index = Math.floor((i * lastIndex) / (sample - 1));
+    result.push(items[index]);
+  }
+  return result;
 }

@@ -19,13 +19,13 @@ import { LorawanService } from './lorawan.service';
 import { parseTtsUplink } from './tts-uplink.schema';
 import { ZodError } from 'zod';
 
+@UseGuards(ApiKeyGuard)
+@RequireApiKeyScope(ApiKeyScope.QUERY)
 @Controller('api/lorawan')
 export class LorawanController {
   constructor(private readonly lorawanService: LorawanService) {}
 
   @Get('events')
-  @UseGuards(ApiKeyGuard)
-  @RequireApiKeyScope(ApiKeyScope.QUERY)
   async listEvents(
     @Query('deviceUid') deviceUid?: string,
     @Query('processingError') processingError?: string,
@@ -42,8 +42,6 @@ export class LorawanController {
   }
 
   @Get('events/:id')
-  @UseGuards(ApiKeyGuard)
-  @RequireApiKeyScope(ApiKeyScope.QUERY)
   async getEvent(@Param('id') id: string) {
     const event = await this.lorawanService.getEventById(id);
     if (!event) {
@@ -53,15 +51,11 @@ export class LorawanController {
   }
 
   @Get('summary')
-  @UseGuards(ApiKeyGuard)
-  @RequireApiKeyScope(ApiKeyScope.QUERY)
   async getSummary() {
     return this.lorawanService.getSummary();
   }
 
   @Post('events/:id/reprocess')
-  @UseGuards(ApiKeyGuard)
-  @RequireApiKeyScope(ApiKeyScope.QUERY)
   @HttpCode(200)
   async reprocessEvent(@Param('id') id: string): Promise<{ status: string }> {
     const updated = await this.lorawanService.reprocessEvent(id);
@@ -72,8 +66,6 @@ export class LorawanController {
   }
 
   @Post('reprocess')
-  @UseGuards(ApiKeyGuard)
-  @RequireApiKeyScope(ApiKeyScope.QUERY)
   @HttpCode(200)
   async reprocessEvents(
     @Body() body: { deviceUid?: string; since?: string; processingError?: string }
