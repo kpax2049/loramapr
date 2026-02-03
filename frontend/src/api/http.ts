@@ -1,9 +1,10 @@
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
 const baseUrl = import.meta.env.DEV ? '' : rawBaseUrl;
 
-type RequestOptions = Omit<RequestInit, 'body' | 'signal'> & {
+type RequestOptions = Omit<RequestInit, 'body' | 'signal' | 'headers'> & {
   json?: unknown;
   signal?: AbortSignal;
+  headers?: HeadersInit;
 };
 
 export class ApiError extends Error {

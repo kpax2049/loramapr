@@ -52,3 +52,7 @@ export type LorawanEvent = {
   processingError: string | null;
   uplinkId: string | null;
 };
+
+export type LorawanEventDetail = LorawanEvent & {
+  payload: unknown;
+};

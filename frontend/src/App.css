@@ -197,6 +197,29 @@
   text-transform: uppercase;
 }
 
+.diagnostic-banner {
+  position: absolute;
+  top: 3.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(720px, 90vw);
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(15, 23, 42, 0.92);
+  color: #fecaca;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.diagnostic-banner a {
+  color: #fcd34d;
+  text-decoration: underline;
+}
+
 .point-details {
   position: static;
   width: 100%;
@@ -358,6 +381,17 @@
   color: var(--panel-muted);
 }
 
+.lorawan-panel__error {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  color: #fecaca;
+  font-size: 0.78rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
 .lorawan-panel__table-wrapper {
   overflow-x: auto;
 }
@@ -382,6 +416,45 @@
   text-transform: uppercase;
   color: var(--panel-muted);
   font-family: var(--font-mono);
+}
+
+.lorawan-panel__row {
+  cursor: pointer;
+}
+
+.lorawan-panel__row:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.lorawan-panel__details-row td {
+  padding: 0.6rem 0.25rem 0.8rem;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.lorawan-panel__details {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--panel-text);
+}
+
+.lorawan-panel__details dt {
+  margin: 0;
+  color: var(--panel-muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.lorawan-panel__details dd {
+  margin: 0;
+}
+
+.lorawan-panel__details--error {
+  color: #fecaca;
 }
 
 @media (max-width: 720px) {

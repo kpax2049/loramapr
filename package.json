@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "apikey:mint": "ts-node scripts/mint-api-key.ts",
     "simulate:walk": "ts-node scripts/simulate-walk.ts",
+    "dev:tts:fixture": "ts-node scripts/post-tts-fixture.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "lint": "echo \"No lint configured\"",

@@ -8,12 +8,14 @@ import MapView from './components/MapView';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
 import { useDevice, useDeviceLatest, useMeasurements, useStats, useTrack } from './query/hooks';
+import { useLorawanEvents } from './query/lorawan';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
 const LOW_ZOOM_LIMIT = 1000;
 const LIMIT_ZOOM_THRESHOLD = 12;
 const BBOX_DEBOUNCE_MS = 300;
+const LORAWAN_DIAG_WINDOW_MINUTES = 10;
 
 type InitialQueryState = {
   deviceId: string | null;
@@ -240,6 +242,14 @@ function App() {
   });
   const { device: selectedDevice } = useDevice(deviceId);
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
+  const latestMeasurementAt =
+    latestDeviceQuery.data?.lastMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
+  const selectedDeviceUid = selectedDevice?.deviceUid;
+  const lorawanEventsQuery = useLorawanEvents(
+    selectedDeviceUid,
+    1,
+    Boolean(selectedDeviceUid)
+  );
 
   const selectedMeasurement = useMemo<Measurement | null>(() => {
     if (!selectedPointId) {
@@ -324,6 +334,27 @@ function App() {
   const isLoading = measurementsQuery.isLoading || trackQuery.isLoading;
   const error = measurementsQuery.error ?? trackQuery.error;
 
+  const latestEvent = lorawanEventsQuery.data?.[0];
+  const hasRecentLorawanEvent = (() => {
+    if (!latestEvent?.receivedAt) {
+      return false;
+    }
+    const eventTime = new Date(latestEvent.receivedAt).getTime();
+    if (!Number.isFinite(eventTime)) {
+      return false;
+    }
+    const windowMs = LORAWAN_DIAG_WINDOW_MINUTES * 60 * 1000;
+    return Date.now() - eventTime <= windowMs;
+  })();
+  const isMissingGps = latestEvent?.processingError === 'missing_gps';
+  const noMeasurementsReturned =
+    measurementsQuery.data !== undefined && measurementsQuery.data.items.length === 0;
+  const shouldShowLorawanBanner =
+    Boolean(selectedDeviceUid) &&
+    hasRecentLorawanEvent &&
+    isMissingGps &&
+    (latestMeasurementAt === null || noMeasurementsReturned);
+
   return (
     <div className="app">
       <MapView
@@ -340,6 +371,15 @@ function App() {
         measurementsQuery.data.items.length === measurementsQuery.data.limit && (
           <div className="limit-banner">Result limited; zoom in or narrow filters</div>
         )}
+      {shouldShowLorawanBanner && (
+        <div className="diagnostic-banner">
+          LoRaWAN uplinks received, but decoded payload has no lat/lon. Configure payload formatter
+          to output GPS.{' '}
+          <a href="../docs/tts-payload-formatter-js.md" target="_blank" rel="noreferrer">
+            docs/tts-payload-formatter-js.md
+          </a>
+        </div>
+      )}
       <div className="right-column">
         <PointDetails measurement={selectedMeasurement} />
         <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />

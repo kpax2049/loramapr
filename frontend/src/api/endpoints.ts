@@ -1,5 +1,13 @@
 import { getJson, requestJson } from './http';
-import type { Device, DeviceLatest, LorawanEvent, Measurement, Session, TrackPoint } from './types';
+import type {
+  Device,
+  DeviceLatest,
+  LorawanEvent,
+  LorawanEventDetail,
+  Measurement,
+  Session,
+  TrackPoint
+} from './types';
 
 export type Bbox = {
   minLon: number;
@@ -99,6 +107,21 @@ export async function getDeviceLatest(deviceId: string, options?: RequestOptions
   return getJson<DeviceLatest>(`/api/devices/${deviceId}/latest`, options);
 }
 
+const queryApiKey = (import.meta.env.VITE_QUERY_API_KEY ?? '').trim();
+
+function withQueryApiKey(options?: RequestOptions): RequestOptions | undefined {
+  if (!queryApiKey) {
+    return options;
+  }
+  return {
+    ...options,
+    headers: {
+      ...(options?.headers ?? {}),
+      'X-API-Key': queryApiKey
+    }
+  };
+}
+
 export async function listLorawanEvents(
   params: { deviceUid?: string; limit?: number },
   options?: RequestOptions
@@ -112,7 +135,14 @@ export async function listLorawanEvents(
   }
   const query = searchParams.toString();
   const path = query ? `/api/lorawan/events?${query}` : '/api/lorawan/events';
-  return getJson<LorawanEvent[]>(path, options);
+  return getJson<LorawanEvent[]>(path, withQueryApiKey(options));
+}
+
+export async function getLorawanEventById(
+  id: string,
+  options?: RequestOptions
+): Promise<LorawanEventDetail> {
+  return getJson<LorawanEventDetail>(`/api/lorawan/events/${id}`, withQueryApiKey(options));
 }
 
 export async function listSessions(deviceId: string, options?: RequestOptions): Promise<Session[]> {
