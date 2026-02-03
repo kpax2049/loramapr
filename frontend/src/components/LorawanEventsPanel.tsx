@@ -1,5 +1,11 @@
 import { Fragment, useState } from 'react';
-import { useLorawanEvent, useLorawanEvents } from '../query/lorawan';
+import {
+  useLorawanEvent,
+  useLorawanEvents,
+  useLorawanSummary,
+  useReprocessLorawanBatch,
+  useReprocessLorawanEvent
+} from '../query/lorawan';
 
 type LorawanEventsPanelProps = {
   deviceUid?: string;
@@ -149,6 +155,9 @@ export default function LorawanEventsPanel({ deviceUid }: LorawanEventsPanelProp
   const { data: events = [], isLoading, refetch, error } = useLorawanEvents(deviceUid, 50);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { data: detail, isLoading: isDetailLoading, error: detailError } = useLorawanEvent(expandedId);
+  const summaryQuery = useLorawanSummary();
+  const reprocessEventMutation = useReprocessLorawanEvent();
+  const reprocessBatchMutation = useReprocessLorawanBatch();
 
   const detailPayload = detail?.payload;
   const decodedPayload = getDecodedPayload(detailPayload);
@@ -163,15 +172,51 @@ export default function LorawanEventsPanel({ deviceUid }: LorawanEventsPanelProp
   const listErrorHint = listErrorStatus === 401 || listErrorStatus === 403 ? authErrorMessage : null;
   const detailErrorHint =
     detailErrorStatus === 401 || detailErrorStatus === 403 ? authErrorMessage : null;
+  const summary = summaryQuery.data;
+
+  const handleReprocessMissingGps = () => {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    reprocessBatchMutation.mutate({ processingError: 'missing_gps', since });
+  };
 
   return (
     <section className="lorawan-panel" aria-label="LoRaWAN events">
       <div className="lorawan-panel__header">
         <h3>LoRaWAN events</h3>
+      </div>
+      <div className="lorawan-panel__actions">
+        <button
+          type="button"
+          onClick={handleReprocessMissingGps}
+          disabled={reprocessBatchMutation.isPending}
+        >
+          {reprocessBatchMutation.isPending ? 'Reprocessing…' : 'Reprocess missing_gps'}
+        </button>
         <button type="button" onClick={() => refetch()} disabled={isLoading}>
           {isLoading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
+
+      {summary ? (
+        <div className="lorawan-panel__summary">
+          <div className="lorawan-panel__summary-row">
+            <span>Total</span>
+            <strong>{summary.totalEvents}</strong>
+            <span>Processed</span>
+            <strong>{summary.processedEvents}</strong>
+            <span>Pending</span>
+            <strong>{summary.unprocessedEvents}</strong>
+          </div>
+          <div className="lorawan-panel__summary-row">
+            <span>Last event</span>
+            <strong>{formatTimestamp(summary.lastEventReceivedAt)}</strong>
+            <span>Last measurement</span>
+            <strong>{formatTimestamp(summary.lastMeasurementCreatedAt)}</strong>
+          </div>
+        </div>
+      ) : summaryQuery.isError ? (
+        <div className="lorawan-panel__summary-error">Summary unavailable</div>
+      ) : null}
 
       {listErrorMessage ? (
         <div className="lorawan-panel__error">
@@ -192,11 +237,14 @@ export default function LorawanEventsPanel({ deviceUid }: LorawanEventsPanelProp
                 <th>Device</th>
                 <th>Error</th>
                 <th>Uplink</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {events.map((event) => {
                 const isExpanded = expandedId === event.id;
+                const isReprocessing =
+                  reprocessEventMutation.isPending && reprocessEventMutation.variables === event.id;
                 return (
                   <Fragment key={event.id}>
                     <tr
@@ -208,10 +256,27 @@ export default function LorawanEventsPanel({ deviceUid }: LorawanEventsPanelProp
                       <td>{event.deviceUid ?? '—'}</td>
                       <td>{event.processingError ?? '—'}</td>
                       <td>{truncate(event.uplinkId)}</td>
+                      <td>
+                        {event.processingError ? (
+                          <button
+                            type="button"
+                            className="lorawan-panel__row-button"
+                            onClick={(eventClick) => {
+                              eventClick.stopPropagation();
+                              reprocessEventMutation.mutate(event.id);
+                            }}
+                            disabled={isReprocessing}
+                          >
+                            {isReprocessing ? 'Reprocessing…' : 'Reprocess'}
+                          </button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                     </tr>
                     {isExpanded ? (
                       <tr className="lorawan-panel__details-row">
-                        <td colSpan={5}>
+                        <td colSpan={6}>
                           {isDetailLoading ? (
                             <div className="lorawan-panel__details">Loading details…</div>
                           ) : detailError ? (

@@ -396,6 +396,12 @@
   gap: 0.75rem;
 }
 
+.lorawan-panel__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
 .lorawan-panel__header h3 {
   margin: 0;
   font-size: 0.95rem;
@@ -404,7 +410,8 @@
   font-family: var(--font-mono);
 }
 
-.lorawan-panel__header button {
+.lorawan-panel__header button,
+.lorawan-panel__actions button {
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: var(--panel-surface);
   color: var(--panel-text);
@@ -416,9 +423,40 @@
   font-family: var(--font-mono);
 }
 
-.lorawan-panel__header button:disabled {
+.lorawan-panel__header button:disabled,
+.lorawan-panel__actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.lorawan-panel__summary {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--panel-surface);
+  font-size: 0.72rem;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
+.lorawan-panel__summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lorawan-panel__summary-row strong {
+  color: var(--panel-text);
+  font-weight: 500;
+  margin-right: 0.5rem;
+}
+
+.lorawan-panel__summary-error {
+  font-size: 0.75rem;
+  color: var(--panel-muted);
 }
 
 .lorawan-panel__empty {
@@ -461,6 +499,24 @@
   text-transform: uppercase;
   color: var(--panel-muted);
   font-family: var(--font-mono);
+}
+
+.lorawan-panel__row-button {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.lorawan-panel__row-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .lorawan-panel__row {

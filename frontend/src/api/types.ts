@@ -56,3 +56,15 @@ export type LorawanEvent = {
 export type LorawanEventDetail = LorawanEvent & {
   payload: unknown;
 };
+
+export type LorawanSummary = {
+  totalEvents: number;
+  processedEvents: number;
+  unprocessedEvents: number;
+  errorsByType: Array<{
+    processingError: string;
+    count: number;
+  }>;
+  lastEventReceivedAt: string | null;
+  lastMeasurementCreatedAt: string | null;
+};

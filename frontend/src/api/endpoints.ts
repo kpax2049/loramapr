@@ -4,6 +4,7 @@ import type {
   DeviceLatest,
   LorawanEvent,
   LorawanEventDetail,
+  LorawanSummary,
   Measurement,
   Session,
   TrackPoint
@@ -143,6 +144,36 @@ export async function getLorawanEventById(
   options?: RequestOptions
 ): Promise<LorawanEventDetail> {
   return getJson<LorawanEventDetail>(`/api/lorawan/events/${id}`, withQueryApiKey(options));
+}
+
+export async function getLorawanSummary(options?: RequestOptions): Promise<LorawanSummary> {
+  return getJson<LorawanSummary>('/api/lorawan/summary', withQueryApiKey(options));
+}
+
+export async function reprocessLorawanEvent(
+  id: string,
+  options?: RequestOptions
+): Promise<{ status: string }> {
+  return requestJson<{ status: string }>(`/api/lorawan/events/${id}/reprocess`, {
+    method: 'POST',
+    ...withQueryApiKey(options)
+  });
+}
+
+export async function reprocessLorawanBatch(
+  filters: { deviceUid?: string; since?: string | Date; processingError?: string },
+  options?: RequestOptions
+): Promise<{ resetCount: number }> {
+  const payload = {
+    deviceUid: filters.deviceUid,
+    processingError: filters.processingError,
+    since: filters.since ? toIso(filters.since) : undefined
+  };
+  return requestJson<{ resetCount: number }>('/api/lorawan/reprocess', {
+    method: 'POST',
+    json: payload,
+    ...withQueryApiKey(options)
+  });
 }
 
 export async function listSessions(deviceId: string, options?: RequestOptions): Promise<Session[]> {
