@@ -26,6 +26,7 @@ type MeasurementKeyParams = {
   to: string | null;
   bbox: string | null;
   gatewayId: string | null;
+  sample: number | null;
   limit: number | null;
   filterMode: 'time' | 'session' | null;
 };
@@ -58,6 +59,7 @@ function normalizeMeasurementParams(
     to: params.to ? toIso(params.to) : null,
     bbox,
     gatewayId: params.gatewayId ?? null,
+    sample: typeof params.sample === 'number' ? params.sample : null,
     limit: typeof params.limit === 'number' ? params.limit : null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
   };

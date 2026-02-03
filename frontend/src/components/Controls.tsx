@@ -191,12 +191,25 @@ export default function Controls({
       ) : (
         <div className="controls__group">
           {deviceId ? (
-            <SessionsPanel
-              deviceId={deviceId}
-              selectedSessionId={selectedSessionId}
-              onSelectSessionId={onSelectSessionId}
-              onStartSession={onStartSession}
-            />
+            <>
+              <SessionsPanel
+                deviceId={deviceId}
+                selectedSessionId={selectedSessionId}
+                onSelectSessionId={onSelectSessionId}
+                onStartSession={onStartSession}
+              />
+              {selectedSessionId ? (
+                <button
+                  type="button"
+                  className="controls__button"
+                  onClick={() =>
+                    window.open(`/api/export/session/${selectedSessionId}.geojson`, '_blank', 'noopener,noreferrer')
+                  }
+                >
+                  Export GeoJSON
+                </button>
+              ) : null}
+            </>
           ) : (
             <span className="controls__label">Select a device</span>
           )}

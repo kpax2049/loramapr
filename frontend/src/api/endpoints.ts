@@ -25,6 +25,7 @@ export type MeasurementQueryParams = {
   to?: string | Date;
   bbox?: Bbox;
   gatewayId?: string;
+  sample?: number;
   limit?: number;
 };
 
@@ -82,6 +83,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   }
   if (params.gatewayId) {
     searchParams.set('gatewayId', params.gatewayId);
+  }
+  if (typeof params.sample === 'number') {
+    searchParams.set('sample', String(params.sample));
   }
   if (typeof params.limit === 'number') {
     searchParams.set('limit', String(params.limit));

@@ -22,6 +22,8 @@ const DEFAULT_LIMIT = 2000;
 const LOW_ZOOM_LIMIT = 1000;
 const LIMIT_ZOOM_THRESHOLD = 12;
 const BBOX_DEBOUNCE_MS = 300;
+const SAMPLE_ZOOM_LOW = 12;
+const SAMPLE_ZOOM_MEDIUM = 14;
 const LORAWAN_DIAG_WINDOW_MINUTES = 10;
 
 type InitialQueryState = {
@@ -170,6 +172,8 @@ function App() {
   const isSessionMode = filterMode === 'session' && Boolean(selectedSessionId);
 
   const effectiveLimit = currentZoom <= LIMIT_ZOOM_THRESHOLD ? LOW_ZOOM_LIMIT : DEFAULT_LIMIT;
+  const effectiveSample =
+    currentZoom <= SAMPLE_ZOOM_LOW ? 800 : currentZoom <= SAMPLE_ZOOM_MEDIUM ? 1500 : undefined;
 
   const measurementsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -178,6 +182,7 @@ function App() {
             sessionId: selectedSessionId ?? undefined,
             bbox: bboxPayload,
             gatewayId: selectedGatewayId ?? undefined,
+            sample: effectiveSample,
             limit: effectiveLimit
           }
         : {
@@ -186,9 +191,20 @@ function App() {
             to: to || undefined,
             bbox: bboxPayload,
             gatewayId: selectedGatewayId ?? undefined,
+            sample: effectiveSample,
             limit: effectiveLimit
           },
-    [isSessionMode, selectedSessionId, bboxPayload, deviceId, from, to, selectedGatewayId, effectiveLimit]
+    [
+      isSessionMode,
+      selectedSessionId,
+      bboxPayload,
+      deviceId,
+      from,
+      to,
+      selectedGatewayId,
+      effectiveSample,
+      effectiveLimit
+    ]
   );
 
   const trackParams = useMemo<MeasurementQueryParams>(
@@ -197,6 +213,7 @@ function App() {
         ? {
             sessionId: selectedSessionId ?? undefined,
             gatewayId: selectedGatewayId ?? undefined,
+            sample: effectiveSample,
             limit: effectiveLimit
           }
         : {
@@ -204,9 +221,19 @@ function App() {
             from: from || undefined,
             to: to || undefined,
             gatewayId: selectedGatewayId ?? undefined,
+            sample: effectiveSample,
             limit: effectiveLimit
           },
-    [isSessionMode, selectedSessionId, deviceId, from, to, selectedGatewayId, effectiveLimit]
+    [
+      isSessionMode,
+      selectedSessionId,
+      deviceId,
+      from,
+      to,
+      selectedGatewayId,
+      effectiveSample,
+      effectiveLimit
+    ]
   );
 
   const sessionPolling = isSessionMode ? 2000 : false;
@@ -392,6 +419,7 @@ function App() {
           to: normalizeTime(measurementsParams.to),
           bbox: bboxKey,
           gatewayId: measurementsParams.gatewayId ?? null,
+          sample: typeof measurementsParams.sample === 'number' ? measurementsParams.sample : null,
           limit: typeof measurementsParams.limit === 'number' ? measurementsParams.limit : null,
           filterMode
         };
@@ -402,6 +430,7 @@ function App() {
           to: normalizeTime(trackParams.to),
           bbox: null,
           gatewayId: trackParams.gatewayId ?? null,
+          sample: typeof trackParams.sample === 'number' ? trackParams.sample : null,
           limit: typeof trackParams.limit === 'number' ? trackParams.limit : null,
           filterMode
         };
