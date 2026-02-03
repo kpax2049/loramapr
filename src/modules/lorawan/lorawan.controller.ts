@@ -52,6 +52,13 @@ export class LorawanController {
     return event;
   }
 
+  @Get('summary')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  async getSummary() {
+    return this.lorawanService.getSummary();
+  }
+
   @Post('events/:id/reprocess')
   @UseGuards(ApiKeyGuard)
   @RequireApiKeyScope(ApiKeyScope.QUERY)

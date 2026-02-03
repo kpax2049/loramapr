@@ -103,6 +103,48 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async getSummary() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [totalEvents, processedEvents, unprocessedEvents, errorsByType, lastEvent, lastMeasurement] =
+      await Promise.all([
+        this.prisma.webhookEvent.count({
+          where: { receivedAt: { gte: since } }
+        }),
+        this.prisma.webhookEvent.count({
+          where: { receivedAt: { gte: since }, processedAt: { not: null } }
+        }),
+        this.prisma.webhookEvent.count({
+          where: { processedAt: null }
+        }),
+        this.prisma.webhookEvent.groupBy({
+          by: ['processingError'],
+          where: {
+            receivedAt: { gte: since },
+            processingError: { not: null }
+          },
+          _count: { _all: true }
+        }),
+        this.prisma.webhookEvent.aggregate({
+          _max: { receivedAt: true }
+        }),
+        this.prisma.measurement.aggregate({
+          _max: { capturedAt: true }
+        })
+      ]);
+
+    return {
+      totalEvents,
+      processedEvents,
+      unprocessedEvents,
+      errorsByType: errorsByType.map((row) => ({
+        processingError: row.processingError as string,
+        count: row._count._all
+      })),
+      lastEventReceivedAt: lastEvent._max.receivedAt ?? null,
+      lastMeasurementCreatedAt: lastMeasurement._max.capturedAt ?? null
+    };
+  }
+
   async reprocessEvent(id: string): Promise<boolean> {
     const result = await this.prisma.webhookEvent.updateMany({
       where: { id },
