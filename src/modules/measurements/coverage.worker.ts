@@ -147,6 +147,51 @@ export class CoverageWorker implements OnModuleInit, OnModuleDestroy {
       _max: { rssi: true, snr: true }
     });
 
+    const data = {
+      count: aggregate._count._all,
+      rssiAvg: aggregate._avg.rssi ?? null,
+      snrAvg: aggregate._avg.snr ?? null,
+      rssiMin: aggregate._min.rssi ?? null,
+      rssiMax: aggregate._max.rssi ?? null,
+      snrMin: aggregate._min.snr ?? null,
+      snrMax: aggregate._max.snr ?? null
+    };
+
+    if (bin.sessionId === null || bin.gatewayId === null) {
+      const existing = await this.prisma.coverageBin.findFirst({
+        where: {
+          deviceId: bin.deviceId,
+          sessionId: bin.sessionId,
+          gatewayId: bin.gatewayId,
+          day: bin.day,
+          latBin: bin.latBin,
+          lonBin: bin.lonBin
+        },
+        select: { id: true }
+      });
+
+      if (existing) {
+        await this.prisma.coverageBin.update({
+          where: { id: existing.id },
+          data
+        });
+        return;
+      }
+
+      await this.prisma.coverageBin.create({
+        data: {
+          deviceId: bin.deviceId,
+          sessionId: bin.sessionId,
+          gatewayId: bin.gatewayId,
+          day: bin.day,
+          latBin: bin.latBin,
+          lonBin: bin.lonBin,
+          ...data
+        }
+      });
+      return;
+    }
+
     await this.prisma.coverageBin.upsert({
       where: {
         deviceId_sessionId_gatewayId_day_latBin_lonBin: {
@@ -165,23 +210,9 @@ export class CoverageWorker implements OnModuleInit, OnModuleDestroy {
         day: bin.day,
         latBin: bin.latBin,
         lonBin: bin.lonBin,
-        count: aggregate._count._all,
-        rssiAvg: aggregate._avg.rssi ?? null,
-        snrAvg: aggregate._avg.snr ?? null,
-        rssiMin: aggregate._min.rssi ?? null,
-        rssiMax: aggregate._max.rssi ?? null,
-        snrMin: aggregate._min.snr ?? null,
-        snrMax: aggregate._max.snr ?? null
+        ...data
       },
-      update: {
-        count: aggregate._count._all,
-        rssiAvg: aggregate._avg.rssi ?? null,
-        snrAvg: aggregate._avg.snr ?? null,
-        rssiMin: aggregate._min.rssi ?? null,
-        rssiMax: aggregate._max.rssi ?? null,
-        snrMin: aggregate._min.snr ?? null,
-        snrMax: aggregate._max.snr ?? null
-      }
+      update: data
     });
   }
 }
