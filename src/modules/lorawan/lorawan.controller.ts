@@ -1,4 +1,18 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  UseGuards
+} from '@nestjs/common';
+import { ApiKeyScope } from '@prisma/client';
+import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
+import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { LorawanRateLimitGuard } from '../../common/guards/lorawan-rate-limit.guard';
 import { LorawanWebhookGuard } from '../../common/guards/lorawan-webhook.guard';
 import { LorawanService } from './lorawan.service';
@@ -10,15 +24,32 @@ export class LorawanController {
   constructor(private readonly lorawanService: LorawanService) {}
 
   @Get('events')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
   async listEvents(
     @Query('deviceUid') deviceUid?: string,
+    @Query('processingError') processingError?: string,
+    @Query('processed') processed?: string,
     @Query('limit') limit?: string
   ) {
     const parsedLimit = parseLimit(limit);
     return this.lorawanService.listEvents({
       deviceUid: deviceUid || undefined,
+      processingError: processingError || undefined,
+      processed: parseOptionalBoolean(processed, 'processed'),
       limit: parsedLimit
     });
+  }
+
+  @Get('events/:id')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  async getEvent(@Param('id') id: string) {
+    const event = await this.lorawanService.getEventById(id);
+    if (!event) {
+      throw new NotFoundException('Webhook event not found');
+    }
+    return event;
   }
 
   @Post('uplink')
@@ -35,7 +66,7 @@ export class LorawanController {
       throw error;
     }
 
-    await this.lorawanService.handleUplink(parsed);
+    await this.lorawanService.enqueueUplink(parsed);
     return { status: 'ok' };
   }
 }
@@ -49,4 +80,17 @@ function parseLimit(value?: string): number {
     throw new BadRequestException('limit must be a positive integer');
   }
   return Math.min(parsed, 200);
+}
+
+function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+  throw new BadRequestException(`${name} must be true or false`);
 }

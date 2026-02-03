@@ -14,6 +14,8 @@ const withGpsFixture = loadFixture('uplink_with_gps.json');
 const missingGpsFixture = loadFixture('uplink_missing_gps.json');
 const noAsupFixture = loadFixture('uplink_no_asup_correlation.json');
 
+jest.setTimeout(15000);
+
 describe('LoRaWAN uplink e2e', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -23,6 +25,7 @@ describe('LoRaWAN uplink e2e', () => {
 
   beforeAll(async () => {
     process.env.TTS_WEBHOOK_API_KEY = apiKey;
+    process.env.LORAWAN_WORKER_ENABLED = 'true';
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule]
@@ -94,18 +97,11 @@ describe('LoRaWAN uplink e2e', () => {
       .send(payload)
       .expect(200);
 
-    const event = await prisma.webhookEvent.findUnique({
-      where: { uplinkId },
-      select: { processedAt: true, processingError: true }
-    });
-
+    const event = await waitForWebhookProcessed(prisma, uplinkId);
     expect(event?.processedAt).toBeTruthy();
     expect(event?.processingError).toBeNull();
 
-    const afterCount = await prisma.measurement.count({
-      where: { device: { deviceUid } }
-    });
-
+    const afterCount = await waitForMeasurementCount(prisma, deviceUid, beforeCount + 1);
     expect(afterCount).toBe(beforeCount + 1);
 
     const measurement = await prisma.measurement.findFirst({
@@ -143,20 +139,21 @@ describe('LoRaWAN uplink e2e', () => {
       .send(payload)
       .expect(200);
 
+    await waitForWebhookProcessed(prisma, uplinkId);
+
     const eventCount = await prisma.webhookEvent.count({
       where: { uplinkId }
     });
 
     expect(eventCount).toBe(1);
 
-    const afterCount = await prisma.measurement.count({
-      where: { device: { deviceUid } }
-    });
-
+    const afterCount = await waitForMeasurementCount(prisma, deviceUid, beforeCount + 1);
     expect(afterCount).toBe(beforeCount + 1);
   });
 
-  it('missing_gps does not ingest measurement', async () => {
+  it(
+    'missing_gps does not ingest measurement',
+    async () => {
     const payload = clonePayload(missingGpsFixture);
     const deviceUid = `dev-${Date.now()}`;
     payload.end_device_ids.dev_eui = deviceUid;
@@ -176,19 +173,14 @@ describe('LoRaWAN uplink e2e', () => {
       .send(payload)
       .expect(200);
 
-    const event = await prisma.webhookEvent.findUnique({
-      where: { uplinkId },
-      select: { processingError: true }
-    });
-
+    const event = await waitForWebhookProcessed(prisma, uplinkId);
     expect(event?.processingError).toBe('missing_gps');
 
-    const afterCount = await prisma.measurement.count({
-      where: { device: { deviceUid } }
-    });
-
+    const afterCount = await waitForMeasurementCount(prisma, deviceUid, beforeCount);
     expect(afterCount).toBe(beforeCount);
-  });
+    },
+    15000
+  );
 
   it('fallback uplinkId hashing works', async () => {
     const payload = clonePayload(noAsupFixture);
@@ -211,11 +203,7 @@ describe('LoRaWAN uplink e2e', () => {
       .send(payload)
       .expect(200);
 
-    const event = await prisma.webhookEvent.findUnique({
-      where: { uplinkId },
-      select: { uplinkId: true }
-    });
-
+    const event = await waitForWebhookProcessed(prisma, uplinkId);
     expect(event?.uplinkId).toBe(uplinkId);
 
     const eventCount = await prisma.webhookEvent.count({
@@ -256,11 +244,9 @@ describe('LoRaWAN uplink e2e', () => {
       .send(payload)
       .expect(200);
 
-    const measurement = await prisma.measurement.findFirst({
-      where: { deviceId: device.id },
-      orderBy: { capturedAt: 'desc' }
-    });
+    await waitForWebhookProcessed(prisma, uplinkId);
 
+    const measurement = await waitForMeasurementWithSession(prisma, device.id, session.id);
     expect(measurement?.sessionId).toBe(session.id);
   });
 });
@@ -272,4 +258,57 @@ function loadFixture(name: string): TtsPayload {
 
 function clonePayload(payload: TtsPayload): TtsPayload {
   return JSON.parse(JSON.stringify(payload)) as TtsPayload;
+}
+
+async function waitForWebhookProcessed(prisma: PrismaService, uplinkId: string) {
+  return waitFor(async () => {
+    const event = await prisma.webhookEvent.findUnique({
+      where: { uplinkId },
+      select: { processedAt: true, processingError: true, uplinkId: true }
+    });
+    if (!event?.processedAt) {
+      return null;
+    }
+    return event;
+  });
+}
+
+async function waitForMeasurementCount(prisma: PrismaService, deviceUid: string, expected: number) {
+  const count = await waitFor(async () => {
+    const current = await prisma.measurement.count({
+      where: { device: { deviceUid } }
+    });
+    return current >= expected ? current : null;
+  });
+  return count ?? 0;
+}
+
+async function waitForMeasurementWithSession(
+  prisma: PrismaService,
+  deviceId: string,
+  sessionId: string
+) {
+  return waitFor(async () => {
+    const measurement = await prisma.measurement.findFirst({
+      where: { deviceId, sessionId },
+      orderBy: { capturedAt: 'desc' }
+    });
+    return measurement ?? null;
+  });
+}
+
+async function waitFor<T>(
+  fn: () => Promise<T | null>,
+  timeoutMs: number = 8000,
+  intervalMs: number = 200
+): Promise<T | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const result = await fn();
+    if (result) {
+      return result;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return null;
 }
