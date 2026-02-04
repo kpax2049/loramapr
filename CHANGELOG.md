@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.5.0 - 2026-02-04
+
+### Highlights
+- Session GeoJSON export via QUERY-key download flow.
+- Coverage layer mode with metric selector + legend (bins from /api/coverage/bins).
+- Zoom-based sampling for measurements and tracks to reduce DOM load while keeping limit caps.
+
+### Notes
+- Includes the retroactive v0.4.0 and v0.4.1 releases.
+- No breaking changes.
+
+## v0.4.1 - 2026-02-04 (retroactive)
+
+### Highlights
+- Adaptive sampling parameters for measurements/tracks based on zoom level.
+- Query keys updated to include sampling for deterministic refetches.
+
+### Notes
+- Retroactive tag created on 2026-02-04.
+
+## v0.4.0 - 2026-02-04 (retroactive)
+
+### Highlights
+- Coverage bins API surfaced in the frontend with a new coverage layer mode.
+- Coverage bins rendering with bucketed styling and simple intensity scaling.
+
+### Notes
+- Retroactive tag created on 2026-02-04.
+
 ## v0.3.0 - 2026-02-03
 
 ### Highlights
