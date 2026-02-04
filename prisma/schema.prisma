@@ -155,8 +155,8 @@ model CoverageBin {
   snrMax    Float?
   updatedAt DateTime @updatedAt
 
-  device  Device   @relation(fields: [deviceId], references: [id])
-  session Session? @relation(fields: [sessionId], references: [id])
+  device  Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([deviceId, day])
   @@index([sessionId, day])

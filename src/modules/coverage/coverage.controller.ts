@@ -7,9 +7,12 @@ type CoverageQuery = {
   day?: string | string[];
   bbox?: string | string[];
   gatewayId?: string | string[];
+  limit?: string | string[];
 };
 
-const BIN_SIZE = 0.001;
+const BIN_SIZE_DEG = 0.001;
+const DEFAULT_LIMIT = 5000;
+const MAX_LIMIT = 20000;
 
 @Controller('api/coverage')
 export class CoverageController {
@@ -31,18 +34,22 @@ export class CoverageController {
     const bboxValue = getSingleValue(query.bbox, 'bbox');
     const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
     const gatewayId = getSingleValue(query.gatewayId, 'gatewayId');
+    const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
+    const limit = Math.min(requestedLimit, MAX_LIMIT);
 
     const bins = await this.coverageService.listBins({
       deviceId: deviceId ?? undefined,
       sessionId: sessionId ?? undefined,
       day,
       bbox,
-      gatewayId: gatewayId ?? undefined
+      gatewayId: gatewayId ?? undefined,
+      limit
     });
 
     return {
-      binSize: BIN_SIZE,
-      bins
+      binSizeDeg: BIN_SIZE_DEG,
+      day: day.toISOString(),
+      items: bins
     };
   }
 }
@@ -69,6 +76,17 @@ function parseDay(value?: string): Date {
     throw new BadRequestException('day must be a valid date');
   }
   return startOfUtcDay(parsed);
+}
+
+function parseLimit(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_LIMIT;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  return parsed;
 }
 
 function startOfUtcDay(value: Date): Date {
