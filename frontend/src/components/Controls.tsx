@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { DeviceLatest } from '../api/types';
 import { useDevices } from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
@@ -59,12 +59,18 @@ export default function Controls({
   const { data: devicesData, isLoading } = useDevices();
   const devices = Array.isArray(devicesData) ? devicesData : [];
   const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (!deviceId && devices.length > 0) {
       onDeviceChange(devices[0].id);
     }
   }, [deviceId, devices, onDeviceChange]);
+
+  useEffect(() => {
+    setExportError(null);
+  }, [selectedSessionId, filterMode]);
 
   return (
     <section className="controls" aria-label="Map controls">
@@ -199,15 +205,19 @@ export default function Controls({
                 onStartSession={onStartSession}
               />
               {selectedSessionId ? (
-                <button
-                  type="button"
-                  className="controls__button"
-                  onClick={() =>
-                    window.open(`/api/export/session/${selectedSessionId}.geojson`, '_blank', 'noopener,noreferrer')
-                  }
-                >
-                  Export GeoJSON
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="controls__button"
+                    onClick={() => void handleExport(selectedSessionId, setExportError, setIsExporting)}
+                    disabled={isExporting}
+                  >
+                    {isExporting ? 'Exporting…' : 'Export GeoJSON'}
+                  </button>
+                  {exportError ? (
+                    <div className="controls__export-error">{exportError}</div>
+                  ) : null}
+                </>
               ) : null}
             </>
           ) : (
@@ -286,6 +296,52 @@ export default function Controls({
       )}
     </section>
   );
+}
+
+function getApiBaseUrl(): string {
+  const raw = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
+  return raw;
+}
+
+async function handleExport(
+  sessionId: string,
+  setExportError: (value: string | null) => void,
+  setIsExporting: (value: boolean) => void
+): Promise<void> {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  setExportError(null);
+  setIsExporting(true);
+  try {
+    const apiBaseUrl = getApiBaseUrl();
+    const url = `${apiBaseUrl}/api/export/session/${sessionId}.geojson`;
+    const queryKey = import.meta.env.VITE_QUERY_API_KEY ?? '';
+    const headers = queryKey ? { 'X-API-Key': queryKey } : undefined;
+    const response = await fetch(url, { headers });
+    if (response.status === 401 || response.status === 403) {
+      setExportError('Export requires QUERY key');
+      return;
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Export failed (${response.status})`);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `session-${sessionId}.geojson`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    setExportError('Export failed');
+  } finally {
+    setIsExporting(false);
+  }
 }
 
 function formatRelativeTime(value: string): string {

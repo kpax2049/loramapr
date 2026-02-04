@@ -239,6 +239,12 @@
   color: #fecaca;
 }
 
+.controls__export-error {
+  font-size: 0.72rem;
+  color: #fecaca;
+  font-family: var(--font-mono);
+}
+
 @media (max-width: 720px) {
   .controls {
     left: 50%;
