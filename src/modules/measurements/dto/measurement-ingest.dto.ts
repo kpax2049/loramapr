@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsArray,
   IsString,
   IsUUID
 } from 'class-validator';
@@ -57,6 +58,10 @@ export class MeasurementIngestDto {
   @IsOptional()
   @IsString()
   payloadRaw?: string;
+
+  @IsOptional()
+  @IsArray()
+  rxMetadata?: any[];
 
   @IsOptional()
   @IsUUID()

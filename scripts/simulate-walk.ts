@@ -10,6 +10,8 @@ type Args = {
   minutes?: string;
   intervalSec?: string;
   seed?: string;
+  gatewayIds?: string;
+  multiGateway?: string | boolean;
 };
 
 const DEFAULTS = {
@@ -36,6 +38,8 @@ const baseLon = parseNumber(args.baseLon, DEFAULTS.baseLon);
 const minutes = parseNumber(args.minutes, DEFAULTS.minutes);
 const intervalSec = parseNumber(args.intervalSec, DEFAULTS.intervalSec);
 const seed = args.seed ?? DEFAULTS.seed;
+const gatewayIds = parseGatewayIds(args.gatewayIds);
+const multiGateway = parseBoolean(args.multiGateway, false);
 
 if (!apiKey) {
   console.error("Missing --apiKey or API_KEY env var.");
@@ -55,7 +59,9 @@ const measurements = buildMeasurements({
   baseLon,
   totalPoints,
   intervalSec,
-  rng
+  rng,
+  gatewayIds,
+  multiGateway
 });
 
 runBatches(apiUrl, apiKey, measurements)
@@ -74,6 +80,16 @@ type Measurement = {
   lon: number;
   rssi?: number;
   snr?: number;
+  gatewayId?: string;
+  rxMetadata?: RxMetadataEntry[];
+};
+
+type RxMetadataEntry = {
+  gateway_ids: {
+    gateway_id: string;
+  };
+  rssi: number;
+  snr: number;
 };
 
 function buildMeasurements(options: {
@@ -83,8 +99,11 @@ function buildMeasurements(options: {
   totalPoints: number;
   intervalSec: number;
   rng: () => number;
+  gatewayIds?: string[];
+  multiGateway: boolean;
 }): Measurement[] {
-  const { deviceUid, baseLat, baseLon, totalPoints, intervalSec, rng } = options;
+  const { deviceUid, baseLat, baseLon, totalPoints, intervalSec, rng, gatewayIds, multiGateway } =
+    options;
 
   const startTime = Date.now() - totalPoints * intervalSec * 1000;
   let lat = baseLat;
@@ -110,14 +129,33 @@ function buildMeasurements(options: {
 
     const capturedAt = new Date(startTime + i * intervalSec * 1000).toISOString();
 
-    measurements.push({
+    const measurement: Measurement = {
       deviceUid,
       capturedAt,
       lat: round(lat + jitterLat, 7),
       lon: round(lon + jitterLon, 7),
       rssi: Math.round(clamp(gaussian(rng, -74, 6), -110, -40)),
       snr: round(clamp(gaussian(rng, 7, 3), -20, 20), 1)
-    });
+    };
+
+    if (gatewayIds && gatewayIds.length > 0) {
+      const { rxMetadata, summary } = buildRxMetadata({
+        gatewayIds,
+        multiGateway,
+        rng,
+        index: i
+      });
+      if (rxMetadata) {
+        measurement.rxMetadata = rxMetadata;
+      }
+      if (summary) {
+        measurement.gatewayId = summary.gatewayId;
+        measurement.rssi = summary.rssi;
+        measurement.snr = summary.snr;
+      }
+    }
+
+    measurements.push(measurement);
   }
 
   return measurements;
@@ -178,6 +216,34 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseBoolean(value: string | boolean | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = value.toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function parseGatewayIds(value: string | undefined): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const ids = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? ids : undefined;
+}
+
 function createRng(seed: string): () => number {
   const seedFn = xmur3(String(seed));
   const s = seedFn();
@@ -225,6 +291,44 @@ function round(value: number, digits: number): number {
   return Math.round(value * factor) / factor;
 }
 
+function buildRxMetadata(options: {
+  gatewayIds: string[];
+  multiGateway: boolean;
+  rng: () => number;
+  index: number;
+}): { rxMetadata: RxMetadataEntry[]; summary: { gatewayId: string; rssi: number; snr: number } } {
+  const { gatewayIds, multiGateway, rng, index } = options;
+  const selected = multiGateway ? gatewayIds : [gatewayIds[index % gatewayIds.length]];
+
+  const rxMetadata = selected.map((gatewayId) => {
+    const rssi = Math.round(clamp(gaussian(rng, -95, 10), -120, -70));
+    const snr = round(clamp(gaussian(rng, 2, 4), -10, 10), 1);
+    return {
+      gateway_ids: { gateway_id: gatewayId },
+      rssi,
+      snr
+    };
+  });
+
+  let best = rxMetadata[0];
+  for (const entry of rxMetadata) {
+    if (entry.snr > best.snr) {
+      best = entry;
+    } else if (entry.snr === best.snr && entry.rssi > best.rssi) {
+      best = entry;
+    }
+  }
+
+  return {
+    rxMetadata,
+    summary: {
+      gatewayId: best.gateway_ids.gateway_id,
+      rssi: best.rssi,
+      snr: best.snr
+    }
+  };
+}
+
 function printHelp(): void {
   console.log(`Usage: npm run simulate:walk -- [options]
 
@@ -237,6 +341,8 @@ Options:
   --minutes       Duration in minutes (default: ${DEFAULTS.minutes})
   --intervalSec   Seconds between points (default: ${DEFAULTS.intervalSec})
   --seed          Deterministic seed (default: ${DEFAULTS.seed})
+  --gatewayIds    Comma-separated gateway IDs (optional)
+  --multiGateway  Include all gateways per point (default: false)
   --help          Show help
 `);
 }

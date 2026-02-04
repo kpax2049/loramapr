@@ -23,7 +23,7 @@ export type CanonicalMeasurementInput = {
   freq?: number;
   gatewayId?: string;
   payloadRaw?: string | Record<string, unknown>;
-  rxMetadata?: Prisma.InputJsonValue;
+  rxMetadata?: Prisma.InputJsonValue | any[];
   sessionId?: string;
 };
 
@@ -69,6 +69,7 @@ export type MeasurementQueryResult = {
     bw: number | null;
     freq: number | null;
     gatewayId: string | null;
+    rxMetadata: Prisma.JsonValue | null;
   }>;
 };
 
@@ -112,6 +113,7 @@ export class MeasurementsService {
         freq: measurement.freq,
         gatewayId: measurement.gatewayId,
         payloadRaw: measurement.payloadRaw,
+        rxMetadata: measurement.rxMetadata,
         sessionId: measurement.sessionId
       })),
       now
@@ -175,6 +177,13 @@ export class MeasurementsService {
             : typeof item.payloadRaw === 'string'
             ? item.payloadRaw
             : JSON.stringify(item.payloadRaw);
+        const summaryFromRx = getSummaryFromRxMetadata(item.rxMetadata);
+        const gatewayId =
+          item.gatewayId ?? summaryFromRx?.gatewayId ?? undefined;
+        const rssi =
+          item.rssi ?? summaryFromRx?.rssi ?? undefined;
+        const snr =
+          item.snr ?? summaryFromRx?.snr ?? undefined;
 
         return {
           id,
@@ -191,12 +200,12 @@ export class MeasurementsService {
             lon: item.lon,
             alt: item.alt,
             hdop: item.hdop,
-            rssi: item.rssi,
-            snr: item.snr,
+            rssi,
+            snr,
             sf: item.sf,
             bw: item.bw,
             freq: item.freq,
-            gatewayId: item.gatewayId,
+            gatewayId,
             payloadRaw,
             rxMetadata: item.rxMetadata ?? undefined
           }
@@ -295,6 +304,7 @@ export class MeasurementsService {
         bw: true,
         freq: true,
         gatewayId: true,
+        rxMetadata: true,
         deviceId: true,
         sessionId: true
       }
@@ -378,4 +388,38 @@ function sampleItems<T>(items: T[], sample: number): T[] {
     result.push(items[index]);
   }
   return result;
+}
+
+function getSummaryFromRxMetadata(
+  rxMetadata: Prisma.InputJsonValue | undefined
+): { gatewayId: string; rssi?: number; snr?: number } | null {
+  if (!Array.isArray(rxMetadata) || rxMetadata.length === 0) {
+    return null;
+  }
+  let best: { gatewayId: string; rssi?: number; snr?: number } | null = null;
+  for (const entry of rxMetadata) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const gatewayId = (entry as any)?.gateway_ids?.gateway_id;
+    if (!gatewayId || typeof gatewayId !== 'string') {
+      continue;
+    }
+    const rssiValue = (entry as any)?.rssi;
+    const snrValue = (entry as any)?.snr;
+    const rssi = typeof rssiValue === 'number' && Number.isFinite(rssiValue) ? Math.round(rssiValue) : undefined;
+    const snr = typeof snrValue === 'number' && Number.isFinite(snrValue) ? snrValue : undefined;
+    if (!best) {
+      best = { gatewayId, rssi, snr };
+      continue;
+    }
+    const bestSnr = best.snr ?? -Infinity;
+    const bestRssi = best.rssi ?? -Infinity;
+    const candidateSnr = snr ?? -Infinity;
+    const candidateRssi = rssi ?? -Infinity;
+    if (candidateSnr > bestSnr || (candidateSnr === bestSnr && candidateRssi > bestRssi)) {
+      best = { gatewayId, rssi, snr };
+    }
+  }
+  return best;
 }
