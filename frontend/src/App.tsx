@@ -95,7 +95,7 @@ function App() {
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
-  const [mapMode, setMapMode] = useState<'points' | 'coverage'>('points');
+  const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
@@ -290,12 +290,19 @@ function App() {
     compareMeasurementsParams,
     {
       enabled:
-        mapMode === 'points' &&
+        mapLayerMode === 'points' &&
         Boolean(compareGatewayId) &&
         (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
+  const renderedPointCount =
+    mapLayerMode === 'points'
+      ? (showPoints ? measurementsQuery.data?.items.length ?? 0 : 0) +
+        (compareMeasurementsQuery.data?.items.length ?? 0)
+      : 0;
+  const renderedBinCount =
+    mapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
 
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -318,21 +325,21 @@ function App() {
       isSessionMode
         ? {
             sessionId: selectedSessionId ?? undefined,
-            bbox: bboxPayload,
+            bbox: debouncedBbox ?? undefined,
             gatewayId: selectedGatewayId ?? undefined
           }
         : {
             deviceId: deviceId ?? undefined,
-            bbox: bboxPayload,
+            bbox: debouncedBbox ?? undefined,
             gatewayId: selectedGatewayId ?? undefined
           },
-    [isSessionMode, selectedSessionId, bboxPayload, deviceId, selectedGatewayId]
+    [isSessionMode, selectedSessionId, debouncedBbox, deviceId, selectedGatewayId]
   );
   const coverageQuery = useCoverageBins(
     coverageParams,
     {
       enabled:
-        mapMode === 'coverage' &&
+        mapLayerMode === 'coverage' &&
         Boolean(bboxPayload) &&
         (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
     },
@@ -553,13 +560,13 @@ function App() {
     <div className="app">
       <MapView
         ref={mapRef}
-        mapMode={mapMode}
+        mapLayerMode={mapLayerMode}
         coverageMetric={coverageMetric}
         measurements={measurementsQuery.data?.items ?? []}
         compareMeasurements={compareMeasurementsQuery.data?.items ?? []}
         track={trackQuery.data?.items ?? []}
-        coverageBins={coverageQuery.data?.bins ?? []}
-        coverageBinSize={coverageQuery.data?.binSize ?? null}
+        coverageBins={coverageQuery.data?.items ?? []}
+        coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
         showPoints={showPoints}
         showTrack={showTrack}
         onBoundsChange={setBbox}
@@ -568,6 +575,13 @@ function App() {
         selectedPointId={selectedPointId}
         onUserInteraction={() => setUserInteractedWithMap(true)}
       />
+      {import.meta.env.DEV && (
+        <div className="dev-counter">
+          {mapLayerMode === 'coverage'
+            ? `Coverage bins: ${renderedBinCount}`
+            : `Points: ${renderedPointCount}`}
+        </div>
+      )}
       {measurementsQuery.data &&
         measurementsQuery.data.items.length === measurementsQuery.data.limit && (
           <div className="limit-banner">Result limited; zoom in or narrow filters</div>
@@ -609,8 +623,8 @@ function App() {
         onSelectCompareGatewayId={setCompareGatewayId}
         latest={latestDeviceQuery.data}
         onFitToData={handleFitToData}
-        mapMode={mapMode}
-        onMapModeChange={setMapMode}
+        mapLayerMode={mapLayerMode}
+        onMapLayerModeChange={setMapLayerMode}
         coverageMetric={coverageMetric}
         onCoverageMetricChange={setCoverageMetric}
         from={from}

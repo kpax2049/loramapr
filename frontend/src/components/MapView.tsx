@@ -25,7 +25,7 @@ const markerShadowUrl = new URL('leaflet/dist/images/marker-shadow.png', import.
 type MapViewProps = {
   center?: [number, number];
   zoom?: number;
-  mapMode?: 'points' | 'coverage';
+  mapLayerMode?: 'points' | 'coverage';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
@@ -125,6 +125,7 @@ function zoomToTolerance(zoom: number): number {
 }
 
 type RssiBucket = 'strong' | 'medium' | 'weak' | 'unknown' | 'default';
+type CoverageBucket = 'low' | 'med' | 'high';
 
 function getRssiBucket(rssi?: number | null): RssiBucket {
   if (rssi === null || rssi === undefined) {
@@ -142,33 +143,34 @@ function getRssiBucket(rssi?: number | null): RssiBucket {
   return 'weak';
 }
 
-function getSnrBucket(snr?: number | null): RssiBucket {
-  if (snr === null || snr === undefined) {
-    return 'unknown';
+function getCoverageSnrBucket(snr: number): CoverageBucket {
+  if (snr >= 6) {
+    return 'high';
   }
-  if (!Number.isFinite(snr)) {
-    return 'unknown';
+  if (snr >= -4) {
+    return 'med';
   }
-  if (snr >= 10) {
-    return 'strong';
-  }
-  if (snr >= 5) {
-    return 'medium';
-  }
-  return 'weak';
+  return 'low';
 }
 
-function getCountBucket(count: number): RssiBucket {
-  if (!Number.isFinite(count)) {
-    return 'unknown';
-  }
+function getCoverageCountBucket(count: number): CoverageBucket {
   if (count >= 21) {
-    return 'strong';
+    return 'high';
   }
   if (count >= 6) {
-    return 'medium';
+    return 'med';
   }
-  return 'weak';
+  return 'low';
+}
+
+function getCoverageRssiBucket(rssi: number): CoverageBucket {
+  if (rssi >= -89) {
+    return 'high';
+  }
+  if (rssi >= -109) {
+    return 'med';
+  }
+  return 'low';
 }
 
 type PointPalette = Record<RssiBucket, string>;
@@ -207,7 +209,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 {
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
-  mapMode = 'points',
+  mapLayerMode = 'points',
   coverageMetric = 'count',
   measurements = [],
   compareMeasurements = [],
@@ -270,27 +272,26 @@ ref
   }, [currentZoom, onZoomChange]);
 
   const coverageData = useMemo(() => {
-    if (mapMode !== 'coverage' || coverageBins.length === 0 || !coverageBinSize) {
-      return { bins: [], maxCount: 1 };
+    if (mapLayerMode !== 'coverage' || coverageBins.length === 0 || !coverageBinSize) {
+      return { bins: [] as Array<CoverageBin & { bounds: [[number, number], [number, number]]; bucket: CoverageBucket }> };
     }
-    let maxCount = 1;
     const bins = coverageBins.map((bin) => {
-      if (bin.count > maxCount) {
-        maxCount = bin.count;
-      }
       const minLat = bin.latBin * coverageBinSize;
       const minLon = bin.lonBin * coverageBinSize;
       const maxLat = minLat + coverageBinSize;
       const maxLon = minLon + coverageBinSize;
-      let bucket: RssiBucket =
+      const metricValue =
         coverageMetric === 'count'
-          ? getCountBucket(bin.count)
+          ? bin.count
           : coverageMetric === 'snrAvg'
-            ? getSnrBucket(bin.snrAvg)
-            : getRssiBucket(bin.rssiAvg);
-      if (bucket === 'default') {
-        bucket = 'unknown';
-      }
+            ? bin.snrAvg ?? 0
+            : bin.rssiAvg ?? 0;
+      const bucket =
+        coverageMetric === 'count'
+          ? getCoverageCountBucket(metricValue)
+          : coverageMetric === 'snrAvg'
+            ? getCoverageSnrBucket(metricValue)
+            : getCoverageRssiBucket(metricValue);
       return {
         ...bin,
         bucket,
@@ -301,8 +302,8 @@ ref
       };
     });
 
-    return { bins, maxCount };
-  }, [mapMode, coverageBins, coverageBinSize, coverageMetric]);
+    return { bins };
+  }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric]);
 
   return (
     <MapContainer
@@ -329,10 +330,10 @@ ref
           pathOptions={{ color: '#0f172a', weight: 3, opacity: 0.7 }}
         />
       )}
-      {mapMode === 'coverage' &&
+      {mapLayerMode === 'coverage' &&
         coverageData.bins.map((bin) => {
-          const intensity = Math.min(1, 0.2 + (bin.count / coverageData.maxCount) * 0.8);
           const className = ['coverage-bin', `coverage-bin--${bin.bucket}`].join(' ');
+          const fillOpacity = bin.bucket === 'high' ? 0.85 : bin.bucket === 'med' ? 0.6 : 0.35;
 
           return (
             <Rectangle
@@ -341,13 +342,13 @@ ref
               pathOptions={{
                 weight: 1,
                 opacity: 0.7,
-                fillOpacity: intensity,
+                fillOpacity,
                 className
               }}
             />
           );
         })}
-      {mapMode === 'points' &&
+      {mapLayerMode === 'points' &&
         compareMeasurements.length > 0 &&
         compareMeasurements.map((measurement) => (
           <CircleMarker
@@ -362,7 +363,7 @@ ref
             interactive={false}
           />
         ))}
-      {mapMode === 'points' &&
+      {mapLayerMode === 'points' &&
         showPoints &&
         measurements.map((measurement) => {
           const bucket = getRssiBucket(measurement.rssi);

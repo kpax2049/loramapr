@@ -51,6 +51,21 @@
   border-left: 3px solid var(--panel-accent);
 }
 
+.dev-counter {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 1000;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
 .controls__group {
   display: grid;
   gap: 0.4rem;
@@ -858,26 +873,20 @@
   background: var(--map-point-default);
 }
 
-.coverage-bin--strong {
+.coverage-bin--high {
   stroke: var(--map-point-strong);
   fill: var(--map-point-strong);
   background: var(--map-point-strong);
 }
 
-.coverage-bin--medium {
+.coverage-bin--med {
   stroke: var(--map-point-medium);
   fill: var(--map-point-medium);
   background: var(--map-point-medium);
 }
 
-.coverage-bin--weak {
+.coverage-bin--low {
   stroke: var(--map-point-weak);
   fill: var(--map-point-weak);
   background: var(--map-point-weak);
-}
-
-.coverage-bin--unknown {
-  stroke: var(--map-point-unknown);
-  fill: var(--map-point-unknown);
-  background: var(--map-point-unknown);
 }

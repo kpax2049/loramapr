@@ -47,11 +47,13 @@ export type CoverageBin = {
   rssiMax: number | null;
   snrMin: number | null;
   snrMax: number | null;
+  gatewayId: string | null;
 };
 
 export type CoverageBinsResponse = {
-  binSize: number;
-  bins: CoverageBin[];
+  binSizeDeg: number;
+  day: string;
+  items: CoverageBin[];
 };
 
 export type GatewaySummary = {

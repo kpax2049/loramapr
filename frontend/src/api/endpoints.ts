@@ -52,9 +52,10 @@ export type StatsResponse = {
 export type CoverageQueryParams = {
   deviceId?: string;
   sessionId?: string;
-  day?: string | Date;
-  bbox?: Bbox;
+  day?: string;
+  bbox?: [number, number, number, number];
   gatewayId?: string;
+  limit?: number;
 };
 
 export type GatewayQueryParams = {
@@ -136,14 +137,16 @@ function buildCoverageQuery(params: CoverageQueryParams): string {
     searchParams.set('sessionId', params.sessionId);
   }
   if (params.day) {
-    searchParams.set('day', toIso(params.day));
+    searchParams.set('day', params.day);
   }
   if (params.bbox) {
-    const { minLon, minLat, maxLon, maxLat } = params.bbox;
-    searchParams.set('bbox', `${minLon},${minLat},${maxLon},${maxLat}`);
+    searchParams.set('bbox', params.bbox.join(','));
   }
   if (params.gatewayId) {
     searchParams.set('gatewayId', params.gatewayId);
+  }
+  if (typeof params.limit === 'number') {
+    searchParams.set('limit', String(params.limit));
   }
 
   return searchParams.toString();

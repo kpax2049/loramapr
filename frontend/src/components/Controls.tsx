@@ -17,8 +17,8 @@ type ControlsProps = {
   onSelectCompareGatewayId: (gatewayId: string | null) => void;
   latest?: DeviceLatest;
   onFitToData: () => void;
-  mapMode: 'points' | 'coverage';
-  onMapModeChange: (mode: 'points' | 'coverage') => void;
+  mapLayerMode: 'points' | 'coverage';
+  onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
   onCoverageMetricChange: (metric: 'count' | 'rssiAvg' | 'snrAvg') => void;
   from: string;
@@ -45,8 +45,8 @@ export default function Controls({
   onSelectCompareGatewayId,
   latest,
   onFitToData,
-  mapMode,
-  onMapModeChange,
+  mapLayerMode,
+  onMapLayerModeChange,
   coverageMetric,
   onCoverageMetricChange,
   from,
@@ -151,30 +151,30 @@ export default function Controls({
       <div className="controls__group">
         <span className="controls__label">Map layer</span>
         <div className="controls__segmented" role="radiogroup" aria-label="Map layer">
-          <label className={`controls__segment ${mapMode === 'points' ? 'is-active' : ''}`}>
+          <label className={`controls__segment ${mapLayerMode === 'points' ? 'is-active' : ''}`}>
             <input
               type="radio"
               name="map-mode"
               value="points"
-              checked={mapMode === 'points'}
-              onChange={() => onMapModeChange('points')}
+              checked={mapLayerMode === 'points'}
+              onChange={() => onMapLayerModeChange('points')}
             />
             Points
           </label>
-          <label className={`controls__segment ${mapMode === 'coverage' ? 'is-active' : ''}`}>
+          <label className={`controls__segment ${mapLayerMode === 'coverage' ? 'is-active' : ''}`}>
             <input
               type="radio"
               name="map-mode"
               value="coverage"
-              checked={mapMode === 'coverage'}
-              onChange={() => onMapModeChange('coverage')}
+              checked={mapLayerMode === 'coverage'}
+              onChange={() => onMapLayerModeChange('coverage')}
             />
             Coverage
           </label>
         </div>
       </div>
 
-      {mapMode === 'coverage' ? (
+      {mapLayerMode === 'coverage' ? (
         <div className="controls__group">
           <label htmlFor="coverage-metric">Coverage metric</label>
           <select
@@ -291,7 +291,7 @@ export default function Controls({
             type="checkbox"
             checked={showPoints}
             onChange={(event) => onShowPointsChange(event.target.checked)}
-            disabled={mapMode === 'coverage'}
+            disabled={mapLayerMode === 'coverage'}
           />
           Show points
         </label>
@@ -448,29 +448,27 @@ function copyDeviceUid(deviceUid: string) {
 
 type CoverageLegendItem = {
   label: string;
-  bucket: 'strong' | 'medium' | 'weak' | 'unknown';
+  bucket: 'low' | 'med' | 'high';
 };
 
 function CoverageLegend({ metric }: { metric: 'count' | 'rssiAvg' | 'snrAvg' }) {
   const items: CoverageLegendItem[] =
     metric === 'count'
       ? [
-          { label: '1-5', bucket: 'weak' },
-          { label: '6-20', bucket: 'medium' },
-          { label: '21+', bucket: 'strong' }
+          { label: '1-5', bucket: 'low' },
+          { label: '6-20', bucket: 'med' },
+          { label: '21+', bucket: 'high' }
         ]
       : metric === 'snrAvg'
         ? [
-            { label: '< 5 dB', bucket: 'weak' },
-            { label: '5-9 dB', bucket: 'medium' },
-            { label: '>= 10 dB', bucket: 'strong' },
-            { label: 'Unknown', bucket: 'unknown' }
+            { label: '<= -5 dB', bucket: 'low' },
+            { label: '-4 to 5 dB', bucket: 'med' },
+            { label: '>= 6 dB', bucket: 'high' }
           ]
         : [
-            { label: '< -90 dBm', bucket: 'weak' },
-            { label: '-90 to -71 dBm', bucket: 'medium' },
-            { label: '>= -70 dBm', bucket: 'strong' },
-            { label: 'Unknown', bucket: 'unknown' }
+            { label: '<= -110 dBm', bucket: 'low' },
+            { label: '-109 to -90 dBm', bucket: 'med' },
+            { label: '>= -89 dBm', bucket: 'high' }
           ];
 
   return (

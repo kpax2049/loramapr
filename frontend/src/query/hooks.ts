@@ -47,6 +47,7 @@ type CoverageKeyParams = {
   day: string | null;
   bbox: string | null;
   gatewayId: string | null;
+  limit: number | null;
   filterMode: 'time' | 'session' | null;
 };
 
@@ -88,16 +89,15 @@ function normalizeCoverageParams(
   params: CoverageQueryParams,
   context?: { filterMode?: 'time' | 'session' }
 ): CoverageKeyParams {
-  const bbox = params.bbox
-    ? `${params.bbox.minLon},${params.bbox.minLat},${params.bbox.maxLon},${params.bbox.maxLat}`
-    : 'none';
+  const bbox = params.bbox ? params.bbox.join(',') : 'none';
 
   return {
     deviceId: params.deviceId ?? null,
     sessionId: params.sessionId ?? null,
-    day: params.day ? toIso(params.day) : null,
+    day: params.day ?? null,
     bbox,
     gatewayId: params.gatewayId ?? null,
+    limit: typeof params.limit === 'number' ? params.limit : null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
   };
 }
@@ -242,12 +242,18 @@ export function useCoverageBins(
   context?: { filterMode?: 'time' | 'session' }
 ) {
   const keyParams = normalizeCoverageParams(params, context);
-  const enabled =
-    options?.enabled ??
-    (Boolean(params.deviceId || params.sessionId) && Boolean(params.bbox));
+  const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
 
   return useQuery<CoverageBinsResponse>({
-    queryKey: ['coverage-bins', keyParams],
+    queryKey: [
+      'coverageBins',
+      keyParams.deviceId,
+      keyParams.sessionId,
+      keyParams.day,
+      keyParams.bbox ?? 'none',
+      keyParams.gatewayId ?? 'all',
+      keyParams.limit
+    ],
     queryFn: ({ signal }) => getCoverageBins(params, { signal }),
     ...options,
     enabled
