@@ -54,6 +54,28 @@ export type CoverageBinsResponse = {
   bins: CoverageBin[];
 };
 
+export type GatewaySummary = {
+  gatewayId: string;
+  count: number;
+  lastSeenAt: string | null;
+};
+
+export type GatewayStats = {
+  gatewayId: string;
+  count: number;
+  rssi: {
+    min: number | null;
+    max: number | null;
+    avg: number | null;
+  };
+  snr: {
+    min: number | null;
+    max: number | null;
+    avg: number | null;
+  };
+  lastSeenAt: string | null;
+};
+
 export type DeviceLatest = {
   deviceId: string;
   lastMeasurementAt: string | null;

@@ -3,6 +3,8 @@ import type {
   Device,
   DeviceLatest,
   CoverageBinsResponse,
+  GatewayStats,
+  GatewaySummary,
   LorawanEvent,
   LorawanEventDetail,
   LorawanSummary,
@@ -25,6 +27,7 @@ export type MeasurementQueryParams = {
   to?: string | Date;
   bbox?: Bbox;
   gatewayId?: string;
+  rxGatewayId?: string;
   sample?: number;
   limit?: number;
 };
@@ -52,6 +55,13 @@ export type CoverageQueryParams = {
   day?: string | Date;
   bbox?: Bbox;
   gatewayId?: string;
+};
+
+export type GatewayQueryParams = {
+  deviceId?: string;
+  sessionId?: string;
+  from?: string | Date;
+  to?: string | Date;
 };
 
 type RequestOptions = {
@@ -83,6 +93,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   }
   if (params.gatewayId) {
     searchParams.set('gatewayId', params.gatewayId);
+  }
+  if (params.rxGatewayId) {
+    searchParams.set('rxGatewayId', params.rxGatewayId);
   }
   if (typeof params.sample === 'number') {
     searchParams.set('sample', String(params.sample));
@@ -131,6 +144,25 @@ function buildCoverageQuery(params: CoverageQueryParams): string {
   }
   if (params.gatewayId) {
     searchParams.set('gatewayId', params.gatewayId);
+  }
+
+  return searchParams.toString();
+}
+
+function buildGatewayQuery(params: GatewayQueryParams): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.deviceId) {
+    searchParams.set('deviceId', params.deviceId);
+  }
+  if (params.sessionId) {
+    searchParams.set('sessionId', params.sessionId);
+  }
+  if (params.from) {
+    searchParams.set('from', toIso(params.from));
+  }
+  if (params.to) {
+    searchParams.set('to', toIso(params.to));
   }
 
   return searchParams.toString();
@@ -263,4 +295,23 @@ export async function getCoverageBins(
   const query = buildCoverageQuery(params);
   const path = query ? `/api/coverage/bins?${query}` : '/api/coverage/bins';
   return getJson<CoverageBinsResponse>(path, options);
+}
+
+export async function listGateways(
+  params: GatewayQueryParams,
+  options?: RequestOptions
+): Promise<GatewaySummary[]> {
+  const query = buildGatewayQuery(params);
+  const path = query ? `/api/gateways?${query}` : '/api/gateways';
+  return getJson<GatewaySummary[]>(path, withQueryApiKey(options));
+}
+
+export async function getGatewayStats(
+  gatewayId: string,
+  params: GatewayQueryParams,
+  options?: RequestOptions
+): Promise<GatewayStats> {
+  const query = buildGatewayQuery(params);
+  const path = query ? `/api/gateways/${gatewayId}/stats?${query}` : `/api/gateways/${gatewayId}/stats`;
+  return getJson<GatewayStats>(path, withQueryApiKey(options));
 }

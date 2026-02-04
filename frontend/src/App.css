@@ -12,6 +12,7 @@
   --map-point-weak: #ef4444;
   --map-point-unknown: #94a3b8;
   --map-point-default: #38bdf8;
+  --map-point-compare: #f472b6;
 }
 
 .app {
@@ -245,6 +246,12 @@
   font-family: var(--font-mono);
 }
 
+.controls__gateway-error {
+  font-size: 0.72rem;
+  color: #fecaca;
+  font-family: var(--font-mono);
+}
+
 @media (max-width: 720px) {
   .controls {
     left: 50%;
@@ -418,6 +425,53 @@
   color: var(--panel-text);
   box-shadow: var(--panel-shadow);
   border-left: 3px solid var(--panel-accent);
+}
+
+.gateway-stats {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  box-shadow: var(--panel-shadow);
+  border-left: 3px solid var(--panel-accent);
+}
+
+.gateway-stats h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.gateway-stats__list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.gateway-stats__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.gateway-stats__row dt {
+  color: var(--panel-muted);
+}
+
+.gateway-stats__row dd {
+  margin: 0;
+  color: var(--panel-text);
+}
+
+.gateway-stats__empty {
+  font-size: 0.8rem;
+  color: var(--panel-muted);
 }
 
 .lorawan-panel__header {
@@ -787,6 +841,11 @@
 .map-point--default {
   stroke: var(--map-point-default);
   fill: var(--map-point-default);
+}
+
+.map-point--compare {
+  stroke: var(--map-point-compare);
+  fill: var(--map-point-compare);
 }
 
 .map-point.is-selected {

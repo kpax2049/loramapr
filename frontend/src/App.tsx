@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { CoverageQueryParams, MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
+import GatewayStatsPanel from './components/GatewayStatsPanel';
 import LorawanEventsPanel from './components/LorawanEventsPanel';
 import MapView, { type MapViewHandle } from './components/MapView';
 import PointDetails from './components/PointDetails';
@@ -100,6 +101,7 @@ function App() {
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedGatewayId, setSelectedGatewayId] = useState<string | null>(null);
+  const [compareGatewayId, setCompareGatewayId] = useState<string | null>(null);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
 
   useEffect(() => {
@@ -181,7 +183,7 @@ function App() {
         ? {
             sessionId: selectedSessionId ?? undefined,
             bbox: bboxPayload,
-            gatewayId: selectedGatewayId ?? undefined,
+            rxGatewayId: selectedGatewayId ?? undefined,
             sample: effectiveSample,
             limit: effectiveLimit
           }
@@ -190,7 +192,7 @@ function App() {
             from: from || undefined,
             to: to || undefined,
             bbox: bboxPayload,
-            gatewayId: selectedGatewayId ?? undefined,
+            rxGatewayId: selectedGatewayId ?? undefined,
             sample: effectiveSample,
             limit: effectiveLimit
           },
@@ -212,7 +214,7 @@ function App() {
       isSessionMode
         ? {
             sessionId: selectedSessionId ?? undefined,
-            gatewayId: selectedGatewayId ?? undefined,
+            rxGatewayId: selectedGatewayId ?? undefined,
             sample: effectiveSample,
             limit: effectiveLimit
           }
@@ -220,7 +222,7 @@ function App() {
             deviceId: deviceId ?? undefined,
             from: from || undefined,
             to: to || undefined,
-            gatewayId: selectedGatewayId ?? undefined,
+            rxGatewayId: selectedGatewayId ?? undefined,
             sample: effectiveSample,
             limit: effectiveLimit
           },
@@ -252,17 +254,49 @@ function App() {
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
+  const compareSample = compareGatewayId ? 800 : undefined;
+  const compareMeasurementsParams = useMemo<MeasurementQueryParams>(
+    () =>
+      isSessionMode
+        ? {
+            sessionId: selectedSessionId ?? undefined,
+            bbox: bboxPayload,
+            rxGatewayId: compareGatewayId ?? undefined,
+            sample: compareSample,
+            limit: effectiveLimit
+          }
+        : {
+            deviceId: deviceId ?? undefined,
+            from: from || undefined,
+            to: to || undefined,
+            bbox: bboxPayload,
+            rxGatewayId: compareGatewayId ?? undefined,
+            sample: compareSample,
+            limit: effectiveLimit
+          },
+    [
+      isSessionMode,
+      selectedSessionId,
+      bboxPayload,
+      deviceId,
+      from,
+      to,
+      compareGatewayId,
+      compareSample,
+      effectiveLimit
+    ]
+  );
+  const compareMeasurementsQuery = useMeasurements(
+    compareMeasurementsParams,
+    {
+      enabled:
+        mapMode === 'points' &&
+        Boolean(compareGatewayId) &&
+        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+    },
+    { filterMode, refetchIntervalMs: sessionPolling }
+  );
 
-  const gatewayIds = useMemo(() => {
-    const items = measurementsQuery.data?.items ?? [];
-    const ids = new Set<string>();
-    for (const item of items) {
-      if (item.gatewayId) {
-        ids.add(item.gatewayId);
-      }
-    }
-    return Array.from(ids).sort((a, b) => a.localeCompare(b));
-  }, [measurementsQuery.data?.items]);
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
       isSessionMode
@@ -314,6 +348,18 @@ function App() {
     1,
     Boolean(selectedDeviceUid)
   );
+  const gatewayScope =
+    filterMode === 'session'
+      ? {
+          sessionId: selectedSessionId ?? undefined
+        }
+      : {
+          deviceId: deviceId ?? undefined,
+          from: from || undefined,
+          to: to || undefined
+        };
+  const gatewayScopeEnabled =
+    filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
 
   const selectedMeasurement = useMemo<Measurement | null>(() => {
     if (!selectedPointId) {
@@ -339,6 +385,7 @@ function App() {
 
   useEffect(() => {
     setSelectedGatewayId(null);
+    setCompareGatewayId(null);
   }, [deviceId, selectedSessionId]);
 
   const measurementBounds = useMemo(() => {
@@ -419,10 +466,32 @@ function App() {
           to: normalizeTime(measurementsParams.to),
           bbox: bboxKey,
           gatewayId: measurementsParams.gatewayId ?? null,
+          rxGatewayId: measurementsParams.rxGatewayId ?? null,
           sample: typeof measurementsParams.sample === 'number' ? measurementsParams.sample : null,
           limit: typeof measurementsParams.limit === 'number' ? measurementsParams.limit : null,
           filterMode
         };
+        const compareKey =
+          compareGatewayId && compareMeasurementsParams.rxGatewayId
+            ? {
+                deviceId: compareMeasurementsParams.deviceId ?? null,
+                sessionId: compareMeasurementsParams.sessionId ?? null,
+                from: normalizeTime(compareMeasurementsParams.from),
+                to: normalizeTime(compareMeasurementsParams.to),
+                bbox: bboxKey,
+                gatewayId: compareMeasurementsParams.gatewayId ?? null,
+                rxGatewayId: compareMeasurementsParams.rxGatewayId ?? null,
+                sample:
+                  typeof compareMeasurementsParams.sample === 'number'
+                    ? compareMeasurementsParams.sample
+                    : null,
+                limit:
+                  typeof compareMeasurementsParams.limit === 'number'
+                    ? compareMeasurementsParams.limit
+                    : null,
+                filterMode
+              }
+            : null;
         const trackKey = {
           deviceId: trackParams.deviceId ?? null,
           sessionId: trackParams.sessionId ?? null,
@@ -430,12 +499,16 @@ function App() {
           to: normalizeTime(trackParams.to),
           bbox: null,
           gatewayId: trackParams.gatewayId ?? null,
+          rxGatewayId: trackParams.rxGatewayId ?? null,
           sample: typeof trackParams.sample === 'number' ? trackParams.sample : null,
           limit: typeof trackParams.limit === 'number' ? trackParams.limit : null,
           filterMode
         };
 
         queryClient.invalidateQueries({ queryKey: ['measurements', measurementsKey] });
+        if (compareKey) {
+          queryClient.invalidateQueries({ queryKey: ['measurements', compareKey] });
+        }
         queryClient.invalidateQueries({ queryKey: ['track', trackKey] });
       }
     }
@@ -445,6 +518,7 @@ function App() {
     deviceId,
     latestDeviceQuery.data?.lastMeasurementAt,
     measurementsParams,
+    compareMeasurementsParams,
     trackParams,
     bboxPayload,
     filterMode,
@@ -482,6 +556,7 @@ function App() {
         mapMode={mapMode}
         coverageMetric={coverageMetric}
         measurements={measurementsQuery.data?.items ?? []}
+        compareMeasurements={compareMeasurementsQuery.data?.items ?? []}
         track={trackQuery.data?.items ?? []}
         coverageBins={coverageQuery.data?.bins ?? []}
         coverageBinSize={coverageQuery.data?.binSize ?? null}
@@ -509,10 +584,15 @@ function App() {
       <div className="right-column">
         <PointDetails measurement={selectedMeasurement} />
         <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
+        <GatewayStatsPanel
+          gatewayId={selectedGatewayId}
+          scope={gatewayScope}
+          enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
+        />
         <StatsCard
-        stats={statsQuery.data}
-        isLoading={statsQuery.isLoading}
-        error={statsQuery.error as Error | null}
+          stats={statsQuery.data}
+          isLoading={statsQuery.isLoading}
+          error={statsQuery.error as Error | null}
         />
       </div>
       <Controls
@@ -523,9 +603,10 @@ function App() {
         selectedSessionId={selectedSessionId}
         onSelectSessionId={setSelectedSessionId}
         onStartSession={handleSessionStart}
-        gatewayIds={gatewayIds}
         selectedGatewayId={selectedGatewayId}
         onSelectGatewayId={setSelectedGatewayId}
+        compareGatewayId={compareGatewayId}
+        onSelectCompareGatewayId={setCompareGatewayId}
         latest={latestDeviceQuery.data}
         onFitToData={handleFitToData}
         mapMode={mapMode}

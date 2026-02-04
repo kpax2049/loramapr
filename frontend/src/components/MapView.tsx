@@ -28,6 +28,7 @@ type MapViewProps = {
   mapMode?: 'points' | 'coverage';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
+  compareMeasurements?: MapPoint[];
   track?: TrackPoint[];
   coverageBins?: CoverageBin[];
   coverageBinSize?: number | null;
@@ -209,6 +210,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   mapMode = 'points',
   coverageMetric = 'count',
   measurements = [],
+  compareMeasurements = [],
   track = [],
   coverageBins = [],
   coverageBinSize = 0.001,
@@ -345,6 +347,21 @@ ref
             />
           );
         })}
+      {mapMode === 'points' &&
+        compareMeasurements.length > 0 &&
+        compareMeasurements.map((measurement) => (
+          <CircleMarker
+            key={`compare-${measurement.id}`}
+            center={[measurement.lat, measurement.lon]}
+            radius={5}
+            pathOptions={{
+              className: 'map-point map-point--compare',
+              weight: 2,
+              fillOpacity: 0.6
+            }}
+            interactive={false}
+          />
+        ))}
       {mapMode === 'points' &&
         showPoints &&
         measurements.map((measurement) => {

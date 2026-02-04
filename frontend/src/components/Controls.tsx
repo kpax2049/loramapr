@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DeviceLatest } from '../api/types';
-import { useDevices } from '../query/hooks';
+import { useDevices, useGateways } from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
@@ -11,9 +11,10 @@ type ControlsProps = {
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
-  gatewayIds: string[];
   selectedGatewayId: string | null;
   onSelectGatewayId: (gatewayId: string | null) => void;
+  compareGatewayId: string | null;
+  onSelectCompareGatewayId: (gatewayId: string | null) => void;
   latest?: DeviceLatest;
   onFitToData: () => void;
   mapMode: 'points' | 'coverage';
@@ -38,9 +39,10 @@ export default function Controls({
   selectedSessionId,
   onSelectSessionId,
   onStartSession,
-  gatewayIds,
   selectedGatewayId,
   onSelectGatewayId,
+  compareGatewayId,
+  onSelectCompareGatewayId,
   latest,
   onFitToData,
   mapMode,
@@ -61,6 +63,21 @@ export default function Controls({
   const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const gatewayScope =
+    filterMode === 'session'
+      ? {
+          sessionId: selectedSessionId ?? undefined
+        }
+      : {
+          deviceId: deviceId ?? undefined,
+          from: from || undefined,
+          to: to || undefined
+        };
+  const gatewayScopeEnabled =
+    filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
+  const gatewaysQuery = useGateways(gatewayScope, { enabled: gatewayScopeEnabled }, { filterMode });
+  const gatewayOptions = gatewaysQuery.data ?? [];
+  const gatewayErrorStatus = getErrorStatus(gatewaysQuery.error);
 
   useEffect(() => {
     if (!deviceId && devices.length > 0) {
@@ -232,15 +249,32 @@ export default function Controls({
           id="gateway-select"
           value={selectedGatewayId ?? ''}
           onChange={(event) => onSelectGatewayId(event.target.value || null)}
-          disabled={gatewayIds.length === 0}
+          disabled={!gatewayScopeEnabled || gatewayOptions.length === 0}
         >
           <option value="">All gateways</option>
-          {gatewayIds.map((gatewayId) => (
-            <option key={gatewayId} value={gatewayId}>
-              {gatewayId}
+          {gatewayOptions.map((gateway) => (
+            <option key={gateway.gatewayId} value={gateway.gatewayId}>
+              {gateway.gatewayId} ({gateway.count})
             </option>
           ))}
         </select>
+        <label htmlFor="gateway-compare">Compare gateway</label>
+        <select
+          id="gateway-compare"
+          value={compareGatewayId ?? ''}
+          onChange={(event) => onSelectCompareGatewayId(event.target.value || null)}
+          disabled={!gatewayScopeEnabled || !selectedGatewayId || gatewayOptions.length === 0}
+        >
+          <option value="">No comparison</option>
+          {gatewayOptions.map((gateway) => (
+            <option key={`compare-${gateway.gatewayId}`} value={gateway.gatewayId}>
+              {gateway.gatewayId} ({gateway.count})
+            </option>
+          ))}
+        </select>
+        {gatewayErrorStatus === 401 || gatewayErrorStatus === 403 ? (
+          <div className="controls__gateway-error">Gateway analysis requires QUERY key</div>
+        ) : null}
       </div>
 
       <div className="controls__group">
@@ -449,4 +483,12 @@ function CoverageLegend({ metric }: { metric: 'count' | 'rssiAvg' | 'snrAvg' }) 
       ))}
     </div>
   );
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (typeof error === 'object' && error && 'status' in error) {
+    const status = (error as { status?: number }).status;
+    return typeof status === 'number' ? status : null;
+  }
+  return null;
 }

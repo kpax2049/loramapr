@@ -4,20 +4,29 @@ import type { UseQueryOptions } from '@tanstack/react-query';
 import {
   getCoverageBins,
   getDeviceLatest,
+  getGatewayStats,
   getMeasurements,
   getStats,
   getTrack,
+  listGateways,
   listDevices
 } from '../api/endpoints';
 import { ApiError } from '../api/http';
 import type {
   CoverageQueryParams,
+  GatewayQueryParams,
   MeasurementQueryParams,
   MeasurementsResponse,
   StatsResponse,
   TrackResponse
 } from '../api/endpoints';
-import type { CoverageBinsResponse, Device, DeviceLatest } from '../api/types';
+import type {
+  CoverageBinsResponse,
+  Device,
+  DeviceLatest,
+  GatewayStats,
+  GatewaySummary
+} from '../api/types';
 
 type MeasurementKeyParams = {
   deviceId: string | null;
@@ -26,6 +35,7 @@ type MeasurementKeyParams = {
   to: string | null;
   bbox: string | null;
   gatewayId: string | null;
+  rxGatewayId: string | null;
   sample: number | null;
   limit: number | null;
   filterMode: 'time' | 'session' | null;
@@ -37,6 +47,14 @@ type CoverageKeyParams = {
   day: string | null;
   bbox: string | null;
   gatewayId: string | null;
+  filterMode: 'time' | 'session' | null;
+};
+
+type GatewayKeyParams = {
+  deviceId: string | null;
+  sessionId: string | null;
+  from: string | null;
+  to: string | null;
   filterMode: 'time' | 'session' | null;
 };
 
@@ -59,6 +77,7 @@ function normalizeMeasurementParams(
     to: params.to ? toIso(params.to) : null,
     bbox,
     gatewayId: params.gatewayId ?? null,
+    rxGatewayId: params.rxGatewayId ?? null,
     sample: typeof params.sample === 'number' ? params.sample : null,
     limit: typeof params.limit === 'number' ? params.limit : null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
@@ -79,6 +98,19 @@ function normalizeCoverageParams(
     day: params.day ? toIso(params.day) : null,
     bbox,
     gatewayId: params.gatewayId ?? null,
+    filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
+  };
+}
+
+function normalizeGatewayParams(
+  params: GatewayQueryParams,
+  context?: { filterMode?: 'time' | 'session' }
+): GatewayKeyParams {
+  return {
+    deviceId: params.deviceId ?? null,
+    sessionId: params.sessionId ?? null,
+    from: params.from ? toIso(params.from) : null,
+    to: params.to ? toIso(params.to) : null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
   };
 }
@@ -166,6 +198,39 @@ export function useStats(params: MeasurementQueryParams, options?: QueryOptions<
   return useQuery<StatsResponse>({
     queryKey: ['stats', keyParams],
     queryFn: ({ signal }) => getStats(params, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useGateways(
+  params: GatewayQueryParams,
+  options?: QueryOptions<GatewaySummary[]>,
+  context?: { filterMode?: 'time' | 'session' }
+) {
+  const keyParams = normalizeGatewayParams(params, context);
+  const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
+
+  return useQuery<GatewaySummary[]>({
+    queryKey: ['gateways', keyParams],
+    queryFn: ({ signal }) => listGateways(params, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useGatewayStats(
+  gatewayId?: string | null,
+  params?: GatewayQueryParams,
+  options?: QueryOptions<GatewayStats>,
+  context?: { filterMode?: 'time' | 'session' }
+) {
+  const keyParams = normalizeGatewayParams(params ?? {}, context);
+  const enabled = options?.enabled ?? Boolean(gatewayId && (params?.deviceId || params?.sessionId));
+
+  return useQuery<GatewayStats>({
+    queryKey: ['gateway-stats', gatewayId ?? 'none', keyParams],
+    queryFn: ({ signal }) => getGatewayStats(gatewayId as string, params ?? {}, { signal }),
     ...options,
     enabled
   });
