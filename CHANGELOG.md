@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.0 - 2026-02-04
+
+### Highlights
+- Gateway analysis via QUERY-key endpoints: gateway list + stats.
+- Gateway filtering uses rxGatewayId (RxMetadata presence) for points and tracks.
+- Optional compare gateway overlay for side-by-side point analysis.
+
+### Notes
+- Normal points mode remains available without QUERY key (gateway analysis requires it).
+
 ## v0.5.0 - 2026-02-04
 
 ### Highlights
