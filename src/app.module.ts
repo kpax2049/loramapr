@@ -9,6 +9,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { LorawanModule } from './modules/lorawan/lorawan.module';
 import { CoverageModule } from './modules/coverage/coverage.module';
 import { ExportModule } from './modules/export/export.module';
+import { GatewaysModule } from './modules/gateways/gateways.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     LorawanModule,
     CoverageModule,
     ExportModule,
+    GatewaysModule,
     PrismaModule
   ]
 })

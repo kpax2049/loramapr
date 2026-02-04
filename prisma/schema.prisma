@@ -70,11 +70,32 @@ model Measurement {
   rxMetadata Json?
   ingestedAt DateTime @default(now())
 
-  device  Device   @relation(fields: [deviceId], references: [id])
-  session Session? @relation(fields: [sessionId], references: [id])
+  device         Device        @relation(fields: [deviceId], references: [id])
+  session        Session?      @relation(fields: [sessionId], references: [id])
+  rxMetadataRows RxMetadata[]
 
   @@index([deviceId, capturedAt])
   @@index([sessionId, capturedAt])
+}
+
+model RxMetadata {
+  id             String      @id @default(uuid()) @db.Uuid
+  measurementId  String      @db.Uuid
+  gatewayId      String
+  rssi           Int?
+  snr            Float?
+  channelIndex   Int?
+  time           DateTime?
+  fineTimestamp  Int?
+  receivedAt     DateTime    @default(now())
+
+  measurement Measurement @relation(fields: [measurementId], references: [id], onDelete: Cascade)
+
+  @@index([gatewayId, receivedAt])
+  @@index([measurementId])
+  @@index([gatewayId, measurementId])
+  @@index([receivedAt])
+  @@unique([measurementId, gatewayId])
 }
 
 model ApiKey {

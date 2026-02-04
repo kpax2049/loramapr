@@ -52,6 +52,13 @@ describe('LoRaWAN uplink e2e', () => {
 
   afterEach(async () => {
     if (trackedDeviceUids.length > 0) {
+      await prisma.coverageBin.deleteMany({
+        where: {
+          device: {
+            deviceUid: { in: trackedDeviceUids }
+          }
+        }
+      });
       await prisma.measurement.deleteMany({
         where: {
           device: {

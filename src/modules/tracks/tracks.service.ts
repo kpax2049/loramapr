@@ -13,6 +13,7 @@ export type TrackQueryParams = {
     maxLat: number;
   };
   gatewayId?: string;
+  rxGatewayId?: string;
   sample?: number;
   limit: number;
   ownerId?: string;
@@ -56,6 +57,9 @@ export class TracksService {
     }
     if (params.gatewayId) {
       where.gatewayId = params.gatewayId;
+    }
+    if (params.rxGatewayId) {
+      where.rxMetadataRows = { some: { gatewayId: params.rxGatewayId } };
     }
     if (params.ownerId) {
       // TODO: confirm owner scoping logic once auth exists.

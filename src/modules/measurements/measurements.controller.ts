@@ -18,6 +18,7 @@ type MeasurementsQuery = {
   limit?: string | string[];
   sample?: string | string[];
   gatewayId?: string | string[];
+  rxGatewayId?: string | string[];
 };
 
 const DEFAULT_LIMIT = 500;
@@ -54,6 +55,7 @@ export class MeasurementsController {
     const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
 
     const gatewayId = getSingleValue(query.gatewayId, 'gatewayId');
+    const rxGatewayId = getSingleValue(query.rxGatewayId, 'rxGatewayId');
 
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
     const limit = Math.min(requestedLimit, MAX_LIMIT);
@@ -68,6 +70,7 @@ export class MeasurementsController {
       limit,
       sample,
       gatewayId: gatewayId ?? undefined,
+      rxGatewayId: rxGatewayId ?? undefined,
       ownerId
     });
   }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementIngestDto } from './dto/measurement-ingest.dto';
 
@@ -43,6 +44,7 @@ export type MeasurementQueryParams = {
     maxLat: number;
   };
   gatewayId?: string;
+  rxGatewayId?: string;
   sample?: number;
   limit: number;
   ownerId?: string;
@@ -164,33 +166,75 @@ export class MeasurementsService {
         }
       }
 
-      const data = items.map((item) => ({
-        deviceId: device.id,
-        sessionId:
-          item.sessionId && validSessionIds.has(item.sessionId)
-            ? item.sessionId
-            : fallbackSessionId,
-        capturedAt: item.capturedAt instanceof Date ? item.capturedAt : new Date(item.capturedAt),
-        lat: item.lat,
-        lon: item.lon,
-        alt: item.alt,
-        hdop: item.hdop,
-        rssi: item.rssi,
-        snr: item.snr,
-        sf: item.sf,
-        bw: item.bw,
-        freq: item.freq,
-        gatewayId: item.gatewayId,
-        payloadRaw:
+      const records = items.map((item) => {
+        const id = randomUUID();
+        const capturedAt = item.capturedAt instanceof Date ? item.capturedAt : new Date(item.capturedAt);
+        const payloadRaw =
           item.payloadRaw === undefined
             ? undefined
             : typeof item.payloadRaw === 'string'
             ? item.payloadRaw
-            : JSON.stringify(item.payloadRaw),
-        rxMetadata: item.rxMetadata ?? undefined
-      }));
+            : JSON.stringify(item.payloadRaw);
 
-      const result = await tx.measurement.createMany({ data });
+        return {
+          id,
+          item,
+          data: {
+            id,
+            deviceId: device.id,
+            sessionId:
+              item.sessionId && validSessionIds.has(item.sessionId)
+                ? item.sessionId
+                : fallbackSessionId,
+            capturedAt,
+            lat: item.lat,
+            lon: item.lon,
+            alt: item.alt,
+            hdop: item.hdop,
+            rssi: item.rssi,
+            snr: item.snr,
+            sf: item.sf,
+            bw: item.bw,
+            freq: item.freq,
+            gatewayId: item.gatewayId,
+            payloadRaw,
+            rxMetadata: item.rxMetadata ?? undefined
+          }
+        };
+      });
+
+      const result = await tx.measurement.createMany({ data: records.map((record) => record.data) });
+
+      const rxRows: Prisma.RxMetadataCreateManyInput[] = [];
+      const receivedAt = new Date();
+      for (const record of records) {
+        const rxMetadata = record.item.rxMetadata;
+        if (!Array.isArray(rxMetadata)) {
+          continue;
+        }
+        for (const entry of rxMetadata) {
+          const gatewayId = entry && typeof entry === 'object' ? (entry as any)?.gateway_ids?.gateway_id : undefined;
+          if (!gatewayId || typeof gatewayId !== 'string') {
+            continue;
+          }
+          const rssiValue = (entry as any)?.rssi;
+          const snrValue = (entry as any)?.snr;
+          rxRows.push({
+            measurementId: record.id,
+            gatewayId,
+            rssi: typeof rssiValue === 'number' && Number.isFinite(rssiValue) ? Math.round(rssiValue) : null,
+            snr: typeof snrValue === 'number' && Number.isFinite(snrValue) ? snrValue : null,
+            receivedAt
+          });
+        }
+      }
+
+      if (rxRows.length > 0) {
+        await tx.rxMetadata.createMany({
+          data: rxRows,
+          skipDuplicates: true
+        });
+      }
 
       return {
         inserted: result.count,
@@ -230,6 +274,9 @@ export class MeasurementsService {
     }
     if (params.gatewayId) {
       where.gatewayId = params.gatewayId;
+    }
+    if (params.rxGatewayId) {
+      where.rxMetadataRows = { some: { gatewayId: params.rxGatewayId } };
     }
 
   const items = await this.prisma.measurement.findMany({
