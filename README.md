@@ -1,5 +1,9 @@
 # LoRaMapr
 
+> ⚠️ **Active development notice**  
+> This project is under active development and is **not** a complete, production-ready app yet.  
+> The goal is to reach a more or less production‑ready **v1.0.0**; until then, expect breaking changes and evolving features.
+
 LoRaMapr is a hardware-backed mapping and visualization project focused on collecting, storing, and displaying LoRa-based field data on an interactive map.
 
 The project combines portable LoRa devices (for example GPS-enabled trackers and mesh nodes) with a web backend and frontend to ingest telemetry such as location, signal strength, and timestamps, then render that data in a structured, explorable map UI.
