@@ -85,10 +85,81 @@ export class CoverageService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async runOnce(): Promise<void> {
-    if (this.isProcessing) {
+  async aggregateOnce(): Promise<void> {
+    await this.runOnce(true);
+  }
+
+  async aggregateForDeviceDay(deviceId: string, day: Date): Promise<void> {
+    const dayStart = startOfUtcDay(day);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const measurements = await this.prisma.measurement.findMany({
+      where: {
+        deviceId,
+        capturedAt: { gte: dayStart, lt: dayEnd }
+      },
+      select: {
+        id: true,
+        deviceId: true,
+        sessionId: true,
+        gatewayId: true,
+        capturedAt: true,
+        lat: true,
+        lon: true
+      }
+    });
+
+    if (measurements.length === 0) {
       return;
     }
+
+    const bins = new Map<string, {
+      deviceId: string;
+      sessionId: string | null;
+      gatewayId: string | null;
+      day: Date;
+      latBin: number;
+      lonBin: number;
+    }>();
+
+    for (const measurement of measurements) {
+      const binDay = startOfUtcDay(measurement.capturedAt);
+      const latBin = Math.floor(measurement.lat / BIN_SIZE_DEG);
+      const lonBin = Math.floor(measurement.lon / BIN_SIZE_DEG);
+      const sessionId = measurement.sessionId ?? null;
+      const gatewayId = measurement.gatewayId ?? null;
+      const key = [
+        measurement.deviceId,
+        sessionId ?? 'null',
+        gatewayId ?? 'null',
+        binDay.toISOString(),
+        latBin,
+        lonBin
+      ].join('|');
+
+      if (!bins.has(key)) {
+        bins.set(key, {
+          deviceId: measurement.deviceId,
+          sessionId,
+          gatewayId,
+          day: binDay,
+          latBin,
+          lonBin
+        });
+      }
+    }
+
+    for (const bin of bins.values()) {
+      await this.upsertCoverageBin(bin);
+    }
+  }
+
+  private async runOnce(force: boolean = false): Promise<void> {
+    if (this.isProcessing) {
+      if (!force) {
+        return;
+      }
+    }
+    const wasProcessing = this.isProcessing;
     this.isProcessing = true;
     try {
       const measurements = await this.loadMeasurements();
@@ -136,7 +207,7 @@ export class CoverageService implements OnModuleInit, OnModuleDestroy {
         await this.upsertCoverageBin(bin);
       }
     } finally {
-      this.isProcessing = false;
+      this.isProcessing = wasProcessing;
     }
   }
 

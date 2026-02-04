@@ -5,15 +5,18 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { hashApiKey } from '../src/common/security/apiKey';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { CoverageService } from '../src/modules/coverage/coverage.service';
 
 describe('Measurements e2e', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let coverageService: CoverageService;
   let apiKeyPlaintext: string;
   let apiKeyHash: string;
   let deviceUid: string;
 
   beforeAll(async () => {
+    process.env.COVERAGE_WORKER_ENABLED = 'false';
     apiKeyPlaintext = `test-${Date.now()}`;
     apiKeyHash = hashApiKey(apiKeyPlaintext);
     deviceUid = `device-${Date.now()}`;
@@ -26,6 +29,7 @@ describe('Measurements e2e', () => {
     await app.init();
 
     prisma = moduleRef.get(PrismaService);
+    coverageService = moduleRef.get(CoverageService);
 
     await prisma.apiKey.create({
       data: {
@@ -162,5 +166,36 @@ describe('Measurements e2e', () => {
     expect(gwB).toBeDefined();
     expect(gwA?.count ?? 0).toBeGreaterThan(0);
     expect(gwB?.count ?? 0).toBeGreaterThan(0);
+  });
+
+  it('coverage bins endpoint returns items after ingest', async () => {
+    const capturedAt = new Date().toISOString();
+    const items = Array.from({ length: 200 }, (_, index) => ({
+      deviceUid,
+      capturedAt,
+      lat: 37.77 + (index % 20) * 0.00005,
+      lon: -122.43 + (index % 10) * 0.00005
+    }));
+
+    await request(app.getHttpServer())
+      .post('/api/measurements')
+      .set('x-api-key', apiKeyPlaintext)
+      .send({ items })
+      .expect(201);
+
+    const device = await prisma.device.findUnique({ where: { deviceUid }, select: { id: true } });
+    expect(device?.id).toBeTruthy();
+    if (device?.id) {
+      await coverageService.aggregateForDeviceDay(device.id, new Date(capturedAt));
+    }
+
+    const bbox = [-122.44, 37.76, -122.42, 37.78].join(',');
+    const response = await request(app.getHttpServer())
+      .get(`/api/coverage/bins?deviceId=${device?.id}&bbox=${bbox}`)
+      .expect(200);
+
+    expect(response.body.binSizeDeg).toBe(0.001);
+    expect(Array.isArray(response.body.items)).toBe(true);
+    expect(response.body.items.length).toBeGreaterThan(0);
   });
 });
