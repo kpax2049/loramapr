@@ -112,6 +112,8 @@ docker compose down -v
 docker compose up --build
 ```
 
+If `npm ci` fails, ensure you are using the committed `package-lock.json` and rebuild.
+
 ## Contributor note
 
 - Use `prisma migrate dev` only when changing schema; otherwise use `prisma migrate deploy` (the default in Docker).
