@@ -106,6 +106,12 @@ docker compose down -v
 docker compose up --build
 ```
 
+If you see a Prisma engine mismatch (darwin vs linux), run:
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ## Contributor note
 
 - Use `prisma migrate dev` only when changing schema; otherwise use `prisma migrate deploy` (the default in Docker).
