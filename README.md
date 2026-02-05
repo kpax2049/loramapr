@@ -22,12 +22,24 @@ This repository serves as the main codebase for the backend and web application 
 - NestJS (HTTP API backend)
 - RxJS, class-validator, class-transformer
 
-## Quickstart (first-time users)
+## Quickstart (first-time users, working UI)
 
+Start the backend + database:
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
+
+Start the frontend dev server in a second terminal:
+```bash
+cp frontend/.env.example frontend/.env
+# edit frontend/.env and set VITE_API_BASE_URL=http://localhost:3000
+npm --prefix frontend install
+npm --prefix frontend run dev
+```
+
+Open the UI at `http://localhost:5173`.
+The Vite dev server proxies `/api` to `VITE_API_BASE_URL`, so no extra CORS setup is required for local dev.
 
 ## What to expect
 
@@ -38,7 +50,7 @@ docker compose up --build
 ## Health check
 
 ```bash
-GET http://localhost:3000/health
+curl http://localhost:3000/health
 ```
 
 ## Running locally (contributors)
@@ -113,6 +125,13 @@ docker compose up --build
 ```
 
 If `npm ci` fails, ensure you are using the committed `package-lock.json` and rebuild.
+
+Common ports:
+- Backend: 3000
+- Frontend dev server: 5173
+- Postgres: 5432
+
+If API requests fail in the browser, check that `frontend/.env` has `VITE_API_BASE_URL=http://localhost:3000` and restart the Vite dev server.
 
 ## Contributor note
 
