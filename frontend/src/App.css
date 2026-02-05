@@ -66,6 +66,28 @@
   letter-spacing: 0.04em;
 }
 
+.playback-blocker {
+  position: absolute;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.55);
+  color: var(--panel-text);
+  font-family: var(--font-mono);
+}
+
+.playback-blocker__message {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .controls__group {
   display: grid;
   gap: 0.4rem;

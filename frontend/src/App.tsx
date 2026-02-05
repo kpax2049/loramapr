@@ -35,6 +35,11 @@ type InitialQueryState = {
   to: string;
   showPoints: boolean;
   showTrack: boolean;
+  viewMode: 'explore' | 'playback';
+  playbackSessionId: string | null;
+  playbackCursorMs: number;
+  playbackWindowMs: number;
+  playbackSpeed: 0.25 | 0.5 | 1 | 2 | 4;
 };
 
 function parseBoolean(value: string | null, defaultValue: boolean): boolean {
@@ -51,6 +56,36 @@ function parseBoolean(value: string | null, defaultValue: boolean): boolean {
   return defaultValue;
 }
 
+function parsePlaybackSpeed(value: string | null): 0.25 | 0.5 | 1 | 2 | 4 {
+  if (!value) {
+    return 1;
+  }
+  const parsed = Number(value);
+  if (parsed === 0.25 || parsed === 0.5 || parsed === 1 || parsed === 2 || parsed === 4) {
+    return parsed;
+  }
+  return 1;
+}
+
+function parsePlaybackCursor(value: string | null): number {
+  if (!value) {
+    return Date.now();
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function parsePlaybackWindowMs(value: string | null): number {
+  if (!value) {
+    return 10 * 60 * 1000;
+  }
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return 10 * 60 * 1000;
+  }
+  return minutes * 60 * 1000;
+}
+
 function readInitialQueryState(): InitialQueryState {
   if (typeof window === 'undefined') {
     return {
@@ -60,13 +95,20 @@ function readInitialQueryState(): InitialQueryState {
       from: '',
       to: '',
       showPoints: true,
-      showTrack: true
+      showTrack: true,
+      viewMode: 'explore',
+      playbackSessionId: null,
+      playbackCursorMs: Date.now(),
+      playbackWindowMs: 10 * 60 * 1000,
+      playbackSpeed: 1
     };
   }
 
   const params = new URLSearchParams(window.location.search);
   const filterModeParam = params.get('filterMode');
   const filterMode = filterModeParam === 'session' ? 'session' : 'time';
+  const viewModeParam = params.get('viewMode');
+  const viewMode = viewModeParam === 'playback' ? 'playback' : 'explore';
 
   return {
     deviceId: params.get('deviceId'),
@@ -75,7 +117,12 @@ function readInitialQueryState(): InitialQueryState {
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
     showPoints: parseBoolean(params.get('showPoints'), true),
-    showTrack: parseBoolean(params.get('showTrack'), true)
+    showTrack: parseBoolean(params.get('showTrack'), true),
+    viewMode,
+    playbackSessionId: params.get('playbackSessionId'),
+    playbackCursorMs: parsePlaybackCursor(params.get('playbackCursor')),
+    playbackWindowMs: parsePlaybackWindowMs(params.get('playbackWindowMinutes')),
+    playbackSpeed: parsePlaybackSpeed(params.get('playbackSpeed'))
   };
 }
 
@@ -95,6 +142,16 @@ function App() {
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
+  const [viewMode, setViewMode] = useState<'explore' | 'playback'>(initial.viewMode);
+  const [playbackSessionId, setPlaybackSessionId] = useState<string | null>(
+    initial.playbackSessionId
+  );
+  const [playbackCursorMs, setPlaybackCursorMs] = useState(initial.playbackCursorMs);
+  const [playbackWindowMs, setPlaybackWindowMs] = useState(initial.playbackWindowMs);
+  const [playbackIsPlaying, setPlaybackIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<0.25 | 0.5 | 1 | 2 | 4>(
+    initial.playbackSpeed
+  );
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [showPoints, setShowPoints] = useState(initial.showPoints);
@@ -137,11 +194,35 @@ function App() {
     if (!showTrack) {
       params.set('showTrack', 'false');
     }
+    params.set('viewMode', viewMode);
+    if (playbackSessionId) {
+      params.set('playbackSessionId', playbackSessionId);
+    }
+    if (Number.isFinite(playbackCursorMs)) {
+      params.set('playbackCursor', new Date(playbackCursorMs).toISOString());
+    }
+    if (Number.isFinite(playbackWindowMs)) {
+      params.set('playbackWindowMinutes', String(Math.round(playbackWindowMs / 60000)));
+    }
+    params.set('playbackSpeed', String(playbackSpeed));
 
     const search = params.toString();
     const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
     window.history.replaceState(null, '', nextUrl);
-  }, [deviceId, filterMode, selectedSessionId, from, to, showPoints, showTrack]);
+  }, [
+    deviceId,
+    filterMode,
+    selectedSessionId,
+    from,
+    to,
+    showPoints,
+    showTrack,
+    viewMode,
+    playbackSessionId,
+    playbackCursorMs,
+    playbackWindowMs,
+    playbackSpeed
+  ]);
 
   const handleFilterModeChange = (mode: 'time' | 'session') => {
     setFilterMode(mode);
@@ -575,6 +656,11 @@ function App() {
         selectedPointId={selectedPointId}
         onUserInteraction={() => setUserInteractedWithMap(true)}
       />
+      {viewMode === 'playback' && !playbackSessionId && (
+        <div className="playback-blocker" role="alert">
+          <div className="playback-blocker__message">Select a session</div>
+        </div>
+      )}
       {import.meta.env.DEV && (
         <div className="dev-counter">
           {mapLayerMode === 'coverage'
