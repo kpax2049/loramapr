@@ -22,7 +22,26 @@ This repository serves as the main codebase for the backend and web application 
 - NestJS (HTTP API backend)
 - RxJS, class-validator, class-transformer
 
-## Running locally
+## Quickstart (first-time users)
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+## What to expect
+
+- Backend listens on `http://localhost:3000`
+- Postgres runs as the `postgres` service
+- Migrations are applied automatically on startup
+
+## Health check
+
+```bash
+GET http://localhost:3000/health
+```
+
+## Running locally (contributors)
 
 ```bash
 npm install
@@ -53,20 +72,7 @@ npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --b
 
 ## Docker dev workflow (backend)
 
-1) Start Postgres:
-```bash
-docker compose up -d postgres
-```
-
-2) Run migrations:
-```bash
-npm run db:migrate
-```
-
-3) Start Nest:
-```bash
-npm run start:dev
-```
+Use the Quickstart above for the recommended flow.
 
 ## API key generation
 
@@ -90,3 +96,16 @@ npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --b
 npm run build
 npm start
 ```
+
+## Troubleshooting
+
+```bash
+docker compose logs postgres --tail=200
+docker compose logs backend --tail=200
+docker compose down -v
+docker compose up --build
+```
+
+## Contributor note
+
+- Use `prisma migrate dev` only when changing schema; otherwise use `prisma migrate deploy` (the default in Docker).

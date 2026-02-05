@@ -5,12 +5,15 @@
   "description": "NestJS backend",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "nest build",
     "postinstall": "prisma generate",
     "start": "node dist/main.js",
-    "start:dev": "ts-node src/main.ts",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
     "dev:all": "concurrently -n backend,frontend -c blue,green \"npm run start:dev\" \"npm --prefix frontend run dev\"",
-    "db:migrate": "prisma migrate dev",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
@@ -38,6 +41,7 @@
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.1.11",
     "@nestjs/testing": "^11.1.11",
     "@types/jest": "^29.5.14",
     "@types/node": "^25.0.8",
