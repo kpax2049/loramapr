@@ -32,6 +32,11 @@ export class SessionsController {
   async update(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
     return this.sessionsService.update(id, dto);
   }
+
+  @Get(':id/timeline')
+  async timeline(@Param('id') id: string) {
+    return this.sessionsService.getTimeline(id);
+  }
 }
 
 function getSingleValue(value: string | string[] | undefined, name: string): string | undefined {

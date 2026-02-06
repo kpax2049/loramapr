@@ -71,6 +71,38 @@ export class SessionsService {
       orderBy: { startedAt: 'desc' }
     });
   }
+
+  async getTimeline(id: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        deviceId: true,
+        startedAt: true,
+        endedAt: true
+      }
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const aggregate = await this.prisma.measurement.aggregate({
+      where: { sessionId: id },
+      _count: { _all: true },
+      _min: { capturedAt: true },
+      _max: { capturedAt: true }
+    });
+
+    return {
+      sessionId: session.id,
+      deviceId: session.deviceId,
+      startedAt: session.startedAt.toISOString(),
+      endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+      minCapturedAt: aggregate._min.capturedAt ? aggregate._min.capturedAt.toISOString() : null,
+      maxCapturedAt: aggregate._max.capturedAt ? aggregate._max.capturedAt.toISOString() : null,
+      count: aggregate._count._all
+    };
+  }
 }
 
 function isNotFoundError(error: unknown): boolean {
