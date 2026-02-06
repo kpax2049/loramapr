@@ -31,6 +31,16 @@ export type Session = {
   notes?: string | null;
 };
 
+export type SessionTimeline = {
+  sessionId: string;
+  deviceId: string;
+  startedAt: string;
+  endedAt: string | null;
+  minCapturedAt: string | null;
+  maxCapturedAt: string | null;
+  count: number;
+};
+
 export type TrackPoint = {
   capturedAt: string;
   lat: number;

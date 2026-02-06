@@ -6,6 +6,7 @@ import Controls from './components/Controls';
 import GatewayStatsPanel from './components/GatewayStatsPanel';
 import LorawanEventsPanel from './components/LorawanEventsPanel';
 import MapView, { type MapViewHandle } from './components/MapView';
+import PlaybackPanel from './components/PlaybackPanel';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
 import {
@@ -17,6 +18,7 @@ import {
   useTrack
 } from './query/hooks';
 import { useLorawanEvents } from './query/lorawan';
+import { useSessionTimeline } from './query/sessions';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -253,137 +255,216 @@ function App() {
   );
 
   const isSessionMode = filterMode === 'session' && Boolean(selectedSessionId);
+  const isPlaybackMode = viewMode === 'playback';
+  const hasPlaybackSession = Boolean(playbackSessionId);
+
+  const playbackTimelineQuery = useSessionTimeline(playbackSessionId ?? undefined, {
+    enabled: Boolean(playbackSessionId)
+  });
+  const playbackMinMs = useMemo(() => {
+    if (!playbackTimelineQuery.data?.minCapturedAt) {
+      return null;
+    }
+    const parsed = new Date(playbackTimelineQuery.data.minCapturedAt).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [playbackTimelineQuery.data?.minCapturedAt]);
+  const playbackMaxMs = useMemo(() => {
+    if (!playbackTimelineQuery.data?.maxCapturedAt) {
+      return null;
+    }
+    const parsed = new Date(playbackTimelineQuery.data.maxCapturedAt).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [playbackTimelineQuery.data?.maxCapturedAt]);
+  const playbackWindow = useMemo(() => {
+    if (!playbackSessionId) {
+      return null;
+    }
+    const windowEnd = playbackCursorMs;
+    const windowStart = playbackCursorMs - playbackWindowMs;
+    const clampedStart =
+      playbackMinMs !== null ? Math.max(windowStart, playbackMinMs) : windowStart;
+    const clampedEnd =
+      playbackMaxMs !== null ? Math.min(windowEnd, playbackMaxMs) : windowEnd;
+
+    return {
+      from: new Date(clampedStart),
+      to: new Date(clampedEnd)
+    };
+  }, [playbackSessionId, playbackCursorMs, playbackWindowMs, playbackMinMs, playbackMaxMs]);
 
   const effectiveLimit = currentZoom <= LIMIT_ZOOM_THRESHOLD ? LOW_ZOOM_LIMIT : DEFAULT_LIMIT;
   const effectiveSample =
     currentZoom <= SAMPLE_ZOOM_LOW ? 800 : currentZoom <= SAMPLE_ZOOM_MEDIUM ? 1500 : undefined;
 
-  const measurementsParams = useMemo<MeasurementQueryParams>(
-    () =>
-      isSessionMode
-        ? {
-            sessionId: selectedSessionId ?? undefined,
-            bbox: bboxPayload,
-            rxGatewayId: selectedGatewayId ?? undefined,
-            sample: effectiveSample,
-            limit: effectiveLimit
-          }
-        : {
-            deviceId: deviceId ?? undefined,
-            from: from || undefined,
-            to: to || undefined,
-            bbox: bboxPayload,
-            rxGatewayId: selectedGatewayId ?? undefined,
-            sample: effectiveSample,
-            limit: effectiveLimit
-          },
-    [
-      isSessionMode,
-      selectedSessionId,
-      bboxPayload,
-      deviceId,
-      from,
-      to,
-      selectedGatewayId,
-      effectiveSample,
-      effectiveLimit
-    ]
-  );
+  const measurementsParams = useMemo<MeasurementQueryParams>(() => {
+    if (isPlaybackMode) {
+      return {
+        sessionId: playbackSessionId ?? undefined,
+        from: playbackWindow?.from,
+        to: playbackWindow?.to,
+        bbox: bboxPayload,
+        rxGatewayId: selectedGatewayId ?? undefined,
+        sample: effectiveSample,
+        limit: effectiveLimit
+      };
+    }
+    if (isSessionMode) {
+      return {
+        sessionId: selectedSessionId ?? undefined,
+        bbox: bboxPayload,
+        rxGatewayId: selectedGatewayId ?? undefined,
+        sample: effectiveSample,
+        limit: effectiveLimit
+      };
+    }
+    return {
+      deviceId: deviceId ?? undefined,
+      from: from || undefined,
+      to: to || undefined,
+      bbox: bboxPayload,
+      rxGatewayId: selectedGatewayId ?? undefined,
+      sample: effectiveSample,
+      limit: effectiveLimit
+    };
+  }, [
+    isPlaybackMode,
+    playbackSessionId,
+    playbackWindow,
+    bboxPayload,
+    selectedGatewayId,
+    effectiveSample,
+    effectiveLimit,
+    isSessionMode,
+    selectedSessionId,
+    deviceId,
+    from,
+    to
+  ]);
 
-  const trackParams = useMemo<MeasurementQueryParams>(
-    () =>
-      isSessionMode
-        ? {
-            sessionId: selectedSessionId ?? undefined,
-            rxGatewayId: selectedGatewayId ?? undefined,
-            sample: effectiveSample,
-            limit: effectiveLimit
-          }
-        : {
-            deviceId: deviceId ?? undefined,
-            from: from || undefined,
-            to: to || undefined,
-            rxGatewayId: selectedGatewayId ?? undefined,
-            sample: effectiveSample,
-            limit: effectiveLimit
-          },
-    [
-      isSessionMode,
-      selectedSessionId,
-      deviceId,
-      from,
-      to,
-      selectedGatewayId,
-      effectiveSample,
-      effectiveLimit
-    ]
-  );
+  const trackParams = useMemo<MeasurementQueryParams>(() => {
+    if (isPlaybackMode) {
+      return {
+        sessionId: playbackSessionId ?? undefined,
+        from: playbackWindow?.from,
+        to: playbackWindow?.to,
+        rxGatewayId: selectedGatewayId ?? undefined,
+        sample: effectiveSample,
+        limit: effectiveLimit
+      };
+    }
+    if (isSessionMode) {
+      return {
+        sessionId: selectedSessionId ?? undefined,
+        rxGatewayId: selectedGatewayId ?? undefined,
+        sample: effectiveSample,
+        limit: effectiveLimit
+      };
+    }
+    return {
+      deviceId: deviceId ?? undefined,
+      from: from || undefined,
+      to: to || undefined,
+      rxGatewayId: selectedGatewayId ?? undefined,
+      sample: effectiveSample,
+      limit: effectiveLimit
+    };
+  }, [
+    isPlaybackMode,
+    playbackSessionId,
+    playbackWindow,
+    selectedGatewayId,
+    effectiveSample,
+    effectiveLimit,
+    isSessionMode,
+    selectedSessionId,
+    deviceId,
+    from,
+    to
+  ]);
 
-  const sessionPolling = isSessionMode ? 2000 : false;
+  const sessionPolling = viewMode === 'explore' && isSessionMode ? 2000 : false;
 
   const measurementsQuery = useMeasurements(
     measurementsParams,
     {
-      enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
+      enabled: isPlaybackMode
+        ? hasPlaybackSession
+        : isSessionMode
+          ? Boolean(selectedSessionId)
+          : Boolean(deviceId)
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
   const trackQuery = useTrack(
     trackParams,
     {
-      enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
+      enabled: isPlaybackMode
+        ? hasPlaybackSession
+        : isSessionMode
+          ? Boolean(selectedSessionId)
+          : Boolean(deviceId)
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
   const compareSample = compareGatewayId ? 800 : undefined;
-  const compareMeasurementsParams = useMemo<MeasurementQueryParams>(
-    () =>
-      isSessionMode
-        ? {
-            sessionId: selectedSessionId ?? undefined,
-            bbox: bboxPayload,
-            rxGatewayId: compareGatewayId ?? undefined,
-            sample: compareSample,
-            limit: effectiveLimit
-          }
-        : {
-            deviceId: deviceId ?? undefined,
-            from: from || undefined,
-            to: to || undefined,
-            bbox: bboxPayload,
-            rxGatewayId: compareGatewayId ?? undefined,
-            sample: compareSample,
-            limit: effectiveLimit
-          },
-    [
-      isSessionMode,
-      selectedSessionId,
-      bboxPayload,
-      deviceId,
-      from,
-      to,
-      compareGatewayId,
-      compareSample,
-      effectiveLimit
-    ]
-  );
+  const compareMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
+    if (isPlaybackMode) {
+      return {
+        sessionId: playbackSessionId ?? undefined,
+        from: playbackWindow?.from,
+        to: playbackWindow?.to,
+        bbox: bboxPayload,
+        rxGatewayId: compareGatewayId ?? undefined,
+        sample: compareSample,
+        limit: effectiveLimit
+      };
+    }
+    if (isSessionMode) {
+      return {
+        sessionId: selectedSessionId ?? undefined,
+        bbox: bboxPayload,
+        rxGatewayId: compareGatewayId ?? undefined,
+        sample: compareSample,
+        limit: effectiveLimit
+      };
+    }
+    return {
+      deviceId: deviceId ?? undefined,
+      from: from || undefined,
+      to: to || undefined,
+      bbox: bboxPayload,
+      rxGatewayId: compareGatewayId ?? undefined,
+      sample: compareSample,
+      limit: effectiveLimit
+    };
+  }, [
+    isPlaybackMode,
+    playbackSessionId,
+    playbackWindow,
+    bboxPayload,
+    compareGatewayId,
+    compareSample,
+    effectiveLimit,
+    isSessionMode,
+    selectedSessionId,
+    deviceId,
+    from,
+    to
+  ]);
   const compareMeasurementsQuery = useMeasurements(
     compareMeasurementsParams,
     {
       enabled:
         mapLayerMode === 'points' &&
         Boolean(compareGatewayId) &&
-        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+        (isPlaybackMode
+          ? hasPlaybackSession
+          : isSessionMode
+            ? Boolean(selectedSessionId)
+            : Boolean(deviceId))
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
-  const renderedPointCount =
-    mapLayerMode === 'points'
-      ? (showPoints ? measurementsQuery.data?.items.length ?? 0 : 0) +
-        (compareMeasurementsQuery.data?.items.length ?? 0)
-      : 0;
-  const renderedBinCount =
-    mapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
 
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -426,6 +507,54 @@ function App() {
     },
     { filterMode }
   );
+  const renderedPointCount =
+    mapLayerMode === 'points'
+      ? (showPoints ? measurementsQuery.data?.items.length ?? 0 : 0) +
+        (compareMeasurementsQuery.data?.items.length ?? 0)
+      : 0;
+  const renderedBinCount =
+    mapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
+
+  useEffect(() => {
+    if (!isPlaybackMode || !hasPlaybackSession || playbackMinMs === null || playbackMaxMs === null) {
+      return;
+    }
+    setPlaybackCursorMs((prev) => {
+      if (prev < playbackMinMs) {
+        return playbackMinMs;
+      }
+      if (prev > playbackMaxMs) {
+        return playbackMaxMs;
+      }
+      return prev;
+    });
+  }, [isPlaybackMode, playbackMinMs, playbackMaxMs]);
+
+  useEffect(() => {
+    if (!isPlaybackMode || !hasPlaybackSession || !playbackIsPlaying) {
+      return;
+    }
+
+    let lastTick = Date.now();
+    const handle = window.setInterval(() => {
+      const now = Date.now();
+      const delta = now - lastTick;
+      lastTick = now;
+
+      setPlaybackCursorMs((prev) => {
+        const next = prev + delta * playbackSpeed;
+        if (playbackMaxMs !== null && next >= playbackMaxMs) {
+          setPlaybackIsPlaying(false);
+          return playbackMaxMs;
+        }
+        return next;
+      });
+    }, 200);
+
+    return () => {
+      window.clearInterval(handle);
+    };
+  }, [isPlaybackMode, playbackIsPlaying, playbackSpeed, playbackMaxMs]);
   const { device: selectedDevice } = useDevice(deviceId);
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
   const latestMeasurementAt =
@@ -682,6 +811,24 @@ function App() {
         </div>
       )}
       <div className="right-column">
+        {viewMode === 'playback' && (
+          <PlaybackPanel
+            deviceId={deviceId}
+            sessionId={playbackSessionId}
+            onSelectSessionId={setPlaybackSessionId}
+            timeline={playbackTimelineQuery.data ?? null}
+            timelineLoading={playbackTimelineQuery.isLoading}
+            timelineError={playbackTimelineQuery.error}
+            playbackCursorMs={playbackCursorMs}
+            onPlaybackCursorMsChange={setPlaybackCursorMs}
+            playbackWindowMs={playbackWindowMs}
+            onPlaybackWindowMsChange={setPlaybackWindowMs}
+            playbackIsPlaying={playbackIsPlaying}
+            onPlaybackIsPlayingChange={setPlaybackIsPlaying}
+            playbackSpeed={playbackSpeed}
+            onPlaybackSpeedChange={setPlaybackSpeed}
+          />
+        )}
         <PointDetails measurement={selectedMeasurement} />
         <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
         <GatewayStatsPanel
@@ -700,6 +847,8 @@ function App() {
         onDeviceChange={setDeviceId}
         filterMode={filterMode}
         onFilterModeChange={handleFilterModeChange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         selectedSessionId={selectedSessionId}
         onSelectSessionId={setSelectedSessionId}
         onStartSession={handleSessionStart}

@@ -8,6 +8,8 @@ type ControlsProps = {
   onDeviceChange: (deviceId: string | null) => void;
   filterMode: 'time' | 'session';
   onFilterModeChange: (mode: 'time' | 'session') => void;
+  viewMode: 'explore' | 'playback';
+  onViewModeChange: (mode: 'explore' | 'playback') => void;
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
@@ -36,6 +38,8 @@ export default function Controls({
   onDeviceChange,
   filterMode,
   onFilterModeChange,
+  viewMode,
+  onViewModeChange,
   selectedSessionId,
   onSelectSessionId,
   onStartSession,
@@ -144,6 +148,32 @@ export default function Controls({
               onChange={() => onFilterModeChange('session')}
             />
             Session
+          </label>
+        </div>
+      </div>
+
+      <div className="controls__group">
+        <span className="controls__label">View mode</span>
+        <div className="controls__segmented" role="radiogroup" aria-label="View mode">
+          <label className={`controls__segment ${viewMode === 'explore' ? 'is-active' : ''}`}>
+            <input
+              type="radio"
+              name="view-mode"
+              value="explore"
+              checked={viewMode === 'explore'}
+              onChange={() => onViewModeChange('explore')}
+            />
+            Explore
+          </label>
+          <label className={`controls__segment ${viewMode === 'playback' ? 'is-active' : ''}`}>
+            <input
+              type="radio"
+              name="view-mode"
+              value="playback"
+              checked={viewMode === 'playback'}
+              onChange={() => onViewModeChange('playback')}
+            />
+            Playback
           </label>
         </div>
       </div>

@@ -9,6 +9,7 @@ import type {
   LorawanEventDetail,
   LorawanSummary,
   Measurement,
+  SessionTimeline,
   Session,
   TrackPoint
 } from './types';
@@ -265,6 +266,13 @@ export async function updateSession(
   input: { name?: string; notes?: string }
 ): Promise<Session> {
   return requestJson<Session>(`/api/sessions/${id}`, { method: 'PATCH', json: input });
+}
+
+export async function getSessionTimeline(
+  sessionId: string,
+  options?: RequestOptions
+): Promise<SessionTimeline> {
+  return getJson<SessionTimeline>(`/api/sessions/${sessionId}/timeline`, options);
 }
 
 export async function getMeasurements(
