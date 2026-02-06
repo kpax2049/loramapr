@@ -9,6 +9,9 @@ type PlaybackPanelProps = {
   timeline?: SessionTimeline | null;
   timelineLoading?: boolean;
   timelineError?: unknown;
+  windowFrom?: Date | null;
+  windowTo?: Date | null;
+  windowCount?: number;
   playbackCursorMs: number;
   onPlaybackCursorMsChange: (value: number) => void;
   playbackWindowMs: number;
@@ -29,6 +32,9 @@ export default function PlaybackPanel({
   timeline,
   timelineLoading,
   timelineError,
+  windowFrom,
+  windowTo,
+  windowCount,
   playbackCursorMs,
   onPlaybackCursorMsChange,
   playbackWindowMs,
@@ -90,6 +96,12 @@ export default function PlaybackPanel({
   const isTimelineLoading = timelineLoading ?? false;
   const hasTimelineError = Boolean(timelineError);
   const noPoints = sessionId && !hasPoints && !isTimelineLoading;
+  const windowLabel =
+    windowFrom && windowTo
+      ? `Showing points from ${formatTimestamp(windowFrom.toISOString())} to ${formatTimestamp(
+          windowTo.toISOString()
+        )} (${windowCount ?? 0} points)`
+      : null;
   const playDisabled = !hasPoints;
   const scrubberDisabled = !hasPoints;
   const jumpDisabled = !hasPoints;
@@ -149,6 +161,7 @@ export default function PlaybackPanel({
           </div>
         ) : null}
         {noPoints ? <div className="playback-panel__status">No points in session</div> : null}
+        {windowLabel ? <div className="playback-panel__window">{windowLabel}</div> : null}
       </div>
 
       <div className="playback-panel__controls">

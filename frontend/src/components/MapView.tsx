@@ -34,6 +34,7 @@ type MapViewProps = {
   coverageBinSize?: number | null;
   showPoints?: boolean;
   showTrack?: boolean;
+  playbackCursorPosition?: [number, number] | null;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
   onZoomChange?: (zoom: number) => void;
   selectedPointId?: string | null;
@@ -173,7 +174,9 @@ function getCoverageRssiBucket(rssi: number): CoverageBucket {
   return 'low';
 }
 
-type PointPalette = Record<RssiBucket, string>;
+type PointPalette = Record<RssiBucket, string> & {
+  cursor: string;
+};
 
 function readPalette(): PointPalette {
   if (typeof window === 'undefined') {
@@ -182,7 +185,8 @@ function readPalette(): PointPalette {
       medium: '',
       weak: '',
       unknown: '',
-      default: ''
+      default: '',
+      cursor: ''
     };
   }
   const styles = getComputedStyle(document.documentElement);
@@ -193,7 +197,8 @@ function readPalette(): PointPalette {
     medium: read('--map-point-medium'),
     weak: read('--map-point-weak'),
     unknown: read('--map-point-unknown'),
-    default: read('--map-point-default')
+    default: read('--map-point-default'),
+    cursor: read('--map-point-cursor')
   };
 }
 
@@ -218,6 +223,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   coverageBinSize = 0.001,
   showPoints = true,
   showTrack = true,
+  playbackCursorPosition = null,
   onBoundsChange,
   onZoomChange,
   selectedPointId = null,
@@ -403,6 +409,20 @@ ref
             </CircleMarker>
           );
         })}
+      {mapLayerMode === 'points' && playbackCursorPosition && (
+        <CircleMarker
+          center={playbackCursorPosition}
+          radius={9}
+          pathOptions={{
+            color: palette.cursor || palette.default,
+            weight: 3,
+            fillColor: palette.cursor || palette.default,
+            fillOpacity: 0.9,
+            className: 'map-point map-point--cursor'
+          }}
+          interactive={false}
+        />
+      )}
     </MapContainer>
   );
 });

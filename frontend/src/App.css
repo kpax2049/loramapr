@@ -13,6 +13,7 @@
   --map-point-unknown: #94a3b8;
   --map-point-default: #38bdf8;
   --map-point-compare: #f472b6;
+  --map-point-cursor: var(--panel-accent);
 }
 
 .app {
@@ -156,6 +157,12 @@
 
 .playback-panel__status--error {
   color: #fecaca;
+}
+
+.playback-panel__window {
+  font-size: 0.78rem;
+  color: var(--panel-muted);
+  line-height: 1.4;
 }
 
 .playback-panel__controls {
@@ -1027,6 +1034,11 @@
 .map-point--compare {
   stroke: var(--map-point-compare);
   fill: var(--map-point-compare);
+}
+
+.map-point--cursor {
+  stroke: var(--map-point-cursor);
+  fill: var(--map-point-cursor);
 }
 
 .map-point.is-selected {

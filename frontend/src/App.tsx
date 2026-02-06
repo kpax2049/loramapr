@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import type { CoverageQueryParams, MeasurementQueryParams } from './api/endpoints';
+import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
+import { getMeasurements, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
 import GatewayStatsPanel from './components/GatewayStatsPanel';
@@ -37,6 +37,8 @@ type InitialQueryState = {
   to: string;
   showPoints: boolean;
   showTrack: boolean;
+  exploreRangePreset: ExploreRangePreset;
+  useAdvancedRange: boolean;
   viewMode: 'explore' | 'playback';
   playbackSessionId: string | null;
   playbackCursorMs: number;
@@ -88,6 +90,44 @@ function parsePlaybackWindowMs(value: string | null): number {
   return minutes * 60 * 1000;
 }
 
+type ExploreRangePreset = 'last15m' | 'last1h' | 'last6h' | 'last24h' | 'all';
+
+function parseExploreRangePreset(value: string | null): ExploreRangePreset {
+  if (!value) {
+    return 'all';
+  }
+  switch (value) {
+    case 'last15m':
+    case 'last1h':
+    case 'last6h':
+    case 'last24h':
+    case 'all':
+      return value;
+    default:
+      return 'all';
+  }
+}
+
+function computePresetRange(
+  preset: ExploreRangePreset,
+  anchorMs: number
+): { from: string; to: string } | null {
+  if (preset === 'all') {
+    return null;
+  }
+  const durationMs =
+    preset === 'last15m'
+      ? 15 * 60 * 1000
+      : preset === 'last1h'
+        ? 60 * 60 * 1000
+        : preset === 'last6h'
+          ? 6 * 60 * 60 * 1000
+          : 24 * 60 * 60 * 1000;
+  const to = new Date(anchorMs).toISOString();
+  const from = new Date(anchorMs - durationMs).toISOString();
+  return { from, to };
+}
+
 function readInitialQueryState(): InitialQueryState {
   if (typeof window === 'undefined') {
     return {
@@ -98,6 +138,8 @@ function readInitialQueryState(): InitialQueryState {
       to: '',
       showPoints: true,
       showTrack: true,
+      exploreRangePreset: 'all',
+      useAdvancedRange: false,
       viewMode: 'explore',
       playbackSessionId: null,
       playbackCursorMs: Date.now(),
@@ -111,6 +153,12 @@ function readInitialQueryState(): InitialQueryState {
   const filterMode = filterModeParam === 'session' ? 'session' : 'time';
   const viewModeParam = params.get('viewMode');
   const viewMode = viewModeParam === 'playback' ? 'playback' : 'explore';
+  const hasCustomRange = Boolean(params.get('from') || params.get('to'));
+  const rangeAdvancedParam = params.get('rangeAdvanced');
+  const useAdvancedRange =
+    rangeAdvancedParam !== null
+      ? parseBoolean(rangeAdvancedParam, hasCustomRange)
+      : hasCustomRange;
 
   return {
     deviceId: params.get('deviceId'),
@@ -120,6 +168,8 @@ function readInitialQueryState(): InitialQueryState {
     to: params.get('to') ?? '',
     showPoints: parseBoolean(params.get('showPoints'), true),
     showTrack: parseBoolean(params.get('showTrack'), true),
+    exploreRangePreset: parseExploreRangePreset(params.get('rangePreset')),
+    useAdvancedRange,
     viewMode,
     playbackSessionId: params.get('playbackSessionId'),
     playbackCursorMs: parsePlaybackCursor(params.get('playbackCursor')),
@@ -135,12 +185,21 @@ function App() {
   const prevLatestMeasurementAt = useRef<string | null>(null);
   const mapRef = useRef<MapViewHandle | null>(null);
   const hasAutoFitRef = useRef(false);
+  const playbackStartRef = useRef<number | null>(null);
+  const playbackStartCursorRef = useRef(0);
+  const playbackStepRef = useRef(0);
+  const playbackCursorRef = useRef(0);
 
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(initial.sessionId);
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
+  const [exploreRangePreset, setExploreRangePreset] = useState<ExploreRangePreset>(
+    initial.exploreRangePreset
+  );
+  const [useAdvancedRange, setUseAdvancedRange] = useState(initial.useAdvancedRange);
+  const [presetAnchorMs, setPresetAnchorMs] = useState(Date.now());
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
@@ -164,6 +223,14 @@ function App() {
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
 
   useEffect(() => {
+    playbackCursorRef.current = playbackCursorMs;
+  }, [playbackCursorMs]);
+
+  useEffect(() => {
+    setPresetAnchorMs(Date.now());
+  }, [exploreRangePreset]);
+
+  useEffect(() => {
     const handle = window.setTimeout(() => {
       setDebouncedBbox(bbox);
     }, BBOX_DEBOUNCE_MS);
@@ -184,11 +251,15 @@ function App() {
     if (selectedSessionId) {
       params.set('sessionId', selectedSessionId);
     }
-    if (from) {
-      params.set('from', from);
-    }
-    if (to) {
-      params.set('to', to);
+    params.set('rangePreset', exploreRangePreset);
+    if (useAdvancedRange) {
+      params.set('rangeAdvanced', 'true');
+      if (from) {
+        params.set('from', from);
+      }
+      if (to) {
+        params.set('to', to);
+      }
     }
     if (!showPoints) {
       params.set('showPoints', 'false');
@@ -219,6 +290,8 @@ function App() {
     to,
     showPoints,
     showTrack,
+    exploreRangePreset,
+    useAdvancedRange,
     viewMode,
     playbackSessionId,
     playbackCursorMs,
@@ -233,6 +306,26 @@ function App() {
       setTo('');
     } else {
       setSelectedSessionId(null);
+    }
+  };
+
+  const handleExploreRangePresetChange = (preset: ExploreRangePreset) => {
+    setExploreRangePreset(preset);
+  };
+
+  const handlePlaybackCursorMsChange = (value: number) => {
+    setPlaybackCursorMs(value);
+    if (playbackIsPlaying) {
+      playbackStartRef.current = Date.now();
+      playbackStartCursorRef.current = value;
+      playbackStepRef.current = 0;
+    }
+  };
+
+  const handleUseAdvancedRangeChange = (value: boolean) => {
+    setUseAdvancedRange(value);
+    if (!value) {
+      setPresetAnchorMs(Date.now());
     }
   };
 
@@ -292,22 +385,32 @@ function App() {
     };
   }, [playbackSessionId, playbackCursorMs, playbackWindowMs, playbackMinMs, playbackMaxMs]);
 
+  const isExploreMode = viewMode === 'explore';
+  const exploreRange = useMemo(() => {
+    if (!isExploreMode || filterMode !== 'time') {
+      return { from: undefined, to: undefined };
+    }
+    if (useAdvancedRange) {
+      return {
+        from: from || undefined,
+        to: to || undefined
+      };
+    }
+    if (exploreRangePreset === 'all') {
+      return { from: undefined, to: undefined };
+    }
+    const presetRange = computePresetRange(exploreRangePreset, presetAnchorMs);
+    return {
+      from: presetRange?.from,
+      to: presetRange?.to
+    };
+  }, [isExploreMode, filterMode, useAdvancedRange, from, to, exploreRangePreset, presetAnchorMs]);
+
   const effectiveLimit = currentZoom <= LIMIT_ZOOM_THRESHOLD ? LOW_ZOOM_LIMIT : DEFAULT_LIMIT;
   const effectiveSample =
     currentZoom <= SAMPLE_ZOOM_LOW ? 800 : currentZoom <= SAMPLE_ZOOM_MEDIUM ? 1500 : undefined;
 
-  const measurementsParams = useMemo<MeasurementQueryParams>(() => {
-    if (isPlaybackMode) {
-      return {
-        sessionId: playbackSessionId ?? undefined,
-        from: playbackWindow?.from,
-        to: playbackWindow?.to,
-        bbox: bboxPayload,
-        rxGatewayId: selectedGatewayId ?? undefined,
-        sample: effectiveSample,
-        limit: effectiveLimit
-      };
-    }
+  const exploreMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
@@ -319,39 +422,26 @@ function App() {
     }
     return {
       deviceId: deviceId ?? undefined,
-      from: from || undefined,
-      to: to || undefined,
+      from: exploreRange.from,
+      to: exploreRange.to,
       bbox: bboxPayload,
       rxGatewayId: selectedGatewayId ?? undefined,
       sample: effectiveSample,
       limit: effectiveLimit
     };
   }, [
-    isPlaybackMode,
-    playbackSessionId,
-    playbackWindow,
-    bboxPayload,
-    selectedGatewayId,
-    effectiveSample,
-    effectiveLimit,
     isSessionMode,
     selectedSessionId,
+    bboxPayload,
     deviceId,
-    from,
-    to
+    exploreRange.from,
+    exploreRange.to,
+    selectedGatewayId,
+    effectiveSample,
+    effectiveLimit
   ]);
 
-  const trackParams = useMemo<MeasurementQueryParams>(() => {
-    if (isPlaybackMode) {
-      return {
-        sessionId: playbackSessionId ?? undefined,
-        from: playbackWindow?.from,
-        to: playbackWindow?.to,
-        rxGatewayId: selectedGatewayId ?? undefined,
-        sample: effectiveSample,
-        limit: effectiveLimit
-      };
-    }
+  const exploreTrackParams = useMemo<MeasurementQueryParams>(() => {
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
@@ -362,63 +452,71 @@ function App() {
     }
     return {
       deviceId: deviceId ?? undefined,
-      from: from || undefined,
-      to: to || undefined,
+      from: exploreRange.from,
+      to: exploreRange.to,
       rxGatewayId: selectedGatewayId ?? undefined,
       sample: effectiveSample,
       limit: effectiveLimit
     };
   }, [
-    isPlaybackMode,
-    playbackSessionId,
-    playbackWindow,
-    selectedGatewayId,
-    effectiveSample,
-    effectiveLimit,
     isSessionMode,
     selectedSessionId,
     deviceId,
-    from,
-    to
+    exploreRange.from,
+    exploreRange.to,
+    selectedGatewayId,
+    effectiveSample,
+    effectiveLimit
   ]);
 
-  const sessionPolling = viewMode === 'explore' && isSessionMode ? 2000 : false;
+  const playbackMeasurementsParams = useMemo<MeasurementQueryParams>(
+    () => ({
+      sessionId: playbackSessionId ?? undefined,
+      from: playbackWindow?.from,
+      to: playbackWindow?.to,
+      bbox: bboxPayload,
+      rxGatewayId: selectedGatewayId ?? undefined,
+      sample: effectiveSample,
+      limit: effectiveLimit
+    }),
+    [
+      playbackSessionId,
+      playbackWindow,
+      bboxPayload,
+      selectedGatewayId,
+      effectiveSample,
+      effectiveLimit
+    ]
+  );
 
-  const measurementsQuery = useMeasurements(
-    measurementsParams,
+  const exploreEnabled = viewMode !== 'playback';
+  const playbackEnabled = isPlaybackMode && hasPlaybackSession;
+  const sessionPolling = exploreEnabled && isSessionMode ? 2000 : false;
+
+  const exploreMeasurementsQuery = useMeasurements(
+    exploreMeasurementsParams,
     {
-      enabled: isPlaybackMode
-        ? hasPlaybackSession
-        : isSessionMode
-          ? Boolean(selectedSessionId)
-          : Boolean(deviceId)
+      enabled: exploreEnabled && (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
-  const trackQuery = useTrack(
-    trackParams,
+  const exploreTrackQuery = useTrack(
+    exploreTrackParams,
     {
-      enabled: isPlaybackMode
-        ? hasPlaybackSession
-        : isSessionMode
-          ? Boolean(selectedSessionId)
-          : Boolean(deviceId)
+      enabled: exploreEnabled && (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
     },
     { filterMode, refetchIntervalMs: sessionPolling }
+  );
+  const playbackMeasurementsQuery = useMeasurements(
+    playbackMeasurementsParams,
+    {
+      enabled: playbackEnabled,
+      placeholderData: keepPreviousData
+    },
+    { filterMode: 'session', refetchIntervalMs: false }
   );
   const compareSample = compareGatewayId ? 800 : undefined;
   const compareMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
-    if (isPlaybackMode) {
-      return {
-        sessionId: playbackSessionId ?? undefined,
-        from: playbackWindow?.from,
-        to: playbackWindow?.to,
-        bbox: bboxPayload,
-        rxGatewayId: compareGatewayId ?? undefined,
-        sample: compareSample,
-        limit: effectiveLimit
-      };
-    }
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
@@ -430,41 +528,121 @@ function App() {
     }
     return {
       deviceId: deviceId ?? undefined,
-      from: from || undefined,
-      to: to || undefined,
+      from: exploreRange.from,
+      to: exploreRange.to,
       bbox: bboxPayload,
       rxGatewayId: compareGatewayId ?? undefined,
       sample: compareSample,
       limit: effectiveLimit
     };
   }, [
-    isPlaybackMode,
-    playbackSessionId,
-    playbackWindow,
+    isSessionMode,
+    selectedSessionId,
     bboxPayload,
     compareGatewayId,
     compareSample,
     effectiveLimit,
-    isSessionMode,
-    selectedSessionId,
     deviceId,
-    from,
-    to
+    exploreRange.from,
+    exploreRange.to
   ]);
   const compareMeasurementsQuery = useMeasurements(
     compareMeasurementsParams,
     {
       enabled:
+        exploreEnabled &&
         mapLayerMode === 'points' &&
         Boolean(compareGatewayId) &&
-        (isPlaybackMode
-          ? hasPlaybackSession
-          : isSessionMode
-            ? Boolean(selectedSessionId)
-            : Boolean(deviceId))
+        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
+
+  const playbackWindowPoints = useMemo(() => {
+    if (!isPlaybackMode) {
+      return [];
+    }
+    const items = playbackMeasurementsQuery.data?.items ?? [];
+    return [...items].sort(
+      (a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime()
+    );
+  }, [isPlaybackMode, playbackMeasurementsQuery.data?.items]);
+
+  const playbackTimedPoints = useMemo(
+    () =>
+      playbackWindowPoints
+        .map((point) => ({
+          time: new Date(point.capturedAt).getTime(),
+          lat: point.lat,
+          lon: point.lon
+        }))
+        .filter((point) => Number.isFinite(point.time)),
+    [playbackWindowPoints]
+  );
+
+  const playbackTrackPoints = useMemo(
+    () =>
+      playbackWindowPoints.map((point) => ({
+        lat: point.lat,
+        lon: point.lon,
+        capturedAt: point.capturedAt
+      })),
+    [playbackWindowPoints]
+  );
+
+  const playbackCursorPosition = useMemo(() => {
+    if (!isPlaybackMode || playbackTimedPoints.length === 0) {
+      return null;
+    }
+    if (playbackTimedPoints.length === 1) {
+      return [playbackTimedPoints[0].lat, playbackTimedPoints[0].lon] as [number, number];
+    }
+
+    const cursor = playbackCursorMs;
+    if (cursor <= playbackTimedPoints[0].time) {
+      return [playbackTimedPoints[0].lat, playbackTimedPoints[0].lon] as [number, number];
+    }
+
+    for (let i = 1; i < playbackTimedPoints.length; i += 1) {
+      const prev = playbackTimedPoints[i - 1];
+      const next = playbackTimedPoints[i];
+      if (cursor <= next.time) {
+        if (next.time === prev.time) {
+          return [next.lat, next.lon] as [number, number];
+        }
+        const ratio = (cursor - prev.time) / (next.time - prev.time);
+        const lat = prev.lat + (next.lat - prev.lat) * ratio;
+        const lon = prev.lon + (next.lon - prev.lon) * ratio;
+        return [lat, lon] as [number, number];
+      }
+    }
+
+    const last = playbackTimedPoints[playbackTimedPoints.length - 1];
+    return [last.lat, last.lon] as [number, number];
+  }, [isPlaybackMode, playbackTimedPoints, playbackCursorMs]);
+
+  const activeMeasurements = isPlaybackMode
+    ? playbackWindowPoints
+    : exploreMeasurementsQuery.data?.items ?? [];
+  const activeTrack = isPlaybackMode ? playbackTrackPoints : exploreTrackQuery.data?.items ?? [];
+  const activeCompareMeasurements = isPlaybackMode
+    ? []
+    : compareMeasurementsQuery.data?.items ?? [];
+  const activeMeasurementsQuery = isPlaybackMode
+    ? playbackMeasurementsQuery
+    : exploreMeasurementsQuery;
+  const activeTrackQuery = isPlaybackMode ? null : exploreTrackQuery;
+  const effectiveMapLayerMode = isPlaybackMode ? 'points' : mapLayerMode;
+  const playbackWindowSummary = useMemo(() => {
+    if (!isPlaybackMode || !playbackWindow) {
+      return null;
+    }
+    return {
+      from: playbackWindow.from,
+      to: playbackWindow.to,
+      count: playbackWindowPoints.length
+    };
+  }, [isPlaybackMode, playbackWindow, playbackWindowPoints.length]);
 
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -474,10 +652,10 @@ function App() {
           }
         : {
             deviceId: deviceId ?? undefined,
-            from: from || undefined,
-            to: to || undefined
+            from: exploreRange.from,
+            to: exploreRange.to
           },
-    [isSessionMode, selectedSessionId, deviceId, from, to]
+    [isSessionMode, selectedSessionId, deviceId, exploreRange.from, exploreRange.to]
   );
   const statsQuery = useStats(statsParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
@@ -501,6 +679,7 @@ function App() {
     coverageParams,
     {
       enabled:
+        !isPlaybackMode &&
         mapLayerMode === 'coverage' &&
         Boolean(bboxPayload) &&
         (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
@@ -508,12 +687,11 @@ function App() {
     { filterMode }
   );
   const renderedPointCount =
-    mapLayerMode === 'points'
-      ? (showPoints ? measurementsQuery.data?.items.length ?? 0 : 0) +
-        (compareMeasurementsQuery.data?.items.length ?? 0)
+    effectiveMapLayerMode === 'points'
+      ? (showPoints ? activeMeasurements.length : 0) + activeCompareMeasurements.length
       : 0;
   const renderedBinCount =
-    mapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
+    effectiveMapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
 
   useEffect(() => {
     if (!isPlaybackMode || !hasPlaybackSession || playbackMinMs === null || playbackMaxMs === null) {
@@ -531,30 +709,115 @@ function App() {
   }, [isPlaybackMode, playbackMinMs, playbackMaxMs]);
 
   useEffect(() => {
+    setPlaybackIsPlaying(false);
+  }, [playbackSessionId]);
+
+  useEffect(() => {
     if (!isPlaybackMode || !hasPlaybackSession || !playbackIsPlaying) {
+      playbackStartRef.current = null;
+      playbackStepRef.current = 0;
       return;
     }
 
-    let lastTick = Date.now();
-    const handle = window.setInterval(() => {
-      const now = Date.now();
-      const delta = now - lastTick;
-      lastTick = now;
+    const tickMs = 250;
+    const stepMs = 1000 * playbackSpeed;
+    playbackStartRef.current = Date.now();
+    playbackStartCursorRef.current = playbackCursorRef.current;
+    playbackStepRef.current = 0;
 
-      setPlaybackCursorMs((prev) => {
-        const next = prev + delta * playbackSpeed;
-        if (playbackMaxMs !== null && next >= playbackMaxMs) {
-          setPlaybackIsPlaying(false);
-          return playbackMaxMs;
-        }
-        return next;
-      });
-    }, 200);
+    const handle = window.setInterval(() => {
+      const start = playbackStartRef.current;
+      if (!start) {
+        return;
+      }
+      const elapsed = Date.now() - start;
+      const steps = Math.floor(elapsed / tickMs);
+      if (steps <= playbackStepRef.current) {
+        return;
+      }
+      playbackStepRef.current = steps;
+
+      let nextCursor = playbackStartCursorRef.current + steps * stepMs;
+      if (playbackMinMs !== null && nextCursor < playbackMinMs) {
+        nextCursor = playbackMinMs;
+      }
+      if (playbackMaxMs !== null && nextCursor >= playbackMaxMs) {
+        nextCursor = playbackMaxMs;
+        setPlaybackIsPlaying(false);
+        window.clearInterval(handle);
+      }
+      setPlaybackCursorMs(nextCursor);
+    }, tickMs);
 
     return () => {
       window.clearInterval(handle);
     };
-  }, [isPlaybackMode, playbackIsPlaying, playbackSpeed, playbackMaxMs]);
+  }, [
+    isPlaybackMode,
+    hasPlaybackSession,
+    playbackIsPlaying,
+    playbackSpeed,
+    playbackMinMs,
+    playbackMaxMs
+  ]);
+
+  useEffect(() => {
+    if (!isPlaybackMode || !hasPlaybackSession) {
+      return;
+    }
+    const center = playbackCursorMs + playbackWindowMs / 2;
+    const windowStart = center - playbackWindowMs;
+    const windowEnd = center;
+    const clampedStart =
+      playbackMinMs !== null ? Math.max(windowStart, playbackMinMs) : windowStart;
+    const clampedEnd =
+      playbackMaxMs !== null ? Math.min(windowEnd, playbackMaxMs) : windowEnd;
+
+    const prefetchParams: MeasurementQueryParams = {
+      sessionId: playbackSessionId ?? undefined,
+      from: new Date(clampedStart),
+      to: new Date(clampedEnd),
+      bbox: bboxPayload,
+      rxGatewayId: selectedGatewayId ?? undefined,
+      sample: effectiveSample,
+      limit: effectiveLimit
+    };
+    const normalizeTime = (value?: string | Date) =>
+      value ? (value instanceof Date ? value.toISOString() : value) : null;
+    const bboxKey = prefetchParams.bbox
+      ? `${prefetchParams.bbox.minLon},${prefetchParams.bbox.minLat},${prefetchParams.bbox.maxLon},${prefetchParams.bbox.maxLat}`
+      : 'none';
+    const key = {
+      deviceId: prefetchParams.deviceId ?? null,
+      sessionId: prefetchParams.sessionId ?? null,
+      from: normalizeTime(prefetchParams.from),
+      to: normalizeTime(prefetchParams.to),
+      bbox: bboxKey,
+      gatewayId: prefetchParams.gatewayId ?? null,
+      rxGatewayId: prefetchParams.rxGatewayId ?? null,
+      sample: typeof prefetchParams.sample === 'number' ? prefetchParams.sample : null,
+      limit: typeof prefetchParams.limit === 'number' ? prefetchParams.limit : null,
+      filterMode: 'session'
+    };
+
+    queryClient.prefetchQuery({
+      queryKey: ['measurements', key],
+      queryFn: ({ signal }) => getMeasurements(prefetchParams, { signal })
+    });
+  }, [
+    isPlaybackMode,
+    hasPlaybackSession,
+    playbackCursorMs,
+    playbackWindowMs,
+    playbackSessionId,
+    playbackMinMs,
+    playbackMaxMs,
+    bboxPayload,
+    selectedGatewayId,
+    effectiveSample,
+    effectiveLimit,
+    queryClient
+  ]);
   const { device: selectedDevice } = useDevice(deviceId);
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
   const latestMeasurementAt =
@@ -572,8 +835,8 @@ function App() {
         }
       : {
           deviceId: deviceId ?? undefined,
-          from: from || undefined,
-          to: to || undefined
+          from: exploreRange.from,
+          to: exploreRange.to
         };
   const gatewayScopeEnabled =
     filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
@@ -582,8 +845,8 @@ function App() {
     if (!selectedPointId) {
       return null;
     }
-    return measurementsQuery.data?.items.find((item) => item.id === selectedPointId) ?? null;
-  }, [measurementsQuery.data?.items, selectedPointId]);
+    return activeMeasurements.find((item) => item.id === selectedPointId) ?? null;
+  }, [activeMeasurements, selectedPointId]);
 
   useEffect(() => {
     if (selectedPointId && !selectedMeasurement) {
@@ -606,7 +869,7 @@ function App() {
   }, [deviceId, selectedSessionId]);
 
   const measurementBounds = useMemo(() => {
-    const items = measurementsQuery.data?.items ?? [];
+    const items = activeMeasurements;
     if (items.length === 0) {
       return null;
     }
@@ -626,13 +889,13 @@ function App() {
       [minLat, minLon],
       [maxLat, maxLon]
     ] as [[number, number], [number, number]];
-  }, [measurementsQuery.data?.items]);
+  }, [activeMeasurements]);
 
   useEffect(() => {
     if (!measurementBounds) {
       return;
     }
-    if (measurementsQuery.isFetching) {
+    if (activeMeasurementsQuery.isFetching) {
       return;
     }
     if (userInteractedWithMap) {
@@ -643,7 +906,7 @@ function App() {
     }
     mapRef.current?.fitBounds(measurementBounds);
     hasAutoFitRef.current = true;
-  }, [measurementBounds, userInteractedWithMap, measurementsQuery.isFetching]);
+  }, [measurementBounds, userInteractedWithMap, activeMeasurementsQuery.isFetching]);
 
   const handleFitToData = () => {
     if (!measurementBounds) {
@@ -661,6 +924,10 @@ function App() {
     }
 
     const latestMeasurementAt = latestDeviceQuery.data?.lastMeasurementAt ?? null;
+    if (viewMode === 'playback') {
+      prevLatestMeasurementAt.current = latestMeasurementAt;
+      return;
+    }
     if (!latestMeasurementAt) {
       prevLatestMeasurementAt.current = latestMeasurementAt;
       return;
@@ -677,15 +944,21 @@ function App() {
         const normalizeTime = (value?: string | Date) =>
           value ? (value instanceof Date ? value.toISOString() : value) : null;
         const measurementsKey = {
-          deviceId: measurementsParams.deviceId ?? null,
-          sessionId: measurementsParams.sessionId ?? null,
-          from: normalizeTime(measurementsParams.from),
-          to: normalizeTime(measurementsParams.to),
+          deviceId: exploreMeasurementsParams.deviceId ?? null,
+          sessionId: exploreMeasurementsParams.sessionId ?? null,
+          from: normalizeTime(exploreMeasurementsParams.from),
+          to: normalizeTime(exploreMeasurementsParams.to),
           bbox: bboxKey,
-          gatewayId: measurementsParams.gatewayId ?? null,
-          rxGatewayId: measurementsParams.rxGatewayId ?? null,
-          sample: typeof measurementsParams.sample === 'number' ? measurementsParams.sample : null,
-          limit: typeof measurementsParams.limit === 'number' ? measurementsParams.limit : null,
+          gatewayId: exploreMeasurementsParams.gatewayId ?? null,
+          rxGatewayId: exploreMeasurementsParams.rxGatewayId ?? null,
+          sample:
+            typeof exploreMeasurementsParams.sample === 'number'
+              ? exploreMeasurementsParams.sample
+              : null,
+          limit:
+            typeof exploreMeasurementsParams.limit === 'number'
+              ? exploreMeasurementsParams.limit
+              : null,
           filterMode
         };
         const compareKey =
@@ -710,15 +983,16 @@ function App() {
               }
             : null;
         const trackKey = {
-          deviceId: trackParams.deviceId ?? null,
-          sessionId: trackParams.sessionId ?? null,
-          from: normalizeTime(trackParams.from),
-          to: normalizeTime(trackParams.to),
+          deviceId: exploreTrackParams.deviceId ?? null,
+          sessionId: exploreTrackParams.sessionId ?? null,
+          from: normalizeTime(exploreTrackParams.from),
+          to: normalizeTime(exploreTrackParams.to),
           bbox: null,
-          gatewayId: trackParams.gatewayId ?? null,
-          rxGatewayId: trackParams.rxGatewayId ?? null,
-          sample: typeof trackParams.sample === 'number' ? trackParams.sample : null,
-          limit: typeof trackParams.limit === 'number' ? trackParams.limit : null,
+          gatewayId: exploreTrackParams.gatewayId ?? null,
+          rxGatewayId: exploreTrackParams.rxGatewayId ?? null,
+          sample:
+            typeof exploreTrackParams.sample === 'number' ? exploreTrackParams.sample : null,
+          limit: typeof exploreTrackParams.limit === 'number' ? exploreTrackParams.limit : null,
           filterMode
         };
 
@@ -734,16 +1008,17 @@ function App() {
   }, [
     deviceId,
     latestDeviceQuery.data?.lastMeasurementAt,
-    measurementsParams,
+    exploreMeasurementsParams,
     compareMeasurementsParams,
-    trackParams,
+    exploreTrackParams,
     bboxPayload,
     filterMode,
+    viewMode,
     queryClient
   ]);
 
-  const isLoading = measurementsQuery.isLoading || trackQuery.isLoading;
-  const error = measurementsQuery.error ?? trackQuery.error;
+  const isLoading = activeMeasurementsQuery.isLoading || Boolean(activeTrackQuery?.isLoading);
+  const error = activeMeasurementsQuery.error ?? activeTrackQuery?.error;
 
   const latestEvent = lorawanEventsQuery.data?.[0];
   const hasRecentLorawanEvent = (() => {
@@ -759,7 +1034,7 @@ function App() {
   })();
   const isMissingGps = latestEvent?.processingError === 'missing_gps';
   const noMeasurementsReturned =
-    measurementsQuery.data !== undefined && measurementsQuery.data.items.length === 0;
+    activeMeasurementsQuery.data !== undefined && activeMeasurementsQuery.data.items.length === 0;
   const shouldShowLorawanBanner =
     Boolean(selectedDeviceUid) &&
     hasRecentLorawanEvent &&
@@ -770,15 +1045,16 @@ function App() {
     <div className="app">
       <MapView
         ref={mapRef}
-        mapLayerMode={mapLayerMode}
+        mapLayerMode={effectiveMapLayerMode}
         coverageMetric={coverageMetric}
-        measurements={measurementsQuery.data?.items ?? []}
-        compareMeasurements={compareMeasurementsQuery.data?.items ?? []}
-        track={trackQuery.data?.items ?? []}
+        measurements={activeMeasurements}
+        compareMeasurements={activeCompareMeasurements}
+        track={activeTrack}
         coverageBins={coverageQuery.data?.items ?? []}
         coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
         showPoints={showPoints}
         showTrack={showTrack}
+        playbackCursorPosition={playbackCursorPosition}
         onBoundsChange={setBbox}
         onSelectPoint={setSelectedPointId}
         onZoomChange={setCurrentZoom}
@@ -792,13 +1068,13 @@ function App() {
       )}
       {import.meta.env.DEV && (
         <div className="dev-counter">
-          {mapLayerMode === 'coverage'
+          {effectiveMapLayerMode === 'coverage'
             ? `Coverage bins: ${renderedBinCount}`
             : `Points: ${renderedPointCount}`}
         </div>
       )}
-      {measurementsQuery.data &&
-        measurementsQuery.data.items.length === measurementsQuery.data.limit && (
+      {activeMeasurementsQuery.data &&
+        activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit && (
           <div className="limit-banner">Result limited; zoom in or narrow filters</div>
         )}
       {shouldShowLorawanBanner && (
@@ -819,8 +1095,11 @@ function App() {
             timeline={playbackTimelineQuery.data ?? null}
             timelineLoading={playbackTimelineQuery.isLoading}
             timelineError={playbackTimelineQuery.error}
+            windowFrom={playbackWindowSummary?.from ?? null}
+            windowTo={playbackWindowSummary?.to ?? null}
+            windowCount={playbackWindowSummary?.count ?? 0}
             playbackCursorMs={playbackCursorMs}
-            onPlaybackCursorMsChange={setPlaybackCursorMs}
+            onPlaybackCursorMsChange={handlePlaybackCursorMsChange}
             playbackWindowMs={playbackWindowMs}
             onPlaybackWindowMsChange={setPlaybackWindowMs}
             playbackIsPlaying={playbackIsPlaying}
@@ -849,6 +1128,10 @@ function App() {
         onFilterModeChange={handleFilterModeChange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        exploreRangePreset={exploreRangePreset}
+        onExploreRangePresetChange={handleExploreRangePresetChange}
+        useAdvancedRange={useAdvancedRange}
+        onUseAdvancedRangeChange={handleUseAdvancedRangeChange}
         selectedSessionId={selectedSessionId}
         onSelectSessionId={setSelectedSessionId}
         onStartSession={handleSessionStart}
@@ -862,6 +1145,8 @@ function App() {
         onMapLayerModeChange={setMapLayerMode}
         coverageMetric={coverageMetric}
         onCoverageMetricChange={setCoverageMetric}
+        rangeFrom={exploreRange.from}
+        rangeTo={exploreRange.to}
         from={from}
         to={to}
         onFromChange={setFrom}

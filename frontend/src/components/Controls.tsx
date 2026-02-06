@@ -10,6 +10,12 @@ type ControlsProps = {
   onFilterModeChange: (mode: 'time' | 'session') => void;
   viewMode: 'explore' | 'playback';
   onViewModeChange: (mode: 'explore' | 'playback') => void;
+  exploreRangePreset: 'last15m' | 'last1h' | 'last6h' | 'last24h' | 'all';
+  onExploreRangePresetChange: (
+    preset: 'last15m' | 'last1h' | 'last6h' | 'last24h' | 'all'
+  ) => void;
+  useAdvancedRange: boolean;
+  onUseAdvancedRangeChange: (value: boolean) => void;
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
@@ -23,6 +29,8 @@ type ControlsProps = {
   onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
   onCoverageMetricChange: (metric: 'count' | 'rssiAvg' | 'snrAvg') => void;
+  rangeFrom?: string | Date;
+  rangeTo?: string | Date;
   from: string;
   to: string;
   onFromChange: (value: string) => void;
@@ -40,6 +48,10 @@ export default function Controls({
   onFilterModeChange,
   viewMode,
   onViewModeChange,
+  exploreRangePreset,
+  onExploreRangePresetChange,
+  useAdvancedRange,
+  onUseAdvancedRangeChange,
   selectedSessionId,
   onSelectSessionId,
   onStartSession,
@@ -53,6 +65,8 @@ export default function Controls({
   onMapLayerModeChange,
   coverageMetric,
   onCoverageMetricChange,
+  rangeFrom,
+  rangeTo,
   from,
   to,
   onFromChange,
@@ -74,8 +88,8 @@ export default function Controls({
         }
       : {
           deviceId: deviceId ?? undefined,
-          from: from || undefined,
-          to: to || undefined
+          from: rangeFrom,
+          to: rangeTo
         };
   const gatewayScopeEnabled =
     filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
@@ -221,26 +235,61 @@ export default function Controls({
       ) : null}
 
       {filterMode === 'time' ? (
-        <div className="controls__row">
+        <>
           <div className="controls__group">
-            <label htmlFor="from-input">From</label>
-            <input
-              id="from-input"
-              type="datetime-local"
-              value={from}
-              onChange={(event) => onFromChange(event.target.value)}
-            />
+            <label htmlFor="range-preset">Range</label>
+            <select
+              id="range-preset"
+              value={exploreRangePreset}
+              onChange={(event) =>
+                onExploreRangePresetChange(
+                  event.target.value as
+                    | 'last15m'
+                    | 'last1h'
+                    | 'last6h'
+                    | 'last24h'
+                    | 'all'
+                )
+              }
+            >
+              <option value="last15m">Last 15m</option>
+              <option value="last1h">Last 1h</option>
+              <option value="last6h">Last 6h</option>
+              <option value="last24h">Last 24h</option>
+              <option value="all">All</option>
+            </select>
+            <label className="controls__toggle">
+              <input
+                type="checkbox"
+                checked={useAdvancedRange}
+                onChange={(event) => onUseAdvancedRangeChange(event.target.checked)}
+              />
+              Advanced
+            </label>
           </div>
-          <div className="controls__group">
-            <label htmlFor="to-input">To</label>
-            <input
-              id="to-input"
-              type="datetime-local"
-              value={to}
-              onChange={(event) => onToChange(event.target.value)}
-            />
-          </div>
-        </div>
+          {useAdvancedRange && (
+            <div className="controls__row">
+              <div className="controls__group">
+                <label htmlFor="from-input">From</label>
+                <input
+                  id="from-input"
+                  type="datetime-local"
+                  value={from}
+                  onChange={(event) => onFromChange(event.target.value)}
+                />
+              </div>
+              <div className="controls__group">
+                <label htmlFor="to-input">To</label>
+                <input
+                  id="to-input"
+                  type="datetime-local"
+                  value={to}
+                  onChange={(event) => onToChange(event.target.value)}
+                />
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <div className="controls__group">
           {deviceId ? (
