@@ -103,6 +103,47 @@ export class SessionsService {
       count: aggregate._count._all
     };
   }
+
+  async getWindow(params: { sessionId: string; cursor: Date; windowMs: number; limit: number }) {
+    const halfWindow = params.windowMs / 2;
+    const from = new Date(params.cursor.getTime() - halfWindow);
+    const to = new Date(params.cursor.getTime() + halfWindow);
+
+    const items = await this.prisma.measurement.findMany({
+      where: {
+        sessionId: params.sessionId,
+        capturedAt: {
+          gte: from,
+          lte: to
+        }
+      },
+      orderBy: { capturedAt: 'asc' },
+      take: params.limit,
+      select: {
+        id: true,
+        capturedAt: true,
+        lat: true,
+        lon: true,
+        rssi: true,
+        snr: true,
+        gatewayId: true,
+        sf: true,
+        bw: true,
+        freq: true
+      }
+    });
+
+    return {
+      sessionId: params.sessionId,
+      cursor: params.cursor.toISOString(),
+      from: from.toISOString(),
+      to: to.toISOString(),
+      items: items.map((item) => ({
+        ...item,
+        capturedAt: item.capturedAt.toISOString()
+      }))
+    };
+  }
 }
 
 function isNotFoundError(error: unknown): boolean {
