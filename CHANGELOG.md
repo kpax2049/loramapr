@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.0 - 2026-02-06
+
+### Highlights
+- Session playback mode with scrubber, play/pause, speed control, and configurable time window.
+- Deterministic replay via URL-synced playback state (shareable/reproducible debugging).
+- Session timeline metadata endpoint and windowed session slice endpoint.
+- Playback map view renders only the active time window plus an interpolated cursor marker.
+- Explore mode time filtering now supports presets (Last 15m/1h/6h/24h/All) with optional advanced custom range.
+
+### Developer/Testing
+- Added e2e coverage for session timeline and window endpoints.
+- Prefetching during playback to reduce latency and keep UI responsive.
+
+### Notes
+- Playback currently operates on session data (sessionId scope). Bounding-box filtering is disabled to preserve deterministic replay.
+
 ## v0.6.0 - 2026-02-04
 
 ### Highlights
