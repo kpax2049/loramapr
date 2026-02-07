@@ -211,6 +211,7 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
         const candidates = await tx.webhookEvent.findMany({
           where: {
             processedAt: null,
+            source: { in: ['tts', 'meshtastic'] },
             OR: [{ processingStartedAt: null }, { processingStartedAt: { lt: staleBefore } }]
           },
           orderBy: { receivedAt: 'asc' },
@@ -219,7 +220,13 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
         });
 
         if (candidates.length === 0) {
-          return [] as Array<{ id: string; deviceUid: string | null; payload: Prisma.JsonValue }>;
+          return [] as Array<{
+            id: string;
+            deviceUid: string | null;
+            payload: Prisma.JsonValue;
+            source: string;
+            receivedAt: Date;
+          }>;
         }
 
         const candidateIds = candidates.map((row) => row.id);
@@ -244,13 +251,21 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
           select: {
             id: true,
             deviceUid: true,
-            payload: true
+            payload: true,
+            source: true,
+            receivedAt: true
           }
         });
       });
 
       for (const event of claimed) {
-        await this.processEvent(event.id, event.deviceUid ?? undefined, event.payload);
+        await this.processEvent(
+          event.id,
+          event.source,
+          event.deviceUid ?? undefined,
+          event.payload,
+          event.receivedAt
+        );
       }
     } finally {
       this.isProcessing = false;
@@ -259,35 +274,19 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
 
   private async processEvent(
     id: string,
+    source: string,
     deviceUid: string | undefined,
-    payload: Prisma.JsonValue
+    payload: Prisma.JsonValue,
+    receivedAt: Date
   ): Promise<void> {
     const processedAt = new Date();
     try {
-      const parsed = payload as TtsUplink;
-      const normalized = normalizeTtsUplinkToMeasurement(parsed);
-      if (!normalized.ok) {
-        await this.prisma.webhookEvent.update({
-          where: { id },
-          data: {
-            processedAt,
-            processingError: normalized.reason
-          }
-        });
+      if (source === 'meshtastic') {
+        await this.processMeshtasticEvent(id, deviceUid, payload, receivedAt, processedAt);
         return;
       }
 
-      await this.measurementsService.ingestCanonical(deviceUid ?? normalized.item.deviceUid, [
-        normalized.item
-      ]);
-
-      await this.prisma.webhookEvent.update({
-        where: { id },
-        data: {
-          processedAt,
-          processingError: null
-        }
-      });
+      await this.processTtsEvent(id, deviceUid, payload, processedAt);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'processing_failed';
       await this.prisma.webhookEvent.update({
@@ -299,6 +298,234 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
       });
     }
   }
+
+  private async processTtsEvent(
+    id: string,
+    deviceUid: string | undefined,
+    payload: Prisma.JsonValue,
+    processedAt: Date
+  ): Promise<void> {
+    const parsed = payload as TtsUplink;
+    const normalized = normalizeTtsUplinkToMeasurement(parsed);
+    if (!normalized.ok) {
+      await this.prisma.webhookEvent.update({
+        where: { id },
+        data: {
+          processedAt,
+          processingError: normalized.reason
+        }
+      });
+      return;
+    }
+
+    await this.measurementsService.ingestCanonical(deviceUid ?? normalized.item.deviceUid, [
+      normalized.item
+    ]);
+
+    await this.prisma.webhookEvent.update({
+      where: { id },
+      data: {
+        processedAt,
+        processingError: null
+      }
+    });
+  }
+
+  private async processMeshtasticEvent(
+    id: string,
+    deviceUid: string | undefined,
+    payload: Prisma.JsonValue,
+    receivedAt: Date,
+    processedAt: Date
+  ): Promise<void> {
+    const normalized = normalizeMeshtasticPayload(payload, receivedAt);
+    if (!normalized) {
+      await this.prisma.webhookEvent.update({
+        where: { id },
+        data: {
+          processedAt,
+          processingError: 'missing_gps'
+        }
+      });
+      return;
+    }
+
+    const effectiveDeviceUid = deviceUid ?? normalized.deviceUid;
+    await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
+      {
+        capturedAt: normalized.capturedAt,
+        lat: normalized.lat,
+        lon: normalized.lon,
+        rssi: normalized.rssi,
+        snr: normalized.snr,
+        gatewayId: normalized.gatewayId ?? undefined,
+        payloadRaw: normalized.payloadRaw
+      }
+    ]);
+
+    await this.prisma.webhookEvent.update({
+      where: { id },
+      data: {
+        processedAt,
+        processingError: null
+      }
+    });
+  }
+}
+
+type MeshtasticNormalized = {
+  deviceUid: string;
+  capturedAt: Date;
+  lat: number;
+  lon: number;
+  rssi?: number;
+  snr?: number;
+  gatewayId?: string | null;
+  payloadRaw: Record<string, unknown>;
+};
+
+function normalizeMeshtasticPayload(
+  payload: Prisma.JsonValue,
+  receivedAt: Date
+): MeshtasticNormalized | null {
+  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+  if (!record) {
+    return null;
+  }
+
+  const position = extractPosition(record);
+  if (!position) {
+    return null;
+  }
+
+  const lat = normalizeCoordinate(position.lat, 90);
+  const lon = normalizeCoordinate(position.lon, 180);
+  if (lat === null || lon === null) {
+    return null;
+  }
+
+  const rssi = getNumber(record.rssi);
+  const snr = getNumber(record.snr);
+  const gatewayId = getGatewayId(record);
+
+  const capturedAt = resolveCapturedAt(record, receivedAt);
+  const deviceUid = getMeshtasticDeviceUid(record);
+
+  return {
+    deviceUid,
+    capturedAt,
+    lat,
+    lon,
+    rssi: rssi ?? undefined,
+    snr: snr ?? undefined,
+    gatewayId: gatewayId ?? null,
+    payloadRaw: record
+  };
+}
+
+function extractPosition(record: Record<string, unknown>): { lat: number; lon: number } | null {
+  const position = record.position;
+  if (position && typeof position === 'object') {
+    const posRecord = position as Record<string, unknown>;
+    const lat = getNumber(posRecord.latitude);
+    const lon = getNumber(posRecord.longitude);
+    if (lat !== null && lon !== null) {
+      return { lat, lon };
+    }
+  }
+
+  const nestedPayload = record.payload;
+  if (nestedPayload && typeof nestedPayload === 'object') {
+    const payloadRecord = nestedPayload as Record<string, unknown>;
+    const nestedPosition = payloadRecord.position;
+    if (nestedPosition && typeof nestedPosition === 'object') {
+      const posRecord = nestedPosition as Record<string, unknown>;
+      const lat = getNumber(posRecord.latitude);
+      const lon = getNumber(posRecord.longitude);
+      if (lat !== null && lon !== null) {
+        return { lat, lon };
+      }
+    }
+  }
+
+  const lat = getNumber(record.lat);
+  const lon = getNumber(record.lon);
+  if (lat !== null && lon !== null) {
+    return { lat, lon };
+  }
+
+  const latAlt = getNumber(record.latitude);
+  const lonAlt = getNumber(record.longitude);
+  if (latAlt !== null && lonAlt !== null) {
+    return { lat: latAlt, lon: lonAlt };
+  }
+
+  return null;
+}
+
+function resolveCapturedAt(record: Record<string, unknown>, receivedAt: Date): Date {
+  const time = getNumber(record.time);
+  if (time !== null) {
+    return new Date(time * 1000);
+  }
+  const timestamp = getNumber(record.timestamp);
+  if (timestamp !== null) {
+    return new Date(timestamp * 1000);
+  }
+  return receivedAt;
+}
+
+function getMeshtasticDeviceUid(record: Record<string, unknown>): string {
+  if (typeof record.from === 'string' && record.from.trim().length > 0) {
+    return record.from;
+  }
+  if (typeof record.nodeId === 'string' && record.nodeId.trim().length > 0) {
+    return record.nodeId;
+  }
+  if (typeof record.nodeId === 'number' && Number.isFinite(record.nodeId)) {
+    return String(record.nodeId);
+  }
+  return 'unknown';
+}
+
+function getGatewayId(record: Record<string, unknown>): string | null {
+  const receiver = record.receiver;
+  if (typeof receiver === 'string' && receiver.trim().length > 0) {
+    return receiver;
+  }
+  if (typeof receiver === 'number' && Number.isFinite(receiver)) {
+    return String(receiver);
+  }
+  const via = record.via;
+  if (typeof via === 'string' && via.trim().length > 0) {
+    return via;
+  }
+  if (typeof via === 'number' && Number.isFinite(via)) {
+    return String(via);
+  }
+  return null;
+}
+
+function normalizeCoordinate(value: number, limit: number): number | null {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const abs = Math.abs(value);
+  if (abs > limit || (Number.isInteger(value) && abs >= 1_000_000)) {
+    return value / 1e7;
+  }
+  return value;
+}
+
+function getNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

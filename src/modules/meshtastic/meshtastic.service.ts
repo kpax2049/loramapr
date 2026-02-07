@@ -28,6 +28,55 @@ export class MeshtasticService {
       throw error;
     }
   }
+
+  async listEvents(params: {
+    deviceUid?: string;
+    processingError?: string;
+    processed?: boolean;
+    limit: number;
+  }) {
+    const where: Record<string, unknown> = {
+      source: 'meshtastic'
+    };
+    if (params.deviceUid) {
+      where.deviceUid = params.deviceUid;
+    }
+    if (params.processingError) {
+      where.processingError = params.processingError;
+    }
+    if (params.processed !== undefined) {
+      where.processedAt = params.processed ? { not: null } : null;
+    }
+
+    return this.prisma.webhookEvent.findMany({
+      where,
+      orderBy: { receivedAt: 'desc' },
+      take: params.limit,
+      select: {
+        id: true,
+        receivedAt: true,
+        processedAt: true,
+        processingError: true,
+        deviceUid: true,
+        uplinkId: true
+      }
+    });
+  }
+
+  async getEventById(id: string) {
+    return this.prisma.webhookEvent.findFirst({
+      where: { id, source: 'meshtastic' },
+      select: {
+        id: true,
+        payload: true,
+        receivedAt: true,
+        processedAt: true,
+        deviceUid: true,
+        uplinkId: true,
+        processingError: true
+      }
+    });
+  }
 }
 
 function getDeviceUid(body: unknown): string {
