@@ -33,12 +33,13 @@ export class LorawanController {
     @Query('limit') limit?: string
   ) {
     const parsedLimit = parseLimit(limit);
-    return this.lorawanService.listEvents({
+    const items = await this.lorawanService.listEvents({
       deviceUid: deviceUid || undefined,
       processingError: processingError || undefined,
       processed: parseOptionalBoolean(processed, 'processed'),
       limit: parsedLimit
     });
+    return { items, count: items.length };
   }
 
   @Get('events/:id')

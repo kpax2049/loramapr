@@ -158,7 +158,7 @@ describe('Measurements e2e', () => {
       .set('x-api-key', apiKeyPlaintext)
       .expect(200);
 
-    const gateways = listResponse.body as Array<{ gatewayId: string; count: number }>;
+    const gateways = listResponse.body.items as Array<{ gatewayId: string; count: number }>;
     const gwA = gateways.find((row) => row.gatewayId === 'gw-a');
     const gwB = gateways.find((row) => row.gatewayId === 'gw-b');
 

@@ -49,7 +49,8 @@ export class CoverageController {
     return {
       binSizeDeg: BIN_SIZE_DEG,
       day: day.toISOString(),
-      items: bins
+      items: bins,
+      count: bins.length
     };
   }
 }

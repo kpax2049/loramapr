@@ -20,6 +20,7 @@ export type TrackQueryParams = {
 };
 
 export type TrackResult = {
+  count: number;
   totalBeforeSample: number;
   returnedAfterSample: number;
   items: Array<{
@@ -81,6 +82,7 @@ export class TracksService {
     const sampled = params.sample ? sampleItems(items, params.sample) : items;
 
     return {
+      count: sampled.length,
       totalBeforeSample,
       returnedAfterSample: sampled.length,
       items: sampled

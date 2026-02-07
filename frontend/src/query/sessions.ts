@@ -8,15 +8,15 @@ import {
   stopSession,
   updateSession
 } from '../api/endpoints';
-import type { Session, SessionTimeline, SessionWindowResponse } from '../api/types';
+import type { ListResponse, Session, SessionTimeline, SessionWindowResponse } from '../api/types';
 import type { SessionWindowParams } from '../api/endpoints';
 
 type QueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
 
-export function useSessions(deviceId?: string, options?: QueryOptions<Session[]>) {
+export function useSessions(deviceId?: string, options?: QueryOptions<ListResponse<Session>>) {
   const enabled = options?.enabled ?? Boolean(deviceId);
 
-  return useQuery<Session[]>({
+  return useQuery<ListResponse<Session>>({
     queryKey: ['sessions', deviceId ?? null],
     queryFn: ({ signal }) => listSessions(deviceId as string, { signal }),
     ...options,

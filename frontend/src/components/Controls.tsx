@@ -77,7 +77,7 @@ export default function Controls({
   onShowTrackChange
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
-  const devices = Array.isArray(devicesData) ? devicesData : [];
+  const devices = devicesData?.items ?? [];
   const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -94,7 +94,7 @@ export default function Controls({
   const gatewayScopeEnabled =
     filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
   const gatewaysQuery = useGateways(gatewayScope, { enabled: gatewayScopeEnabled }, { filterMode });
-  const gatewayOptions = gatewaysQuery.data ?? [];
+  const gatewayOptions = gatewaysQuery.data?.items ?? [];
   const gatewayErrorStatus = getErrorStatus(gatewaysQuery.error);
 
   useEffect(() => {

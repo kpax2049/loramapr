@@ -51,7 +51,7 @@ export default function PlaybackPanel({
   onPlaybackSpeedChange
 }: PlaybackPanelProps) {
   const sessionsQuery = useSessions(deviceId ?? undefined, { enabled: Boolean(deviceId) });
-  const sessions = sessionsQuery.data ?? [];
+  const sessions = sessionsQuery.data?.items ?? [];
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const minMs = useMemo(() => {

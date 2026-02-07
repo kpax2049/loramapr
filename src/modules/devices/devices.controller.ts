@@ -9,9 +9,12 @@ export class DevicesController {
 
   @Get()
   @UseGuards(OwnerGuard)
-  async list(@Req() request: OwnerContextRequest): Promise<DeviceListItem[]> {
+  async list(
+    @Req() request: OwnerContextRequest
+  ): Promise<{ items: DeviceListItem[]; count: number }> {
     const ownerId = getOwnerIdFromRequest(request);
-    return this.devicesService.list(ownerId);
+    const items = await this.devicesService.list(ownerId);
+    return { items, count: items.length };
   }
 
   @Get(':id/latest')

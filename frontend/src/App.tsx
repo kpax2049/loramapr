@@ -1195,7 +1195,7 @@ function App() {
   const isLoading = activeMeasurementsQuery.isLoading || Boolean(activeTrackQuery?.isLoading);
   const error = activeMeasurementsQuery.error ?? activeTrackQuery?.error;
 
-  const latestEvent = lorawanEventsQuery.data?.[0];
+  const latestEvent = lorawanEventsQuery.data?.items?.[0];
   const hasRecentLorawanEvent = (() => {
     if (!latestEvent?.receivedAt) {
       return false;

@@ -27,7 +27,8 @@ export class SessionsController {
   @Get()
   async list(@Query() query: SessionsQuery) {
     const deviceId = getSingleValue(query.deviceId, 'deviceId');
-    return this.sessionsService.list(deviceId ?? undefined);
+    const items = await this.sessionsService.list(deviceId ?? undefined);
+    return { items, count: items.length };
   }
 
   @Post('start')

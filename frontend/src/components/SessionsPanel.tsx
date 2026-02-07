@@ -31,7 +31,8 @@ export default function SessionsPanel({
   onStartSession
 }: SessionsPanelProps) {
   const [sessionName, setSessionName] = useState('');
-  const { data: sessions = [], isLoading, error } = useSessions(deviceId ?? undefined);
+  const { data: sessionsResponse, isLoading, error } = useSessions(deviceId ?? undefined);
+  const sessions = sessionsResponse?.items ?? [];
   const startMutation = useStartSession();
   const stopMutation = useStopSession();
 

@@ -6,6 +6,11 @@ export type Device = {
   latestMeasurementAt: string | null;
 };
 
+export type ListResponse<T> = {
+  items: T[];
+  count: number;
+};
+
 export type Measurement = {
   id: string;
   deviceId: string;
@@ -87,6 +92,7 @@ export type CoverageBinsResponse = {
   binSizeDeg: number;
   day: string;
   items: CoverageBin[];
+  count: number;
 };
 
 export type GatewaySummary = {

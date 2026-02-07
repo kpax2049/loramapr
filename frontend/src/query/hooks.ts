@@ -25,7 +25,8 @@ import type {
   Device,
   DeviceLatest,
   GatewayStats,
-  GatewaySummary
+  GatewaySummary,
+  ListResponse
 } from '../api/types';
 
 type MeasurementKeyParams = {
@@ -116,7 +117,7 @@ function normalizeGatewayParams(
 }
 
 export function useDevices() {
-  return useQuery<Device[]>({
+  return useQuery<ListResponse<Device>>({
     queryKey: ['devices'],
     queryFn: ({ signal }) => listDevices({ signal })
   });
@@ -124,9 +125,10 @@ export function useDevices() {
 
 export function useDevice(deviceId?: string | null) {
   const devicesQuery = useDevices();
+  const items = devicesQuery.data?.items ?? [];
   const device = useMemo(
-    () => devicesQuery.data?.find((item) => item.id === deviceId) ?? null,
-    [devicesQuery.data, deviceId]
+    () => items.find((item) => item.id === deviceId) ?? null,
+    [items, deviceId]
   );
 
   return { ...devicesQuery, device };
@@ -205,13 +207,13 @@ export function useStats(params: MeasurementQueryParams, options?: QueryOptions<
 
 export function useGateways(
   params: GatewayQueryParams,
-  options?: QueryOptions<GatewaySummary[]>,
+  options?: QueryOptions<ListResponse<GatewaySummary>>,
   context?: { filterMode?: 'time' | 'session' }
 ) {
   const keyParams = normalizeGatewayParams(params, context);
   const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
 
-  return useQuery<GatewaySummary[]>({
+  return useQuery<ListResponse<GatewaySummary>>({
     queryKey: ['gateways', keyParams],
     queryFn: ({ signal }) => listGateways(params, { signal }),
     ...options,

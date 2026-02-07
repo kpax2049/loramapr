@@ -5,6 +5,7 @@ import type {
   CoverageBinsResponse,
   GatewayStats,
   GatewaySummary,
+  ListResponse,
   LorawanEvent,
   LorawanEventDetail,
   LorawanSummary,
@@ -41,7 +42,10 @@ export type MeasurementsResponse = {
 };
 
 export type TrackResponse = {
+  count: number;
   items: TrackPoint[];
+  totalBeforeSample: number;
+  returnedAfterSample: number;
 };
 
 export type SessionWindowParams = {
@@ -181,8 +185,8 @@ function buildGatewayQuery(params: GatewayQueryParams): string {
   return searchParams.toString();
 }
 
-export async function listDevices(options?: RequestOptions): Promise<Device[]> {
-  return getJson<Device[]>('/api/devices', options);
+export async function listDevices(options?: RequestOptions): Promise<ListResponse<Device>> {
+  return getJson<ListResponse<Device>>('/api/devices', options);
 }
 
 export async function getDeviceLatest(deviceId: string, options?: RequestOptions): Promise<DeviceLatest> {
@@ -207,7 +211,7 @@ function withQueryApiKey(options?: RequestOptions): RequestOptions | undefined {
 export async function listLorawanEvents(
   params: { deviceUid?: string; limit?: number },
   options?: RequestOptions
-): Promise<LorawanEvent[]> {
+): Promise<ListResponse<LorawanEvent>> {
   const searchParams = new URLSearchParams();
   if (params.deviceUid) {
     searchParams.set('deviceUid', params.deviceUid);
@@ -217,7 +221,7 @@ export async function listLorawanEvents(
   }
   const query = searchParams.toString();
   const path = query ? `/api/lorawan/events?${query}` : '/api/lorawan/events';
-  return getJson<LorawanEvent[]>(path, withQueryApiKey(options));
+  return getJson<ListResponse<LorawanEvent>>(path, withQueryApiKey(options));
 }
 
 export async function getLorawanEventById(
@@ -257,9 +261,12 @@ export async function reprocessLorawanBatch(
   });
 }
 
-export async function listSessions(deviceId: string, options?: RequestOptions): Promise<Session[]> {
+export async function listSessions(
+  deviceId: string,
+  options?: RequestOptions
+): Promise<ListResponse<Session>> {
   const params = new URLSearchParams({ deviceId });
-  return getJson<Session[]>(`/api/sessions?${params.toString()}`, options);
+  return getJson<ListResponse<Session>>(`/api/sessions?${params.toString()}`, options);
 }
 
 export async function startSession(input: { deviceId: string; name?: string }): Promise<Session> {
@@ -339,10 +346,10 @@ export async function getCoverageBins(
 export async function listGateways(
   params: GatewayQueryParams,
   options?: RequestOptions
-): Promise<GatewaySummary[]> {
+): Promise<ListResponse<GatewaySummary>> {
   const query = buildGatewayQuery(params);
   const path = query ? `/api/gateways?${query}` : '/api/gateways';
-  return getJson<GatewaySummary[]>(path, withQueryApiKey(options));
+  return getJson<ListResponse<GatewaySummary>>(path, withQueryApiKey(options));
 }
 
 export async function getGatewayStats(

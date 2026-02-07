@@ -34,12 +34,13 @@ export class GatewaysController {
       throw new BadRequestException('from must be before to');
     }
 
-    return this.gatewaysService.list({
+    const items = await this.gatewaysService.list({
       deviceId: deviceId ?? undefined,
       sessionId: sessionId ?? undefined,
       from,
       to
     });
+    return { items, count: items.length };
   }
 
   @Get(':gatewayId/stats')

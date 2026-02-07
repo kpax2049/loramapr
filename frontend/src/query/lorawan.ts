@@ -6,10 +6,10 @@ import {
   reprocessLorawanBatch,
   reprocessLorawanEvent
 } from '../api/endpoints';
-import type { LorawanEvent, LorawanEventDetail, LorawanSummary } from '../api/types';
+import type { ListResponse, LorawanEvent, LorawanEventDetail, LorawanSummary } from '../api/types';
 
 export function useLorawanEvents(deviceUid?: string, limit = 50, enabled = true) {
-  return useQuery<LorawanEvent[]>({
+  return useQuery<ListResponse<LorawanEvent>>({
     queryKey: ['lorawanEvents', deviceUid ?? 'all', limit],
     enabled,
     queryFn: ({ signal }) => listLorawanEvents({ deviceUid, limit }, { signal })

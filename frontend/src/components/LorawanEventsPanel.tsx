@@ -152,7 +152,8 @@ function pickBestGateway(payload: unknown): {
 }
 
 export default function LorawanEventsPanel({ deviceUid }: LorawanEventsPanelProps) {
-  const { data: events = [], isLoading, refetch, error } = useLorawanEvents(deviceUid, 50);
+  const { data: eventsResponse, isLoading, refetch, error } = useLorawanEvents(deviceUid, 50);
+  const events = eventsResponse?.items ?? [];
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { data: detail, isLoading: isDetailLoading, error: detailError } = useLorawanEvent(expandedId);
   const summaryQuery = useLorawanSummary();
