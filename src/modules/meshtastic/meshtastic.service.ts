@@ -1,0 +1,94 @@
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
+import { PrismaService } from '../../prisma/prisma.service';
+
+@Injectable()
+export class MeshtasticService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async ingestEvent(body: unknown): Promise<void> {
+    const deviceUid = getDeviceUid(body);
+    const eventId = getEventId(body);
+
+    try {
+      await this.prisma.webhookEvent.create({
+        data: {
+          source: 'meshtastic',
+          eventType: 'event',
+          deviceUid,
+          uplinkId: eventId,
+          payload: body as Prisma.InputJsonValue
+        }
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        return;
+      }
+      throw error;
+    }
+  }
+}
+
+function getDeviceUid(body: unknown): string {
+  if (body && typeof body === 'object') {
+    const record = body as Record<string, unknown>;
+    if (typeof record.from === 'string' && record.from.trim().length > 0) {
+      return record.from;
+    }
+    if (typeof record.nodeId === 'string' && record.nodeId.trim().length > 0) {
+      return record.nodeId;
+    }
+    if (typeof record.nodeId === 'number' && Number.isFinite(record.nodeId)) {
+      return String(record.nodeId);
+    }
+  }
+  return 'unknown';
+}
+
+function getEventId(body: unknown): string {
+  if (body && typeof body === 'object') {
+    const record = body as Record<string, unknown>;
+    const packetId = record.packetId;
+    if (typeof packetId === 'string' && packetId.trim().length > 0) {
+      return packetId;
+    }
+    if (typeof packetId === 'number' && Number.isFinite(packetId)) {
+      return String(packetId);
+    }
+    const packetIdSnake = record.packet_id;
+    if (typeof packetIdSnake === 'string' && packetIdSnake.trim().length > 0) {
+      return packetIdSnake;
+    }
+    if (typeof packetIdSnake === 'number' && Number.isFinite(packetIdSnake)) {
+      return String(packetIdSnake);
+    }
+    const id = record.id;
+    if (typeof id === 'string' && id.trim().length > 0) {
+      return id;
+    }
+    if (typeof id === 'number' && Number.isFinite(id)) {
+      return String(id);
+    }
+  }
+
+  const json = safeStringify(body);
+  return createHash('sha256').update(json).digest('hex');
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return 'unstringifiable';
+  }
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
