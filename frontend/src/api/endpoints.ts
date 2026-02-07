@@ -9,6 +9,7 @@ import type {
   LorawanEventDetail,
   LorawanSummary,
   Measurement,
+  SessionWindowResponse,
   SessionTimeline,
   Session,
   TrackPoint
@@ -41,6 +42,14 @@ export type MeasurementsResponse = {
 
 export type TrackResponse = {
   items: TrackPoint[];
+};
+
+export type SessionWindowParams = {
+  sessionId: string;
+  cursor: string | Date;
+  windowMs: number;
+  limit?: number;
+  sample?: number;
 };
 
 export type StatsResponse = {
@@ -273,6 +282,25 @@ export async function getSessionTimeline(
   options?: RequestOptions
 ): Promise<SessionTimeline> {
   return getJson<SessionTimeline>(`/api/sessions/${sessionId}/timeline`, options);
+}
+
+export async function getSessionWindow(
+  params: SessionWindowParams,
+  options?: RequestOptions
+): Promise<SessionWindowResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('cursor', toIso(params.cursor));
+  searchParams.set('windowMs', String(params.windowMs));
+  if (typeof params.limit === 'number') {
+    searchParams.set('limit', String(params.limit));
+  }
+  if (typeof params.sample === 'number') {
+    searchParams.set('sample', String(params.sample));
+  }
+
+  const query = searchParams.toString();
+  const path = `/api/sessions/${params.sessionId}/window${query ? `?${query}` : ''}`;
+  return getJson<SessionWindowResponse>(path, options);
 }
 
 export async function getMeasurements(

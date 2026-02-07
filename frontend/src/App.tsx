@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
-import { getMeasurements, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
+import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
 import type { Measurement } from './api/types';
 import Controls from './components/Controls';
 import GatewayStatsPanel from './components/GatewayStatsPanel';
@@ -18,7 +18,7 @@ import {
   useTrack
 } from './query/hooks';
 import { useLorawanEvents } from './query/lorawan';
-import { useSessionTimeline } from './query/sessions';
+import { useSessionTimeline, useSessionWindow } from './query/sessions';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -128,6 +128,22 @@ function computePresetRange(
   return { from, to };
 }
 
+function buildSessionWindowKey(params: {
+  sessionId: string;
+  cursor: Date | string;
+  windowMs: number;
+  sample?: number;
+  limit?: number;
+}) {
+  return {
+    sessionId: params.sessionId ?? null,
+    cursor: params.cursor instanceof Date ? params.cursor.toISOString() : params.cursor,
+    windowMs: params.windowMs,
+    sample: typeof params.sample === 'number' ? params.sample : null,
+    limit: typeof params.limit === 'number' ? params.limit : null
+  };
+}
+
 function readInitialQueryState(): InitialQueryState {
   if (typeof window === 'undefined') {
     return {
@@ -213,6 +229,8 @@ function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState<0.25 | 0.5 | 1 | 2 | 4>(
     initial.playbackSpeed
   );
+  const [playbackRefetchIntervalMs, setPlaybackRefetchIntervalMs] = useState(1500);
+  const playbackCacheMissesRef = useRef<number[]>([]);
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [showPoints, setShowPoints] = useState(initial.showPoints);
@@ -368,23 +386,6 @@ function App() {
     const parsed = new Date(playbackTimelineQuery.data.maxCapturedAt).getTime();
     return Number.isFinite(parsed) ? parsed : null;
   }, [playbackTimelineQuery.data?.maxCapturedAt]);
-  const playbackWindow = useMemo(() => {
-    if (!playbackSessionId) {
-      return null;
-    }
-    const windowEnd = playbackCursorMs;
-    const windowStart = playbackCursorMs - playbackWindowMs;
-    const clampedStart =
-      playbackMinMs !== null ? Math.max(windowStart, playbackMinMs) : windowStart;
-    const clampedEnd =
-      playbackMaxMs !== null ? Math.min(windowEnd, playbackMaxMs) : windowEnd;
-
-    return {
-      from: new Date(clampedStart),
-      to: new Date(clampedEnd)
-    };
-  }, [playbackSessionId, playbackCursorMs, playbackWindowMs, playbackMinMs, playbackMaxMs]);
-
   const isExploreMode = viewMode === 'explore';
   const exploreRange = useMemo(() => {
     if (!isExploreMode || filterMode !== 'time') {
@@ -409,6 +410,27 @@ function App() {
   const effectiveLimit = currentZoom <= LIMIT_ZOOM_THRESHOLD ? LOW_ZOOM_LIMIT : DEFAULT_LIMIT;
   const effectiveSample =
     currentZoom <= SAMPLE_ZOOM_LOW ? 800 : currentZoom <= SAMPLE_ZOOM_MEDIUM ? 1500 : undefined;
+  const playbackSampling = useMemo(() => {
+    let sample: number | undefined;
+    let limit: number;
+
+    if (currentZoom <= 12) {
+      sample = 600;
+      limit = 2000;
+    } else if (currentZoom <= 14) {
+      sample = 1200;
+      limit = 3000;
+    } else {
+      sample = undefined;
+      limit = 5000;
+    }
+
+    if (playbackWindowMs >= 30 * 60 * 1000) {
+      sample = typeof sample === 'number' ? Math.min(sample, 1000) : 1000;
+    }
+
+    return { sample, limit };
+  }, [currentZoom, playbackWindowMs]);
 
   const exploreMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
     if (isSessionMode) {
@@ -469,24 +491,15 @@ function App() {
     effectiveLimit
   ]);
 
-  const playbackMeasurementsParams = useMemo<MeasurementQueryParams>(
+  const playbackWindowParams = useMemo(
     () => ({
-      sessionId: playbackSessionId ?? undefined,
-      from: playbackWindow?.from,
-      to: playbackWindow?.to,
-      bbox: bboxPayload,
-      rxGatewayId: selectedGatewayId ?? undefined,
-      sample: effectiveSample,
-      limit: effectiveLimit
+      sessionId: playbackSessionId ?? '',
+      cursor: new Date(playbackCursorMs),
+      windowMs: playbackWindowMs,
+      sample: playbackSampling.sample,
+      limit: playbackSampling.limit
     }),
-    [
-      playbackSessionId,
-      playbackWindow,
-      bboxPayload,
-      selectedGatewayId,
-      effectiveSample,
-      effectiveLimit
-    ]
+    [playbackSessionId, playbackCursorMs, playbackWindowMs, playbackSampling]
   );
 
   const exploreEnabled = viewMode !== 'playback';
@@ -507,14 +520,11 @@ function App() {
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
-  const playbackMeasurementsQuery = useMeasurements(
-    playbackMeasurementsParams,
-    {
-      enabled: playbackEnabled,
-      placeholderData: keepPreviousData
-    },
-    { filterMode: 'session', refetchIntervalMs: false }
-  );
+  const playbackWindowQuery = useSessionWindow(playbackWindowParams, {
+    enabled: playbackEnabled,
+    placeholderData: keepPreviousData,
+    refetchInterval: playbackIsPlaying ? playbackRefetchIntervalMs : false
+  });
   const compareSample = compareGatewayId ? 800 : undefined;
   const compareMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
     if (isSessionMode) {
@@ -562,11 +572,11 @@ function App() {
     if (!isPlaybackMode) {
       return [];
     }
-    const items = playbackMeasurementsQuery.data?.items ?? [];
+    const items = playbackWindowQuery.data?.items ?? [];
     return [...items].sort(
       (a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime()
     );
-  }, [isPlaybackMode, playbackMeasurementsQuery.data?.items]);
+  }, [isPlaybackMode, playbackWindowQuery.data?.items]);
 
   const playbackTimedPoints = useMemo(
     () =>
@@ -603,10 +613,16 @@ function App() {
       return [playbackTimedPoints[0].lat, playbackTimedPoints[0].lon] as [number, number];
     }
 
+    const GAP_THRESHOLD_MS = 10_000;
+
     for (let i = 1; i < playbackTimedPoints.length; i += 1) {
       const prev = playbackTimedPoints[i - 1];
       const next = playbackTimedPoints[i];
       if (cursor <= next.time) {
+        const gap = next.time - prev.time;
+        if (gap > GAP_THRESHOLD_MS && cursor < next.time) {
+          return [prev.lat, prev.lon] as [number, number];
+        }
         if (next.time === prev.time) {
           return [next.lat, next.lon] as [number, number];
         }
@@ -629,20 +645,32 @@ function App() {
     ? []
     : compareMeasurementsQuery.data?.items ?? [];
   const activeMeasurementsQuery = isPlaybackMode
-    ? playbackMeasurementsQuery
+    ? playbackWindowQuery
     : exploreMeasurementsQuery;
   const activeTrackQuery = isPlaybackMode ? null : exploreTrackQuery;
   const effectiveMapLayerMode = isPlaybackMode ? 'points' : mapLayerMode;
   const playbackWindowSummary = useMemo(() => {
-    if (!isPlaybackMode || !playbackWindow) {
+    if (!isPlaybackMode || !playbackWindowQuery.data) {
       return null;
     }
+    const { from, to } = playbackWindowQuery.data;
     return {
-      from: playbackWindow.from,
-      to: playbackWindow.to,
-      count: playbackWindowPoints.length
+      from: new Date(from),
+      to: new Date(to),
+      count: playbackWindowQuery.data.items.length
     };
-  }, [isPlaybackMode, playbackWindow, playbackWindowPoints.length]);
+  }, [isPlaybackMode, playbackWindowQuery.data]);
+
+  const playbackSampleNote = useMemo(() => {
+    if (!isPlaybackMode || !playbackWindowQuery.data) {
+      return null;
+    }
+    const { totalBeforeSample, returnedAfterSample } = playbackWindowQuery.data;
+    if (totalBeforeSample > returnedAfterSample) {
+      return `Sampled ${returnedAfterSample} of ${totalBeforeSample} points`;
+    }
+    return null;
+  }, [isPlaybackMode, playbackWindowQuery.data]);
 
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -765,45 +793,37 @@ function App() {
     if (!isPlaybackMode || !hasPlaybackSession) {
       return;
     }
-    const center = playbackCursorMs + playbackWindowMs / 2;
-    const windowStart = center - playbackWindowMs;
-    const windowEnd = center;
-    const clampedStart =
-      playbackMinMs !== null ? Math.max(windowStart, playbackMinMs) : windowStart;
-    const clampedEnd =
-      playbackMaxMs !== null ? Math.min(windowEnd, playbackMaxMs) : windowEnd;
-
-    const prefetchParams: MeasurementQueryParams = {
-      sessionId: playbackSessionId ?? undefined,
-      from: new Date(clampedStart),
-      to: new Date(clampedEnd),
-      bbox: bboxPayload,
-      rxGatewayId: selectedGatewayId ?? undefined,
-      sample: effectiveSample,
-      limit: effectiveLimit
-    };
-    const normalizeTime = (value?: string | Date) =>
-      value ? (value instanceof Date ? value.toISOString() : value) : null;
-    const bboxKey = prefetchParams.bbox
-      ? `${prefetchParams.bbox.minLon},${prefetchParams.bbox.minLat},${prefetchParams.bbox.maxLon},${prefetchParams.bbox.maxLat}`
-      : 'none';
-    const key = {
-      deviceId: prefetchParams.deviceId ?? null,
-      sessionId: prefetchParams.sessionId ?? null,
-      from: normalizeTime(prefetchParams.from),
-      to: normalizeTime(prefetchParams.to),
-      bbox: bboxKey,
-      gatewayId: prefetchParams.gatewayId ?? null,
-      rxGatewayId: prefetchParams.rxGatewayId ?? null,
-      sample: typeof prefetchParams.sample === 'number' ? prefetchParams.sample : null,
-      limit: typeof prefetchParams.limit === 'number' ? prefetchParams.limit : null,
-      filterMode: 'session'
+    const clampCursor = (value: number) => {
+      if (playbackMinMs !== null && value < playbackMinMs) {
+        return playbackMinMs;
+      }
+      if (playbackMaxMs !== null && value > playbackMaxMs) {
+        return playbackMaxMs;
+      }
+      return value;
     };
 
-    queryClient.prefetchQuery({
-      queryKey: ['measurements', key],
-      queryFn: ({ signal }) => getMeasurements(prefetchParams, { signal })
-    });
+    const cursors = [
+      clampCursor(playbackCursorMs - playbackWindowMs),
+      clampCursor(playbackCursorMs),
+      clampCursor(playbackCursorMs + playbackWindowMs)
+    ];
+
+    const uniqueCursors = Array.from(new Set(cursors.filter((value) => Number.isFinite(value))));
+    for (const cursor of uniqueCursors) {
+      const prefetchParams = {
+        sessionId: playbackSessionId ?? '',
+        cursor: new Date(cursor),
+        windowMs: playbackWindowMs,
+        sample: playbackSampling.sample,
+        limit: playbackSampling.limit
+      };
+      const key = buildSessionWindowKey(prefetchParams);
+      queryClient.prefetchQuery({
+        queryKey: ['sessionWindow', key],
+        queryFn: ({ signal }) => getSessionWindow(prefetchParams, { signal })
+      });
+    }
   }, [
     isPlaybackMode,
     hasPlaybackSession,
@@ -812,11 +832,40 @@ function App() {
     playbackSessionId,
     playbackMinMs,
     playbackMaxMs,
-    bboxPayload,
-    selectedGatewayId,
-    effectiveSample,
-    effectiveLimit,
+    playbackSampling,
     queryClient
+  ]);
+
+  useEffect(() => {
+    if (!playbackIsPlaying || !playbackEnabled) {
+      playbackCacheMissesRef.current = [];
+      setPlaybackRefetchIntervalMs(1500);
+      return;
+    }
+
+    const key = buildSessionWindowKey(playbackWindowParams);
+    const hasCache = queryClient.getQueryData(['sessionWindow', key]) !== undefined;
+    const history = playbackCacheMissesRef.current;
+    history.push(hasCache ? 0 : 1);
+    if (history.length > 6) {
+      history.shift();
+    }
+    const misses = history.reduce((sum, value) => sum + value, 0);
+    const missRatio = history.length > 0 ? misses / history.length : 0;
+    const nextInterval = missRatio >= 0.5 ? 1000 : 1500;
+    if (nextInterval !== playbackRefetchIntervalMs) {
+      setPlaybackRefetchIntervalMs(nextInterval);
+    }
+  }, [
+    playbackIsPlaying,
+    playbackEnabled,
+    playbackCursorMs,
+    playbackWindowMs,
+    playbackSessionId,
+    playbackSampling,
+    queryClient,
+    playbackWindowParams,
+    playbackRefetchIntervalMs
   ]);
   const { device: selectedDevice } = useDevice(deviceId);
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
@@ -845,8 +894,28 @@ function App() {
     if (!selectedPointId) {
       return null;
     }
-    return activeMeasurements.find((item) => item.id === selectedPointId) ?? null;
-  }, [activeMeasurements, selectedPointId]);
+    if (isPlaybackMode) {
+      const point = playbackWindowPoints.find((item) => item.id === selectedPointId);
+      if (!point) {
+        return null;
+      }
+      return {
+        ...point,
+        deviceId: playbackTimelineQuery.data?.deviceId ?? deviceId ?? '',
+        sessionId: playbackSessionId ?? null,
+        alt: null
+      };
+    }
+    return (activeMeasurements as Measurement[]).find((item) => item.id === selectedPointId) ?? null;
+  }, [
+    activeMeasurements,
+    selectedPointId,
+    isPlaybackMode,
+    playbackWindowPoints,
+    playbackTimelineQuery.data?.deviceId,
+    deviceId,
+    playbackSessionId
+  ]);
 
   useEffect(() => {
     if (selectedPointId && !selectedMeasurement) {
@@ -1098,6 +1167,7 @@ function App() {
             windowFrom={playbackWindowSummary?.from ?? null}
             windowTo={playbackWindowSummary?.to ?? null}
             windowCount={playbackWindowSummary?.count ?? 0}
+            sampleNote={playbackSampleNote}
             playbackCursorMs={playbackCursorMs}
             onPlaybackCursorMsChange={handlePlaybackCursorMsChange}
             playbackWindowMs={playbackWindowMs}

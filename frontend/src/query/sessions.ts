@@ -2,12 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 import {
   getSessionTimeline,
+  getSessionWindow,
   listSessions,
   startSession,
   stopSession,
   updateSession
 } from '../api/endpoints';
-import type { Session, SessionTimeline } from '../api/types';
+import type { Session, SessionTimeline, SessionWindowResponse } from '../api/types';
+import type { SessionWindowParams } from '../api/endpoints';
 
 type QueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
 
@@ -33,6 +35,39 @@ export function useSessionTimeline(
     queryFn: ({ signal }) => getSessionTimeline(sessionId as string, { signal }),
     ...options,
     enabled: enabled && Boolean(sessionId)
+  });
+}
+
+type SessionWindowKeyParams = {
+  sessionId: string | null;
+  cursor: string | null;
+  windowMs: number | null;
+  limit: number | null;
+  sample: number | null;
+};
+
+function normalizeSessionWindowParams(params: SessionWindowParams): SessionWindowKeyParams {
+  return {
+    sessionId: params.sessionId ?? null,
+    cursor: params.cursor ? (params.cursor instanceof Date ? params.cursor.toISOString() : params.cursor) : null,
+    windowMs: Number.isFinite(params.windowMs) ? params.windowMs : null,
+    limit: typeof params.limit === 'number' ? params.limit : null,
+    sample: typeof params.sample === 'number' ? params.sample : null
+  };
+}
+
+export function useSessionWindow(
+  params: SessionWindowParams,
+  options?: QueryOptions<SessionWindowResponse>
+) {
+  const enabled = options?.enabled ?? Boolean(params?.sessionId);
+  const keyParams = normalizeSessionWindowParams(params);
+
+  return useQuery<SessionWindowResponse>({
+    queryKey: ['sessionWindow', keyParams],
+    queryFn: ({ signal }) => getSessionWindow(params, { signal }),
+    ...options,
+    enabled: enabled && Boolean(params?.sessionId)
   });
 }
 

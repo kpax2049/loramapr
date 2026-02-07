@@ -12,6 +12,7 @@ type PlaybackPanelProps = {
   windowFrom?: Date | null;
   windowTo?: Date | null;
   windowCount?: number;
+  sampleNote?: string | null;
   playbackCursorMs: number;
   onPlaybackCursorMsChange: (value: number) => void;
   playbackWindowMs: number;
@@ -35,6 +36,7 @@ export default function PlaybackPanel({
   windowFrom,
   windowTo,
   windowCount,
+  sampleNote,
   playbackCursorMs,
   onPlaybackCursorMsChange,
   playbackWindowMs,
@@ -162,6 +164,7 @@ export default function PlaybackPanel({
         ) : null}
         {noPoints ? <div className="playback-panel__status">No points in session</div> : null}
         {windowLabel ? <div className="playback-panel__window">{windowLabel}</div> : null}
+        {sampleNote ? <div className="playback-panel__status">{sampleNote}</div> : null}
       </div>
 
       <div className="playback-panel__controls">

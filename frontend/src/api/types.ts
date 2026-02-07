@@ -41,6 +41,29 @@ export type SessionTimeline = {
   count: number;
 };
 
+export type SessionWindowPoint = {
+  id: string;
+  capturedAt: string;
+  lat: number;
+  lon: number;
+  rssi: number | null;
+  snr: number | null;
+  sf: number | null;
+  bw: number | null;
+  freq: number | null;
+  gatewayId: string | null;
+};
+
+export type SessionWindowResponse = {
+  sessionId: string;
+  cursor: string;
+  from: string;
+  to: string;
+  totalBeforeSample: number;
+  returnedAfterSample: number;
+  items: SessionWindowPoint[];
+};
+
 export type TrackPoint = {
   capturedAt: string;
   lat: number;
