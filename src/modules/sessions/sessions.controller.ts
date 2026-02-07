@@ -70,6 +70,12 @@ export class SessionsController {
       sample
     });
   }
+
+  @Get(':id/overview')
+  async overview(@Param('id') id: string, @Query('sample') sampleRaw?: string) {
+    const sample = parseOverviewSample(sampleRaw);
+    return this.sessionsService.getOverview(id, sample);
+  }
 }
 
 function getSingleValue(value: string | string[] | undefined, name: string): string | undefined {
@@ -124,4 +130,15 @@ function parseSample(value: string | undefined): number | undefined {
     throw new BadRequestException('sample must be a positive integer');
   }
   return parsed;
+}
+
+function parseOverviewSample(value: string | undefined): number {
+  if (!value) {
+    return 1000;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('sample must be a positive integer');
+  }
+  return Math.min(parsed, 5000);
 }

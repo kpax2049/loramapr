@@ -155,6 +155,37 @@ export class SessionsService {
       }))
     };
   }
+
+  async getOverview(id: string, sample: number) {
+    const session = await this.prisma.session.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const items = await this.prisma.measurement.findMany({
+      where: { sessionId: id },
+      orderBy: { capturedAt: 'asc' },
+      select: {
+        capturedAt: true,
+        lat: true,
+        lon: true
+      }
+    });
+
+    const sampled = sampleItems(items, sample);
+
+    return {
+      sessionId: session.id,
+      items: sampled.map((item) => ({
+        capturedAt: item.capturedAt.toISOString(),
+        lat: item.lat,
+        lon: item.lon
+      }))
+    };
+  }
 }
 
 function sampleItems<T>(items: T[], sample: number): T[] {
