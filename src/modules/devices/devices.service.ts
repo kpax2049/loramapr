@@ -13,6 +13,7 @@ export type DeviceLatestStatus = {
   latestMeasurementAt: Date | null;
   latestWebhookReceivedAt: Date | null;
   latestWebhookError: string | null;
+  latestWebhookSource: string | null;
 };
 
 export type DeviceSummary = {
@@ -80,14 +81,15 @@ export class DevicesService {
       this.prisma.webhookEvent.findFirst({
         where: { deviceUid: device.deviceUid },
         orderBy: { receivedAt: 'desc' },
-        select: { receivedAt: true, processingError: true }
+        select: { receivedAt: true, processingError: true, source: true }
       })
     ]);
 
     return {
       latestMeasurementAt: latestMeasurement?.capturedAt ?? null,
       latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
-      latestWebhookError: latestWebhook?.processingError ?? null
+      latestWebhookError: latestWebhook?.processingError ?? null,
+      latestWebhookSource: normalizeWebhookSource(latestWebhook?.source)
     };
   }
 
@@ -103,4 +105,14 @@ export class DevicesService {
       }
     });
   }
+}
+
+function normalizeWebhookSource(source?: string | null): string | null {
+  if (!source) {
+    return null;
+  }
+  if (source === 'tts') {
+    return 'lorawan';
+  }
+  return source;
 }

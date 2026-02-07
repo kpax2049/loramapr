@@ -26,6 +26,7 @@ export class DevicesController {
     latestMeasurementAt: string | null;
     latestWebhookReceivedAt: string | null;
     latestWebhookError: string | null;
+    latestWebhookSource: string | null;
   }> {
     const ownerId = getOwnerIdFromRequest(request);
     const latest = await this.devicesService.getLatestStatus(id, ownerId);
@@ -56,6 +57,7 @@ function formatLatestResponse(latest: DeviceLatestStatus) {
     latestWebhookReceivedAt: latest.latestWebhookReceivedAt
       ? latest.latestWebhookReceivedAt.toISOString()
       : null,
-    latestWebhookError: latest.latestWebhookError ?? null
+    latestWebhookError: latest.latestWebhookError ?? null,
+    latestWebhookSource: latest.latestWebhookSource ?? null
   };
 }

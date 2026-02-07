@@ -6,6 +6,7 @@ import Controls from './components/Controls';
 import GatewayStatsPanel from './components/GatewayStatsPanel';
 import LorawanEventsPanel from './components/LorawanEventsPanel';
 import MapView, { type MapViewHandle } from './components/MapView';
+import MeshtasticEventsPanel from './components/MeshtasticEventsPanel';
 import PlaybackPanel from './components/PlaybackPanel';
 import PointDetails from './components/PointDetails';
 import StatsCard from './components/StatsCard';
@@ -976,7 +977,7 @@ function App() {
   const { device: selectedDevice } = useDevice(deviceId);
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
   const latestMeasurementAt =
-    latestDeviceQuery.data?.lastMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
+    latestDeviceQuery.data?.latestMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
   const selectedDeviceUid = selectedDevice?.deviceUid;
   const lorawanEventsQuery = useLorawanEvents(
     selectedDeviceUid,
@@ -1098,7 +1099,7 @@ function App() {
       return;
     }
 
-    const latestMeasurementAt = latestDeviceQuery.data?.lastMeasurementAt ?? null;
+    const latestMeasurementAt = latestDeviceQuery.data?.latestMeasurementAt ?? null;
     if (viewMode === 'playback') {
       prevLatestMeasurementAt.current = latestMeasurementAt;
       return;
@@ -1182,7 +1183,7 @@ function App() {
     prevLatestMeasurementAt.current = latestMeasurementAt;
   }, [
     deviceId,
-    latestDeviceQuery.data?.lastMeasurementAt,
+    latestDeviceQuery.data?.latestMeasurementAt,
     exploreMeasurementsParams,
     compareMeasurementsParams,
     exploreTrackParams,
@@ -1290,6 +1291,7 @@ function App() {
         )}
         <PointDetails measurement={selectedMeasurement} />
         <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
+        <MeshtasticEventsPanel deviceUid={selectedDevice?.deviceUid} />
         <GatewayStatsPanel
           gatewayId={selectedGatewayId}
           scope={gatewayScope}

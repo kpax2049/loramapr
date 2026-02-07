@@ -118,10 +118,10 @@ export type GatewayStats = {
 };
 
 export type DeviceLatest = {
-  deviceId: string;
-  lastMeasurementAt: string | null;
-  lastWebhookAt: string | null;
-  lastWebhookError: string | null;
+  latestMeasurementAt: string | null;
+  latestWebhookReceivedAt: string | null;
+  latestWebhookError: string | null;
+  latestWebhookSource: string | null;
 };
 
 export type LorawanEvent = {
@@ -134,6 +134,19 @@ export type LorawanEvent = {
 };
 
 export type LorawanEventDetail = LorawanEvent & {
+  payload: unknown;
+};
+
+export type MeshtasticEvent = {
+  id: string;
+  receivedAt: string;
+  processedAt: string | null;
+  deviceUid: string | null;
+  processingError: string | null;
+  uplinkId: string | null;
+};
+
+export type MeshtasticEventDetail = MeshtasticEvent & {
   payload: unknown;
 };
 

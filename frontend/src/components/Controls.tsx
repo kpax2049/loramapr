@@ -384,24 +384,40 @@ export default function Controls({
         </label>
       </div>
 
-      {(latest?.lastMeasurementAt || latest?.lastWebhookAt || latest?.lastWebhookError) && (
+      {(latest?.latestMeasurementAt ||
+        latest?.latestWebhookReceivedAt ||
+        latest?.latestWebhookError ||
+        latest?.latestWebhookSource) && (
         <div className="controls__status" aria-live="polite">
-          {latest?.lastMeasurementAt && (
+          {latest?.latestMeasurementAt && (
             <div className="controls__status-row">
               <span>Last measurement:</span>
-              <strong>{formatRelativeTime(latest.lastMeasurementAt)}</strong>
+              <strong>{formatRelativeTime(latest.latestMeasurementAt)}</strong>
             </div>
           )}
-          {(latest?.lastWebhookAt || latest?.lastWebhookError) && (
+          {(latest?.latestWebhookReceivedAt || latest?.latestWebhookError) && (
             <div
               className={`controls__status-row ${
-                latest?.lastWebhookError ? 'controls__status-error' : ''
+                latest?.latestWebhookError ? 'controls__status-error' : ''
               }`}
             >
               <span>Last webhook:</span>
               <strong>
-                {latest?.lastWebhookAt ? formatRelativeTime(latest.lastWebhookAt) : '—'}
-                {latest?.lastWebhookError ? ` (${latest.lastWebhookError})` : ''}
+                {latest?.latestWebhookReceivedAt
+                  ? formatRelativeTime(latest.latestWebhookReceivedAt)
+                  : '—'}
+                {latest?.latestWebhookError ? ` (${latest.latestWebhookError})` : ''}
+              </strong>
+            </div>
+          )}
+          {(latest?.latestWebhookSource || latest?.latestWebhookReceivedAt) && (
+            <div className="controls__status-row">
+              <span>Last ingest:</span>
+              <strong>
+                {latest?.latestWebhookSource ?? '—'} @{' '}
+                {latest?.latestWebhookReceivedAt
+                  ? formatRelativeTime(latest.latestWebhookReceivedAt)
+                  : '—'}
               </strong>
             </div>
           )}

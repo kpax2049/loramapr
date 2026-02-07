@@ -10,6 +10,8 @@ import type {
   LorawanEventDetail,
   LorawanSummary,
   Measurement,
+  MeshtasticEvent,
+  MeshtasticEventDetail,
   SessionWindowResponse,
   SessionTimeline,
   Session,
@@ -233,6 +235,29 @@ export async function getLorawanEventById(
 
 export async function getLorawanSummary(options?: RequestOptions): Promise<LorawanSummary> {
   return getJson<LorawanSummary>('/api/lorawan/summary', withQueryApiKey(options));
+}
+
+export async function listMeshtasticEvents(
+  params: { deviceUid?: string; limit?: number },
+  options?: RequestOptions
+): Promise<ListResponse<MeshtasticEvent>> {
+  const searchParams = new URLSearchParams();
+  if (params.deviceUid) {
+    searchParams.set('deviceUid', params.deviceUid);
+  }
+  if (typeof params.limit === 'number') {
+    searchParams.set('limit', String(params.limit));
+  }
+  const query = searchParams.toString();
+  const path = query ? `/api/meshtastic/events?${query}` : '/api/meshtastic/events';
+  return getJson<ListResponse<MeshtasticEvent>>(path, withQueryApiKey(options));
+}
+
+export async function getMeshtasticEventById(
+  id: string,
+  options?: RequestOptions
+): Promise<MeshtasticEventDetail> {
+  return getJson<MeshtasticEventDetail>(`/api/meshtastic/events/${id}`, withQueryApiKey(options));
 }
 
 export async function reprocessLorawanEvent(
