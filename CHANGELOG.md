@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.1 - 2026-02-07
+
+### Highlights
+- Playback performance polish: responsive UI on large sessions with adaptive sampling.
+- Sampling visibility: “Sampled X of Y points” surfaced in playback.
+- Overview track behind the window track; click-to-jump cursor on the overview.
+- Keyboard shortcuts for playback (space, arrows, shift+arrows, home/end).
+- Empty-window behavior stabilized (last-good items retained; no flicker/clearing).
+
+### Notes
+- No breaking changes.
+
 ## v0.8.0 - 2026-02-06
 
 ### Highlights
