@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import type { Session, SessionTimeline } from '../api/types';
+import { useEffect, useMemo, useRef } from 'react';
+import type { Session, SessionTimeline, SessionWindowPoint } from '../api/types';
 import { useSessions } from '../query/sessions';
 
 type PlaybackPanelProps = {
@@ -12,7 +12,9 @@ type PlaybackPanelProps = {
   windowFrom?: Date | null;
   windowTo?: Date | null;
   windowCount?: number;
+  windowItems?: SessionWindowPoint[];
   sampleNote?: string | null;
+  emptyNote?: string | null;
   playbackCursorMs: number;
   onPlaybackCursorMsChange: (value: number) => void;
   playbackWindowMs: number;
@@ -36,7 +38,9 @@ export default function PlaybackPanel({
   windowFrom,
   windowTo,
   windowCount,
+  windowItems,
   sampleNote,
+  emptyNote,
   playbackCursorMs,
   onPlaybackCursorMsChange,
   playbackWindowMs,
@@ -48,6 +52,7 @@ export default function PlaybackPanel({
 }: PlaybackPanelProps) {
   const sessionsQuery = useSessions(deviceId ?? undefined, { enabled: Boolean(deviceId) });
   const sessions = sessionsQuery.data ?? [];
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const minMs = useMemo(() => {
     if (!timeline?.minCapturedAt) {
@@ -110,6 +115,123 @@ export default function PlaybackPanel({
   const speedDisabled = !sessionId;
   const windowDisabled = !sessionId;
 
+  const windowChartData = useMemo(() => {
+    if (!windowFrom || !windowTo || !windowItems || windowItems.length === 0) {
+      return null;
+    }
+    const startMs = windowFrom.getTime();
+    const endMs = windowTo.getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      return null;
+    }
+
+    const hasRssi = windowItems.some((item) => typeof item.rssi === 'number');
+    const points = windowItems
+      .map((item) => {
+        const timeMs = new Date(item.capturedAt).getTime();
+        if (!Number.isFinite(timeMs)) {
+          return null;
+        }
+        const value = hasRssi ? item.rssi : item.snr;
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          return null;
+        }
+        return { timeMs, value };
+      })
+      .filter((point): point is { timeMs: number; value: number } => point !== null)
+      .sort((a, b) => a.timeMs - b.timeMs);
+
+    if (points.length === 0) {
+      return null;
+    }
+
+    let minValue = points[0].value;
+    let maxValue = points[0].value;
+    for (const point of points) {
+      if (point.value < minValue) {
+        minValue = point.value;
+      }
+      if (point.value > maxValue) {
+        maxValue = point.value;
+      }
+    }
+    if (minValue === maxValue) {
+      minValue -= 1;
+      maxValue += 1;
+    }
+
+    return {
+      startMs,
+      endMs,
+      points,
+      minValue,
+      maxValue
+    };
+  }, [windowFrom, windowTo, windowItems]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !windowChartData) {
+      return;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, rect.width, rect.height);
+
+    const stroke = getComputedStyle(canvas).color || '#000';
+    context.strokeStyle = stroke;
+    context.lineWidth = 1.5;
+
+    const padding = 8;
+    const width = rect.width - padding * 2;
+    const height = rect.height - padding * 2;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+
+    const range = windowChartData.maxValue - windowChartData.minValue;
+    const duration = windowChartData.endMs - windowChartData.startMs;
+    if (range <= 0 || duration <= 0) {
+      return;
+    }
+
+    context.beginPath();
+    windowChartData.points.forEach((point, index) => {
+      const x = padding + ((point.timeMs - windowChartData.startMs) / duration) * width;
+      const y =
+        padding + (1 - (point.value - windowChartData.minValue) / range) * height;
+      if (index === 0) {
+        context.moveTo(x, y);
+      } else {
+        context.lineTo(x, y);
+      }
+    });
+    context.stroke();
+
+    const cursorX =
+      padding + ((playbackCursorMs - windowChartData.startMs) / duration) * width;
+    if (Number.isFinite(cursorX)) {
+      context.save();
+      context.globalAlpha = 0.6;
+      context.beginPath();
+      context.moveTo(cursorX, padding);
+      context.lineTo(cursorX, padding + height);
+      context.stroke();
+      context.restore();
+    }
+  }, [windowChartData, playbackCursorMs]);
+
   return (
     <section className="playback-panel" aria-label="Playback controls">
       <div className="playback-panel__header">
@@ -165,6 +287,32 @@ export default function PlaybackPanel({
         {noPoints ? <div className="playback-panel__status">No points in session</div> : null}
         {windowLabel ? <div className="playback-panel__window">{windowLabel}</div> : null}
         {sampleNote ? <div className="playback-panel__status">{sampleNote}</div> : null}
+        {emptyNote ? <div className="playback-panel__status">{emptyNote}</div> : null}
+      </div>
+      <div className="playback-panel__chart">
+        <canvas
+          ref={canvasRef}
+          className="playback-panel__canvas"
+          role="presentation"
+          onClick={(event) => {
+            if (!windowChartData) {
+              return;
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            const padding = 8;
+            const width = rect.width - padding * 2;
+            if (width <= 0) {
+              return;
+            }
+            const x = event.clientX - rect.left;
+            const clamped = Math.min(Math.max(x - padding, 0), width);
+            const fraction = width > 0 ? clamped / width : 0;
+            const next =
+              windowChartData.startMs +
+              fraction * (windowChartData.endMs - windowChartData.startMs);
+            onPlaybackCursorMsChange(next);
+          }}
+        />
       </div>
 
       <div className="playback-panel__controls">

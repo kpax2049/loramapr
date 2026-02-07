@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
-import type { Measurement } from './api/types';
+import type { Measurement, SessionWindowPoint } from './api/types';
 import Controls from './components/Controls';
 import GatewayStatsPanel from './components/GatewayStatsPanel';
 import LorawanEventsPanel from './components/LorawanEventsPanel';
@@ -144,6 +144,17 @@ function buildSessionWindowKey(params: {
   };
 }
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof Element)) {
+    return false;
+  }
+  const tag = target.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    return true;
+  }
+  return target.hasAttribute('contenteditable');
+}
+
 function readInitialQueryState(): InitialQueryState {
   if (typeof window === 'undefined') {
     return {
@@ -231,6 +242,7 @@ function App() {
   );
   const [playbackRefetchIntervalMs, setPlaybackRefetchIntervalMs] = useState(1500);
   const playbackCacheMissesRef = useRef<number[]>([]);
+  const [playbackLastGoodItems, setPlaybackLastGoodItems] = useState<SessionWindowPoint[]>([]);
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [showPoints, setShowPoints] = useState(initial.showPoints);
@@ -331,14 +343,14 @@ function App() {
     setExploreRangePreset(preset);
   };
 
-  const handlePlaybackCursorMsChange = (value: number) => {
+  const handlePlaybackCursorMsChange = useCallback((value: number) => {
     setPlaybackCursorMs(value);
     if (playbackIsPlaying) {
       playbackStartRef.current = Date.now();
       playbackStartCursorRef.current = value;
       playbackStepRef.current = 0;
     }
-  };
+  }, [playbackIsPlaying]);
 
   const handleUseAdvancedRangeChange = (value: boolean) => {
     setUseAdvancedRange(value);
@@ -501,6 +513,14 @@ function App() {
     }),
     [playbackSessionId, playbackCursorMs, playbackWindowMs, playbackSampling]
   );
+  const playbackOverviewTrackParams = useMemo<MeasurementQueryParams>(
+    () => ({
+      sessionId: playbackSessionId ?? undefined,
+      sample: playbackSampling.sample,
+      limit: playbackSampling.limit
+    }),
+    [playbackSessionId, playbackSampling]
+  );
 
   const exploreEnabled = viewMode !== 'playback';
   const playbackEnabled = isPlaybackMode && hasPlaybackSession;
@@ -525,6 +545,11 @@ function App() {
     placeholderData: keepPreviousData,
     refetchInterval: playbackIsPlaying ? playbackRefetchIntervalMs : false
   });
+  const playbackOverviewTrackQuery = useTrack(
+    playbackOverviewTrackParams,
+    { enabled: playbackEnabled },
+    { filterMode: 'session', refetchIntervalMs: false }
+  );
   const compareSample = compareGatewayId ? 800 : undefined;
   const compareMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
     if (isSessionMode) {
@@ -568,15 +593,32 @@ function App() {
     { filterMode, refetchIntervalMs: sessionPolling }
   );
 
+  const playbackWindowItems = useMemo(() => {
+    const items = playbackWindowQuery.data?.items ?? [];
+    if (items.length > 0) {
+      return items;
+    }
+    return playbackLastGoodItems;
+  }, [playbackWindowQuery.data?.items, playbackLastGoodItems]);
+  const playbackWindowEmpty =
+    playbackWindowQuery.data !== undefined && playbackWindowQuery.data.items.length === 0;
+
+  useEffect(() => {
+    const items = playbackWindowQuery.data?.items ?? [];
+    if (items.length > 0) {
+      setPlaybackLastGoodItems(items);
+    }
+  }, [playbackWindowQuery.data?.items]);
+
   const playbackWindowPoints = useMemo(() => {
     if (!isPlaybackMode) {
       return [];
     }
-    const items = playbackWindowQuery.data?.items ?? [];
+    const items = playbackWindowItems;
     return [...items].sort(
       (a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime()
     );
-  }, [isPlaybackMode, playbackWindowQuery.data?.items]);
+  }, [isPlaybackMode, playbackWindowItems]);
 
   const playbackTimedPoints = useMemo(
     () =>
@@ -598,6 +640,10 @@ function App() {
         capturedAt: point.capturedAt
       })),
     [playbackWindowPoints]
+  );
+  const playbackOverviewTrack = useMemo(
+    () => playbackOverviewTrackQuery.data?.items ?? [],
+    [playbackOverviewTrackQuery.data?.items]
   );
 
   const playbackCursorPosition = useMemo(() => {
@@ -657,9 +703,9 @@ function App() {
     return {
       from: new Date(from),
       to: new Date(to),
-      count: playbackWindowQuery.data.items.length
+      count: playbackWindowItems.length
     };
-  }, [isPlaybackMode, playbackWindowQuery.data]);
+  }, [isPlaybackMode, playbackWindowQuery.data, playbackWindowItems.length]);
 
   const playbackSampleNote = useMemo(() => {
     if (!isPlaybackMode || !playbackWindowQuery.data) {
@@ -671,6 +717,7 @@ function App() {
     }
     return null;
   }, [isPlaybackMode, playbackWindowQuery.data]);
+  const playbackEmptyNote = playbackWindowEmpty ? 'No points in this window' : null;
 
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -739,6 +786,65 @@ function App() {
   useEffect(() => {
     setPlaybackIsPlaying(false);
   }, [playbackSessionId]);
+
+  useEffect(() => {
+    setPlaybackLastGoodItems([]);
+  }, [playbackSessionId]);
+
+  useEffect(() => {
+    if (!isPlaybackMode || !hasPlaybackSession) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key;
+      if (key === ' ') {
+        event.preventDefault();
+        setPlaybackIsPlaying((prev) => !prev);
+        return;
+      }
+
+      const stepSeconds = event.shiftKey ? 10 : 1;
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        event.preventDefault();
+        const direction = key === 'ArrowRight' ? 1 : -1;
+        const delta = stepSeconds * 1000 * playbackSpeed * direction;
+        let next = playbackCursorRef.current + delta;
+        if (playbackMinMs !== null) {
+          next = Math.max(next, playbackMinMs);
+        }
+        if (playbackMaxMs !== null) {
+          next = Math.min(next, playbackMaxMs);
+        }
+        handlePlaybackCursorMsChange(next);
+        return;
+      }
+
+      if (key === 'Home' && playbackMinMs !== null) {
+        event.preventDefault();
+        handlePlaybackCursorMsChange(playbackMinMs);
+        return;
+      }
+      if (key === 'End' && playbackMaxMs !== null) {
+        event.preventDefault();
+        handlePlaybackCursorMsChange(playbackMaxMs);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isPlaybackMode,
+    hasPlaybackSession,
+    playbackSpeed,
+    playbackMinMs,
+    playbackMaxMs,
+    handlePlaybackCursorMsChange
+  ]);
 
   useEffect(() => {
     if (!isPlaybackMode || !hasPlaybackSession || !playbackIsPlaying) {
@@ -1119,6 +1225,7 @@ function App() {
         measurements={activeMeasurements}
         compareMeasurements={activeCompareMeasurements}
         track={activeTrack}
+        overviewTrack={isPlaybackMode ? playbackOverviewTrack : []}
         coverageBins={coverageQuery.data?.items ?? []}
         coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
         showPoints={showPoints}
@@ -1126,6 +1233,7 @@ function App() {
         playbackCursorPosition={playbackCursorPosition}
         onBoundsChange={setBbox}
         onSelectPoint={setSelectedPointId}
+        onOverviewSelectTime={isPlaybackMode ? handlePlaybackCursorMsChange : undefined}
         onZoomChange={setCurrentZoom}
         selectedPointId={selectedPointId}
         onUserInteraction={() => setUserInteractedWithMap(true)}
@@ -1167,7 +1275,9 @@ function App() {
             windowFrom={playbackWindowSummary?.from ?? null}
             windowTo={playbackWindowSummary?.to ?? null}
             windowCount={playbackWindowSummary?.count ?? 0}
+            windowItems={playbackWindowItems}
             sampleNote={playbackSampleNote}
+            emptyNote={playbackEmptyNote}
             playbackCursorMs={playbackCursorMs}
             onPlaybackCursorMsChange={handlePlaybackCursorMsChange}
             playbackWindowMs={playbackWindowMs}

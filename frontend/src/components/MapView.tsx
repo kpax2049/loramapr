@@ -30,6 +30,7 @@ type MapViewProps = {
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
   track?: TrackPoint[];
+  overviewTrack?: TrackPoint[];
   coverageBins?: CoverageBin[];
   coverageBinSize?: number | null;
   showPoints?: boolean;
@@ -40,6 +41,7 @@ type MapViewProps = {
   selectedPointId?: string | null;
   onSelectPoint?: (id: string) => void;
   onUserInteraction?: () => void;
+  onOverviewSelectTime?: (timeMs: number) => void;
 };
 
 type MapPoint = {
@@ -219,6 +221,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   measurements = [],
   compareMeasurements = [],
   track = [],
+  overviewTrack = [],
   coverageBins = [],
   coverageBinSize = 0.001,
   showPoints = true,
@@ -228,7 +231,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   onZoomChange,
   selectedPointId = null,
   onSelectPoint,
-  onUserInteraction
+  onUserInteraction,
+  onOverviewSelectTime
 },
 ref
 ) {
@@ -270,6 +274,44 @@ ref
 
     return positions;
   }, [track, currentZoom, showTrack]);
+
+  const overviewTrackPoints = useMemo(
+    () =>
+      overviewTrack
+        .map((point) => ({
+          lat: point.lat,
+          lon: point.lon,
+          timeMs: new Date(point.capturedAt).getTime()
+        }))
+        .filter((point) => Number.isFinite(point.timeMs)),
+    [overviewTrack]
+  );
+
+  const overviewTrackPositions = useMemo(() => {
+    if (!showTrack || overviewTrack.length === 0) {
+      return [];
+    }
+    if (overviewTrack.length <= 2) {
+      return overviewTrack.map((point) => [point.lat, point.lon] as [number, number]);
+    }
+
+    const tolerance = zoomToTolerance(currentZoom);
+    const points = overviewTrack.map((point) => ({ x: point.lon, y: point.lat }));
+    const simplified = simplify(points, tolerance, true);
+    const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
+
+    const first = [overviewTrack[0].lat, overviewTrack[0].lon] as [number, number];
+    const last = [
+      overviewTrack[overviewTrack.length - 1].lat,
+      overviewTrack[overviewTrack.length - 1].lon
+    ] as [number, number];
+    if (positions.length > 0) {
+      positions[0] = first;
+      positions[positions.length - 1] = last;
+    }
+
+    return positions;
+  }, [overviewTrack, currentZoom, showTrack]);
 
   useEffect(() => {
     if (onZoomChange) {
@@ -330,10 +372,41 @@ ref
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      {showTrack && overviewTrackPositions.length > 0 && (
+        <Polyline
+          positions={overviewTrackPositions}
+          pathOptions={{ className: 'map-track map-track--overview' }}
+          eventHandlers={
+            onOverviewSelectTime && overviewTrackPoints.length > 0
+              ? {
+                  click: (event) => {
+                    const { lat, lng } = event.latlng;
+                    let nearestTime: number | null = null;
+                    let nearestDistance = Number.POSITIVE_INFINITY;
+
+                    for (const point of overviewTrackPoints) {
+                      const dLat = point.lat - lat;
+                      const dLon = point.lon - lng;
+                      const distance = dLat * dLat + dLon * dLon;
+                      if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestTime = point.timeMs;
+                      }
+                    }
+
+                    if (nearestTime !== null) {
+                      onOverviewSelectTime(nearestTime);
+                    }
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
       {showTrack && trackPositions.length > 0 && (
         <Polyline
           positions={trackPositions}
-          pathOptions={{ color: '#0f172a', weight: 3, opacity: 0.7 }}
+          pathOptions={{ className: 'map-track map-track--window' }}
         />
       )}
       {mapLayerMode === 'coverage' &&
