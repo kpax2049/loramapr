@@ -82,6 +82,22 @@ npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --b
 2) Open the frontend dev server in your browser.
 3) Select the device in the dropdown to see points and track.
 
+### Meshtastic ingest (MVP)
+
+Post Meshtastic JSON payloads to:
+```bash
+POST /api/meshtastic/event
+```
+Use an `X-API-Key` with `INGEST` scope. Meshtastic events create webhook events, and if GPS data is present, measurements will appear in the map.
+
+### Debug panels (QUERY key)
+
+The LoRaWAN and Meshtastic debug panels require `VITE_QUERY_API_KEY` (QUERY scope) in `frontend/.env`.
+
+### Playback
+
+Session playback mode supports scrubber, keyboard shortcuts, and time-window slicing for deterministic replay.
+
 ## Docker dev workflow (backend)
 
 Use the Quickstart above for the recommended flow.
