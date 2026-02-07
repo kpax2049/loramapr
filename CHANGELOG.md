@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.5 - 2026-02-07
+
+### Highlights
+- Meshtastic ingest endpoint (POST /api/meshtastic/event) creating webhook events.
+- Meshtastic processing pipeline and debug endpoints for listing and detail lookup.
+- Frontend Meshtastic events panel with status/errors and GPS field detection.
+- Device latest status now surfaces last ingest source (lorawan/meshtastic).
+
+### Notes
+- Meshtastic debug endpoints require an X-API-Key with QUERY scope.
+
 ## v0.8.1 - 2026-02-07
 
 ### Highlights
