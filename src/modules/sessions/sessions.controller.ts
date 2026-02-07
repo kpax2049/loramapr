@@ -12,6 +12,7 @@ type SessionWindowQuery = {
   cursor?: string | string[];
   windowMs?: string | string[];
   limit?: string | string[];
+  sample?: string | string[];
 };
 
 const DEFAULT_WINDOW_LIMIT = 2000;
@@ -59,12 +60,14 @@ export class SessionsController {
     const windowMs = parseWindowMs(getSingleValue(query.windowMs, 'windowMs'));
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
     const limit = Math.min(requestedLimit, MAX_WINDOW_LIMIT);
+    const sample = parseSample(getSingleValue(query.sample, 'sample'));
 
     return this.sessionsService.getWindow({
       sessionId: id,
       cursor,
       windowMs,
-      limit
+      limit,
+      sample
     });
   }
 }
@@ -108,6 +111,17 @@ function parseLimit(value: string | undefined): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new BadRequestException('limit must be a positive integer');
+  }
+  return parsed;
+}
+
+function parseSample(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('sample must be a positive integer');
   }
   return parsed;
 }

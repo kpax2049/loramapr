@@ -104,7 +104,13 @@ export class SessionsService {
     };
   }
 
-  async getWindow(params: { sessionId: string; cursor: Date; windowMs: number; limit: number }) {
+  async getWindow(params: {
+    sessionId: string;
+    cursor: Date;
+    windowMs: number;
+    limit: number;
+    sample?: number;
+  }) {
     const halfWindow = params.windowMs / 2;
     const from = new Date(params.cursor.getTime() - halfWindow);
     const to = new Date(params.cursor.getTime() + halfWindow);
@@ -133,17 +139,41 @@ export class SessionsService {
       }
     });
 
+    const totalBeforeSample = items.length;
+    const sampled = params.sample ? sampleItems(items, params.sample) : items;
+
     return {
       sessionId: params.sessionId,
       cursor: params.cursor.toISOString(),
       from: from.toISOString(),
       to: to.toISOString(),
-      items: items.map((item) => ({
+      totalBeforeSample,
+      returnedAfterSample: sampled.length,
+      items: sampled.map((item) => ({
         ...item,
         capturedAt: item.capturedAt.toISOString()
       }))
     };
   }
+}
+
+function sampleItems<T>(items: T[], sample: number): T[] {
+  if (sample <= 0 || items.length === 0) {
+    return [];
+  }
+  if (sample >= items.length) {
+    return items;
+  }
+  if (sample === 1) {
+    return [items[0]];
+  }
+  const lastIndex = items.length - 1;
+  const result: T[] = [];
+  for (let i = 0; i < sample; i += 1) {
+    const index = Math.floor((i * lastIndex) / (sample - 1));
+    result.push(items[index]);
+  }
+  return result;
 }
 
 function isNotFoundError(error: unknown): boolean {
