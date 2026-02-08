@@ -249,6 +249,9 @@ function App() {
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [receiverSource, setReceiverSource] = useState<'lorawan' | 'meshtastic'>('lorawan');
+  const [receiverSourceOverridden, setReceiverSourceOverridden] = useState(false);
+  const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
   const [selectedGatewayId, setSelectedGatewayId] = useState<string | null>(null);
   const [compareGatewayId, setCompareGatewayId] = useState<string | null>(null);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
@@ -340,6 +343,14 @@ function App() {
     }
   };
 
+  const handleReceiverSourceChange = (source: 'lorawan' | 'meshtastic') => {
+    setReceiverSource(source);
+    setReceiverSourceOverridden(true);
+    setSelectedReceiverId(null);
+    setSelectedGatewayId(null);
+    setCompareGatewayId(null);
+  };
+
   const handleExploreRangePresetChange = (preset: ExploreRangePreset) => {
     setExploreRangePreset(preset);
   };
@@ -381,6 +392,7 @@ function App() {
   const isSessionMode = filterMode === 'session' && Boolean(selectedSessionId);
   const isPlaybackMode = viewMode === 'playback';
   const hasPlaybackSession = Boolean(playbackSessionId);
+  const isMeshtasticSource = receiverSource === 'meshtastic';
 
   const playbackTimelineQuery = useSessionTimeline(playbackSessionId ?? undefined, {
     enabled: Boolean(playbackSessionId)
@@ -446,11 +458,14 @@ function App() {
   }, [currentZoom, playbackWindowMs]);
 
   const exploreMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
+    const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
+    const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
         bbox: bboxPayload,
-        rxGatewayId: selectedGatewayId ?? undefined,
+        receiverId,
+        rxGatewayId,
         sample: effectiveSample,
         limit: effectiveLimit
       };
@@ -460,7 +475,8 @@ function App() {
       from: exploreRange.from,
       to: exploreRange.to,
       bbox: bboxPayload,
-      rxGatewayId: selectedGatewayId ?? undefined,
+      receiverId,
+      rxGatewayId,
       sample: effectiveSample,
       limit: effectiveLimit
     };
@@ -472,15 +488,20 @@ function App() {
     exploreRange.from,
     exploreRange.to,
     selectedGatewayId,
+    selectedReceiverId,
+    isMeshtasticSource,
     effectiveSample,
     effectiveLimit
   ]);
 
   const exploreTrackParams = useMemo<MeasurementQueryParams>(() => {
+    const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
+    const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
-        rxGatewayId: selectedGatewayId ?? undefined,
+        receiverId,
+        rxGatewayId,
         sample: effectiveSample,
         limit: effectiveLimit
       };
@@ -489,7 +510,8 @@ function App() {
       deviceId: deviceId ?? undefined,
       from: exploreRange.from,
       to: exploreRange.to,
-      rxGatewayId: selectedGatewayId ?? undefined,
+      receiverId,
+      rxGatewayId,
       sample: effectiveSample,
       limit: effectiveLimit
     };
@@ -500,6 +522,8 @@ function App() {
     exploreRange.from,
     exploreRange.to,
     selectedGatewayId,
+    selectedReceiverId,
+    isMeshtasticSource,
     effectiveSample,
     effectiveLimit
   ]);
@@ -551,13 +575,14 @@ function App() {
     { enabled: playbackEnabled },
     { filterMode: 'session', refetchIntervalMs: false }
   );
-  const compareSample = compareGatewayId ? 800 : undefined;
+  const compareSample = receiverSource === 'lorawan' && compareGatewayId ? 800 : undefined;
   const compareMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
+    const rxGatewayId = receiverSource === 'lorawan' ? compareGatewayId ?? undefined : undefined;
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
         bbox: bboxPayload,
-        rxGatewayId: compareGatewayId ?? undefined,
+        rxGatewayId,
         sample: compareSample,
         limit: effectiveLimit
       };
@@ -567,7 +592,7 @@ function App() {
       from: exploreRange.from,
       to: exploreRange.to,
       bbox: bboxPayload,
-      rxGatewayId: compareGatewayId ?? undefined,
+      rxGatewayId,
       sample: compareSample,
       limit: effectiveLimit
     };
@@ -576,6 +601,7 @@ function App() {
     selectedSessionId,
     bboxPayload,
     compareGatewayId,
+    receiverSource,
     compareSample,
     effectiveLimit,
     deviceId,
@@ -587,6 +613,7 @@ function App() {
     {
       enabled:
         exploreEnabled &&
+        receiverSource === 'lorawan' &&
         mapLayerMode === 'points' &&
         Boolean(compareGatewayId) &&
         (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
@@ -688,9 +715,10 @@ function App() {
     ? playbackWindowPoints
     : exploreMeasurementsQuery.data?.items ?? [];
   const activeTrack = isPlaybackMode ? playbackTrackPoints : exploreTrackQuery.data?.items ?? [];
-  const activeCompareMeasurements = isPlaybackMode
-    ? []
-    : compareMeasurementsQuery.data?.items ?? [];
+  const activeCompareMeasurements =
+    isPlaybackMode || receiverSource !== 'lorawan'
+      ? []
+      : compareMeasurementsQuery.data?.items ?? [];
   const activeMeasurementsQuery = isPlaybackMode
     ? playbackWindowQuery
     : exploreMeasurementsQuery;
@@ -736,21 +764,21 @@ function App() {
   const statsQuery = useStats(statsParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
-  const coverageParams = useMemo<CoverageQueryParams>(
-    () =>
-      isSessionMode
-        ? {
-            sessionId: selectedSessionId ?? undefined,
-            bbox: debouncedBbox ?? undefined,
-            gatewayId: selectedGatewayId ?? undefined
-          }
-        : {
-            deviceId: deviceId ?? undefined,
-            bbox: debouncedBbox ?? undefined,
-            gatewayId: selectedGatewayId ?? undefined
-          },
-    [isSessionMode, selectedSessionId, debouncedBbox, deviceId, selectedGatewayId]
-  );
+  const coverageParams = useMemo<CoverageQueryParams>(() => {
+    const gatewayId = receiverSource === 'lorawan' ? selectedGatewayId ?? undefined : undefined;
+    if (isSessionMode) {
+      return {
+        sessionId: selectedSessionId ?? undefined,
+        bbox: debouncedBbox ?? undefined,
+        gatewayId
+      };
+    }
+    return {
+      deviceId: deviceId ?? undefined,
+      bbox: debouncedBbox ?? undefined,
+      gatewayId
+    };
+  }, [isSessionMode, selectedSessionId, debouncedBbox, deviceId, selectedGatewayId, receiverSource]);
   const coverageQuery = useCoverageBins(
     coverageParams,
     {
@@ -979,6 +1007,22 @@ function App() {
   const latestMeasurementAt =
     latestDeviceQuery.data?.latestMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
   const selectedDeviceUid = selectedDevice?.deviceUid;
+
+  useEffect(() => {
+    setReceiverSourceOverridden(false);
+    setReceiverSource('lorawan');
+    setSelectedReceiverId(null);
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (receiverSourceOverridden) {
+      return;
+    }
+    const source = latestDeviceQuery.data?.latestWebhookSource;
+    if (source === 'lorawan' || source === 'meshtastic') {
+      setReceiverSource(source);
+    }
+  }, [latestDeviceQuery.data?.latestWebhookSource, receiverSourceOverridden]);
   const lorawanEventsQuery = useLorawanEvents(
     selectedDeviceUid,
     1,
@@ -1042,7 +1086,8 @@ function App() {
   useEffect(() => {
     setSelectedGatewayId(null);
     setCompareGatewayId(null);
-  }, [deviceId, selectedSessionId]);
+    setSelectedReceiverId(null);
+  }, [deviceId, selectedSessionId, receiverSource]);
 
   const measurementBounds = useMemo(() => {
     const items = activeMeasurements;
@@ -1126,6 +1171,7 @@ function App() {
           to: normalizeTime(exploreMeasurementsParams.to),
           bbox: bboxKey,
           gatewayId: exploreMeasurementsParams.gatewayId ?? null,
+          receiverId: exploreMeasurementsParams.receiverId ?? null,
           rxGatewayId: exploreMeasurementsParams.rxGatewayId ?? null,
           sample:
             typeof exploreMeasurementsParams.sample === 'number'
@@ -1146,6 +1192,7 @@ function App() {
                 to: normalizeTime(compareMeasurementsParams.to),
                 bbox: bboxKey,
                 gatewayId: compareMeasurementsParams.gatewayId ?? null,
+                receiverId: compareMeasurementsParams.receiverId ?? null,
                 rxGatewayId: compareMeasurementsParams.rxGatewayId ?? null,
                 sample:
                   typeof compareMeasurementsParams.sample === 'number'
@@ -1165,6 +1212,7 @@ function App() {
           to: normalizeTime(exploreTrackParams.to),
           bbox: null,
           gatewayId: exploreTrackParams.gatewayId ?? null,
+          receiverId: exploreTrackParams.receiverId ?? null,
           rxGatewayId: exploreTrackParams.rxGatewayId ?? null,
           sample:
             typeof exploreTrackParams.sample === 'number' ? exploreTrackParams.sample : null,
@@ -1292,11 +1340,13 @@ function App() {
         <PointDetails measurement={selectedMeasurement} />
         <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
         <MeshtasticEventsPanel deviceUid={selectedDevice?.deviceUid} />
-        <GatewayStatsPanel
-          gatewayId={selectedGatewayId}
-          scope={gatewayScope}
-          enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
-        />
+        {receiverSource === 'lorawan' && (
+          <GatewayStatsPanel
+            gatewayId={selectedGatewayId}
+            scope={gatewayScope}
+            enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
+          />
+        )}
         <StatsCard
           stats={statsQuery.data}
           isLoading={statsQuery.isLoading}
@@ -1317,6 +1367,10 @@ function App() {
         selectedSessionId={selectedSessionId}
         onSelectSessionId={setSelectedSessionId}
         onStartSession={handleSessionStart}
+        receiverSource={receiverSource}
+        onReceiverSourceChange={handleReceiverSourceChange}
+        selectedReceiverId={selectedReceiverId}
+        onSelectReceiverId={setSelectedReceiverId}
         selectedGatewayId={selectedGatewayId}
         onSelectGatewayId={setSelectedGatewayId}
         compareGatewayId={compareGatewayId}

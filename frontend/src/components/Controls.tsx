@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DeviceLatest } from '../api/types';
-import { useDevices, useGateways } from '../query/hooks';
+import { useDevices, useGateways, useReceivers } from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
@@ -19,6 +19,10 @@ type ControlsProps = {
   selectedSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
+  receiverSource: 'lorawan' | 'meshtastic';
+  onReceiverSourceChange: (source: 'lorawan' | 'meshtastic') => void;
+  selectedReceiverId: string | null;
+  onSelectReceiverId: (receiverId: string | null) => void;
   selectedGatewayId: string | null;
   onSelectGatewayId: (gatewayId: string | null) => void;
   compareGatewayId: string | null;
@@ -55,6 +59,10 @@ export default function Controls({
   selectedSessionId,
   onSelectSessionId,
   onStartSession,
+  receiverSource,
+  onReceiverSourceChange,
+  selectedReceiverId,
+  onSelectReceiverId,
   selectedGatewayId,
   onSelectGatewayId,
   compareGatewayId,
@@ -93,9 +101,33 @@ export default function Controls({
         };
   const gatewayScopeEnabled =
     filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
-  const gatewaysQuery = useGateways(gatewayScope, { enabled: gatewayScopeEnabled }, { filterMode });
+  const gatewaysQuery = useGateways(
+    gatewayScope,
+    { enabled: gatewayScopeEnabled && receiverSource === 'lorawan' },
+    { filterMode }
+  );
   const gatewayOptions = gatewaysQuery.data?.items ?? [];
   const gatewayErrorStatus = getErrorStatus(gatewaysQuery.error);
+
+  const receiverScope =
+    filterMode === 'session'
+      ? {
+          sessionId: selectedSessionId ?? undefined
+        }
+      : {
+          deviceId: deviceId ?? undefined,
+          from: rangeFrom,
+          to: rangeTo
+        };
+  const receiverScopeEnabled =
+    filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
+  const receiversQuery = useReceivers(
+    { source: receiverSource, ...receiverScope },
+    { enabled: receiverScopeEnabled && receiverSource === 'meshtastic' },
+    { filterMode }
+  );
+  const receiverOptions = receiversQuery.data?.items ?? [];
+  const receiverErrorStatus = getErrorStatus(receiversQuery.error);
 
   useEffect(() => {
     if (!deviceId && devices.length > 0) {
@@ -323,37 +355,89 @@ export default function Controls({
       )}
 
       <div className="controls__group">
-        <label htmlFor="gateway-select">Gateway</label>
-        <select
-          id="gateway-select"
-          value={selectedGatewayId ?? ''}
-          onChange={(event) => onSelectGatewayId(event.target.value || null)}
-          disabled={!gatewayScopeEnabled || gatewayOptions.length === 0}
-        >
-          <option value="">All gateways</option>
-          {gatewayOptions.map((gateway) => (
-            <option key={gateway.gatewayId} value={gateway.gatewayId}>
-              {gateway.gatewayId} ({gateway.count})
-            </option>
-          ))}
-        </select>
-        <label htmlFor="gateway-compare">Compare gateway</label>
-        <select
-          id="gateway-compare"
-          value={compareGatewayId ?? ''}
-          onChange={(event) => onSelectCompareGatewayId(event.target.value || null)}
-          disabled={!gatewayScopeEnabled || !selectedGatewayId || gatewayOptions.length === 0}
-        >
-          <option value="">No comparison</option>
-          {gatewayOptions.map((gateway) => (
-            <option key={`compare-${gateway.gatewayId}`} value={gateway.gatewayId}>
-              {gateway.gatewayId} ({gateway.count})
-            </option>
-          ))}
-        </select>
-        {gatewayErrorStatus === 401 || gatewayErrorStatus === 403 ? (
-          <div className="controls__gateway-error">Gateway analysis requires QUERY key</div>
-        ) : null}
+        <span className="controls__label">Receiver source</span>
+        <div className="controls__segmented" role="radiogroup" aria-label="Receiver source">
+          <label className={`controls__segment ${receiverSource === 'lorawan' ? 'is-active' : ''}`}>
+            <input
+              type="radio"
+              name="receiver-source"
+              value="lorawan"
+              checked={receiverSource === 'lorawan'}
+              onChange={() => onReceiverSourceChange('lorawan')}
+            />
+            LoRaWAN
+          </label>
+          <label
+            className={`controls__segment ${receiverSource === 'meshtastic' ? 'is-active' : ''}`}
+          >
+            <input
+              type="radio"
+              name="receiver-source"
+              value="meshtastic"
+              checked={receiverSource === 'meshtastic'}
+              onChange={() => onReceiverSourceChange('meshtastic')}
+            />
+            Meshtastic
+          </label>
+        </div>
+      </div>
+
+      <div className="controls__group">
+        {receiverSource === 'meshtastic' ? (
+          <>
+            <label htmlFor="receiver-select">Receiver</label>
+            <select
+              id="receiver-select"
+              value={selectedReceiverId ?? ''}
+              onChange={(event) => onSelectReceiverId(event.target.value || null)}
+              disabled={!receiverScopeEnabled || receiverOptions.length === 0}
+            >
+              <option value="">All receivers</option>
+              {receiverOptions.map((receiver) => (
+                <option key={receiver.id} value={receiver.id}>
+                  {receiver.id} ({receiver.count})
+                </option>
+              ))}
+            </select>
+            {receiverErrorStatus === 401 || receiverErrorStatus === 403 ? (
+              <div className="controls__gateway-error">Receiver analysis requires QUERY key</div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <label htmlFor="gateway-select">Gateway</label>
+            <select
+              id="gateway-select"
+              value={selectedGatewayId ?? ''}
+              onChange={(event) => onSelectGatewayId(event.target.value || null)}
+              disabled={!gatewayScopeEnabled || gatewayOptions.length === 0}
+            >
+              <option value="">All gateways</option>
+              {gatewayOptions.map((gateway) => (
+                <option key={gateway.gatewayId} value={gateway.gatewayId}>
+                  {gateway.gatewayId} ({gateway.count})
+                </option>
+              ))}
+            </select>
+            <label htmlFor="gateway-compare">Compare gateway</label>
+            <select
+              id="gateway-compare"
+              value={compareGatewayId ?? ''}
+              onChange={(event) => onSelectCompareGatewayId(event.target.value || null)}
+              disabled={!gatewayScopeEnabled || !selectedGatewayId || gatewayOptions.length === 0}
+            >
+              <option value="">No comparison</option>
+              {gatewayOptions.map((gateway) => (
+                <option key={`compare-${gateway.gatewayId}`} value={gateway.gatewayId}>
+                  {gateway.gatewayId} ({gateway.count})
+                </option>
+              ))}
+            </select>
+            {gatewayErrorStatus === 401 || gatewayErrorStatus === 403 ? (
+              <div className="controls__gateway-error">Gateway analysis requires QUERY key</div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="controls__group">

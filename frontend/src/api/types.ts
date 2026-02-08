@@ -101,6 +101,13 @@ export type GatewaySummary = {
   lastSeenAt: string | null;
 };
 
+export type ReceiverSummary = {
+  id: string;
+  source: 'lorawan' | 'meshtastic';
+  count: number;
+  lastSeenAt: string | null;
+};
+
 export type GatewayStats = {
   gatewayId: string;
   count: number;

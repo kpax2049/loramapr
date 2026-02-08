@@ -8,6 +8,7 @@ import {
   getMeasurements,
   getStats,
   getTrack,
+  listReceivers,
   listGateways,
   listDevices
 } from '../api/endpoints';
@@ -17,6 +18,7 @@ import type {
   GatewayQueryParams,
   MeasurementQueryParams,
   MeasurementsResponse,
+  ReceiversQueryParams,
   StatsResponse,
   TrackResponse
 } from '../api/endpoints';
@@ -26,6 +28,7 @@ import type {
   DeviceLatest,
   GatewayStats,
   GatewaySummary,
+  ReceiverSummary,
   ListResponse
 } from '../api/types';
 
@@ -36,6 +39,7 @@ type MeasurementKeyParams = {
   to: string | null;
   bbox: string | null;
   gatewayId: string | null;
+  receiverId: string | null;
   rxGatewayId: string | null;
   sample: number | null;
   limit: number | null;
@@ -53,6 +57,15 @@ type CoverageKeyParams = {
 };
 
 type GatewayKeyParams = {
+  deviceId: string | null;
+  sessionId: string | null;
+  from: string | null;
+  to: string | null;
+  filterMode: 'time' | 'session' | null;
+};
+
+type ReceiversKeyParams = {
+  source: 'lorawan' | 'meshtastic' | 'any' | null;
   deviceId: string | null;
   sessionId: string | null;
   from: string | null;
@@ -79,6 +92,7 @@ function normalizeMeasurementParams(
     to: params.to ? toIso(params.to) : null,
     bbox,
     gatewayId: params.gatewayId ?? null,
+    receiverId: params.receiverId ?? null,
     rxGatewayId: params.rxGatewayId ?? null,
     sample: typeof params.sample === 'number' ? params.sample : null,
     limit: typeof params.limit === 'number' ? params.limit : null,
@@ -108,6 +122,20 @@ function normalizeGatewayParams(
   context?: { filterMode?: 'time' | 'session' }
 ): GatewayKeyParams {
   return {
+    deviceId: params.deviceId ?? null,
+    sessionId: params.sessionId ?? null,
+    from: params.from ? toIso(params.from) : null,
+    to: params.to ? toIso(params.to) : null,
+    filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
+  };
+}
+
+function normalizeReceiversParams(
+  params: ReceiversQueryParams,
+  context?: { filterMode?: 'time' | 'session' }
+): ReceiversKeyParams {
+  return {
+    source: params.source ?? null,
     deviceId: params.deviceId ?? null,
     sessionId: params.sessionId ?? null,
     from: params.from ? toIso(params.from) : null,
@@ -216,6 +244,22 @@ export function useGateways(
   return useQuery<ListResponse<GatewaySummary>>({
     queryKey: ['gateways', keyParams],
     queryFn: ({ signal }) => listGateways(params, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useReceivers(
+  params: ReceiversQueryParams,
+  options?: QueryOptions<ListResponse<ReceiverSummary>>,
+  context?: { filterMode?: 'time' | 'session' }
+) {
+  const keyParams = normalizeReceiversParams(params, context);
+  const enabled = options?.enabled ?? Boolean(params.deviceId || params.sessionId);
+
+  return useQuery<ListResponse<ReceiverSummary>>({
+    queryKey: ['receivers', keyParams],
+    queryFn: ({ signal }) => listReceivers(params, { signal }),
     ...options,
     enabled
   });

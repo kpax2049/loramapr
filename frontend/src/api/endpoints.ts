@@ -10,6 +10,7 @@ import type {
   LorawanEventDetail,
   LorawanSummary,
   Measurement,
+  ReceiverSummary,
   MeshtasticEvent,
   MeshtasticEventDetail,
   SessionWindowResponse,
@@ -32,6 +33,7 @@ export type MeasurementQueryParams = {
   to?: string | Date;
   bbox?: Bbox;
   gatewayId?: string;
+  receiverId?: string;
   rxGatewayId?: string;
   sample?: number;
   limit?: number;
@@ -81,6 +83,14 @@ export type GatewayQueryParams = {
   to?: string | Date;
 };
 
+export type ReceiversQueryParams = {
+  source?: 'lorawan' | 'meshtastic' | 'any';
+  deviceId?: string;
+  sessionId?: string;
+  from?: string | Date;
+  to?: string | Date;
+};
+
 type RequestOptions = {
   signal?: AbortSignal;
 };
@@ -110,6 +120,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   }
   if (params.gatewayId) {
     searchParams.set('gatewayId', params.gatewayId);
+  }
+  if (params.receiverId) {
+    searchParams.set('receiverId', params.receiverId);
   }
   if (params.rxGatewayId) {
     searchParams.set('rxGatewayId', params.rxGatewayId);
@@ -171,6 +184,28 @@ function buildCoverageQuery(params: CoverageQueryParams): string {
 function buildGatewayQuery(params: GatewayQueryParams): string {
   const searchParams = new URLSearchParams();
 
+  if (params.deviceId) {
+    searchParams.set('deviceId', params.deviceId);
+  }
+  if (params.sessionId) {
+    searchParams.set('sessionId', params.sessionId);
+  }
+  if (params.from) {
+    searchParams.set('from', toIso(params.from));
+  }
+  if (params.to) {
+    searchParams.set('to', toIso(params.to));
+  }
+
+  return searchParams.toString();
+}
+
+function buildReceiversQuery(params: ReceiversQueryParams): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.source) {
+    searchParams.set('source', params.source);
+  }
   if (params.deviceId) {
     searchParams.set('deviceId', params.deviceId);
   }
@@ -385,4 +420,13 @@ export async function getGatewayStats(
   const query = buildGatewayQuery(params);
   const path = query ? `/api/gateways/${gatewayId}/stats?${query}` : `/api/gateways/${gatewayId}/stats`;
   return getJson<GatewayStats>(path, withQueryApiKey(options));
+}
+
+export async function listReceivers(
+  params: ReceiversQueryParams,
+  options?: RequestOptions
+): Promise<ListResponse<ReceiverSummary>> {
+  const query = buildReceiversQuery(params);
+  const path = query ? `/api/receivers?${query}` : '/api/receivers';
+  return getJson<ListResponse<ReceiverSummary>>(path, withQueryApiKey(options));
 }
