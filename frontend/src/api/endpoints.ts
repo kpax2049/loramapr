@@ -428,5 +428,15 @@ export async function listReceivers(
 ): Promise<ListResponse<ReceiverSummary>> {
   const query = buildReceiversQuery(params);
   const path = query ? `/api/receivers?${query}` : '/api/receivers';
-  return getJson<ListResponse<ReceiverSummary>>(path, withQueryApiKey(options));
+  const data = await getJson<ReceiverSummary[] | ListResponse<ReceiverSummary>>(
+    path,
+    withQueryApiKey(options)
+  );
+  if (Array.isArray(data)) {
+    return { items: data, count: data.length };
+  }
+  if (data && Array.isArray((data as ListResponse<ReceiverSummary>).items)) {
+    return data as ListResponse<ReceiverSummary>;
+  }
+  return { items: [], count: 0 };
 }

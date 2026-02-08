@@ -9,12 +9,14 @@ import MapView, { type MapViewHandle } from './components/MapView';
 import MeshtasticEventsPanel from './components/MeshtasticEventsPanel';
 import PlaybackPanel from './components/PlaybackPanel';
 import PointDetails from './components/PointDetails';
+import ReceiverStatsPanel from './components/ReceiverStatsPanel';
 import StatsCard from './components/StatsCard';
 import {
   useCoverageBins,
   useDevice,
   useDeviceLatest,
   useMeasurements,
+  useReceivers,
   useStats,
   useTrack
 } from './query/hooks';
@@ -252,6 +254,7 @@ function App() {
   const [receiverSource, setReceiverSource] = useState<'lorawan' | 'meshtastic'>('lorawan');
   const [receiverSourceOverridden, setReceiverSourceOverridden] = useState(false);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
+  const [compareReceiverId, setCompareReceiverId] = useState<string | null>(null);
   const [selectedGatewayId, setSelectedGatewayId] = useState<string | null>(null);
   const [compareGatewayId, setCompareGatewayId] = useState<string | null>(null);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
@@ -347,6 +350,7 @@ function App() {
     setReceiverSource(source);
     setReceiverSourceOverridden(true);
     setSelectedReceiverId(null);
+    setCompareReceiverId(null);
     setSelectedGatewayId(null);
     setCompareGatewayId(null);
   };
@@ -575,13 +579,16 @@ function App() {
     { enabled: playbackEnabled },
     { filterMode: 'session', refetchIntervalMs: false }
   );
-  const compareSample = receiverSource === 'lorawan' && compareGatewayId ? 800 : undefined;
+  const compareId = receiverSource === 'lorawan' ? compareGatewayId : compareReceiverId;
+  const compareSample = compareId && !isPlaybackMode ? 800 : undefined;
   const compareMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
     const rxGatewayId = receiverSource === 'lorawan' ? compareGatewayId ?? undefined : undefined;
+    const receiverId = receiverSource === 'meshtastic' ? compareReceiverId ?? undefined : undefined;
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
         bbox: bboxPayload,
+        receiverId,
         rxGatewayId,
         sample: compareSample,
         limit: effectiveLimit
@@ -592,6 +599,7 @@ function App() {
       from: exploreRange.from,
       to: exploreRange.to,
       bbox: bboxPayload,
+      receiverId,
       rxGatewayId,
       sample: compareSample,
       limit: effectiveLimit
@@ -601,6 +609,7 @@ function App() {
     selectedSessionId,
     bboxPayload,
     compareGatewayId,
+    compareReceiverId,
     receiverSource,
     compareSample,
     effectiveLimit,
@@ -613,9 +622,8 @@ function App() {
     {
       enabled:
         exploreEnabled &&
-        receiverSource === 'lorawan' &&
         mapLayerMode === 'points' &&
-        Boolean(compareGatewayId) &&
+        Boolean(compareId) &&
         (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
     },
     { filterMode, refetchIntervalMs: sessionPolling }
@@ -715,10 +723,9 @@ function App() {
     ? playbackWindowPoints
     : exploreMeasurementsQuery.data?.items ?? [];
   const activeTrack = isPlaybackMode ? playbackTrackPoints : exploreTrackQuery.data?.items ?? [];
-  const activeCompareMeasurements =
-    isPlaybackMode || receiverSource !== 'lorawan'
-      ? []
-      : compareMeasurementsQuery.data?.items ?? [];
+  const activeCompareMeasurements = isPlaybackMode
+    ? []
+    : compareMeasurementsQuery.data?.items ?? [];
   const activeMeasurementsQuery = isPlaybackMode
     ? playbackWindowQuery
     : exploreMeasurementsQuery;
@@ -1028,6 +1035,27 @@ function App() {
     1,
     Boolean(selectedDeviceUid)
   );
+  const receiverScope =
+    filterMode === 'session'
+      ? {
+          sessionId: selectedSessionId ?? undefined
+        }
+      : {
+          deviceId: deviceId ?? undefined,
+          from: exploreRange.from,
+          to: exploreRange.to
+        };
+  const receiverScopeEnabled =
+    filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
+  const receiversQuery = useReceivers(
+    { source: receiverSource, ...receiverScope },
+    { enabled: receiverScopeEnabled && receiverSource === 'meshtastic' },
+    { filterMode }
+  );
+  const selectedReceiver = useMemo(
+    () => receiversQuery.data?.items.find((item) => item.id === selectedReceiverId) ?? null,
+    [receiversQuery.data?.items, selectedReceiverId]
+  );
   const gatewayScope =
     filterMode === 'session'
       ? {
@@ -1087,6 +1115,7 @@ function App() {
     setSelectedGatewayId(null);
     setCompareGatewayId(null);
     setSelectedReceiverId(null);
+    setCompareReceiverId(null);
   }, [deviceId, selectedSessionId, receiverSource]);
 
   const measurementBounds = useMemo(() => {
@@ -1184,7 +1213,7 @@ function App() {
           filterMode
         };
         const compareKey =
-          compareGatewayId && compareMeasurementsParams.rxGatewayId
+          compareId && (compareMeasurementsParams.rxGatewayId || compareMeasurementsParams.receiverId)
             ? {
                 deviceId: compareMeasurementsParams.deviceId ?? null,
                 sessionId: compareMeasurementsParams.sessionId ?? null,
@@ -1234,6 +1263,7 @@ function App() {
     latestDeviceQuery.data?.latestMeasurementAt,
     exploreMeasurementsParams,
     compareMeasurementsParams,
+    compareId,
     exploreTrackParams,
     bboxPayload,
     filterMode,
@@ -1347,6 +1377,13 @@ function App() {
             enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
           />
         )}
+        {import.meta.env.DEV && receiverSource === 'meshtastic' && (
+          <ReceiverStatsPanel
+            receiverId={selectedReceiverId}
+            count={selectedReceiver?.count ?? null}
+            lastSeenAt={selectedReceiver?.lastSeenAt ?? null}
+          />
+        )}
         <StatsCard
           stats={statsQuery.data}
           isLoading={statsQuery.isLoading}
@@ -1371,6 +1408,8 @@ function App() {
         onReceiverSourceChange={handleReceiverSourceChange}
         selectedReceiverId={selectedReceiverId}
         onSelectReceiverId={setSelectedReceiverId}
+        compareReceiverId={compareReceiverId}
+        onSelectCompareReceiverId={setCompareReceiverId}
         selectedGatewayId={selectedGatewayId}
         onSelectGatewayId={setSelectedGatewayId}
         compareGatewayId={compareGatewayId}

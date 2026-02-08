@@ -23,6 +23,8 @@ type ControlsProps = {
   onReceiverSourceChange: (source: 'lorawan' | 'meshtastic') => void;
   selectedReceiverId: string | null;
   onSelectReceiverId: (receiverId: string | null) => void;
+  compareReceiverId: string | null;
+  onSelectCompareReceiverId: (receiverId: string | null) => void;
   selectedGatewayId: string | null;
   onSelectGatewayId: (gatewayId: string | null) => void;
   compareGatewayId: string | null;
@@ -63,6 +65,8 @@ export default function Controls({
   onReceiverSourceChange,
   selectedReceiverId,
   onSelectReceiverId,
+  compareReceiverId,
+  onSelectCompareReceiverId,
   selectedGatewayId,
   onSelectGatewayId,
   compareGatewayId,
@@ -395,6 +399,20 @@ export default function Controls({
               <option value="">All receivers</option>
               {receiverOptions.map((receiver) => (
                 <option key={receiver.id} value={receiver.id}>
+                  {receiver.id} ({receiver.count})
+                </option>
+              ))}
+            </select>
+            <label htmlFor="receiver-compare">Compare receiver</label>
+            <select
+              id="receiver-compare"
+              value={compareReceiverId ?? ''}
+              onChange={(event) => onSelectCompareReceiverId(event.target.value || null)}
+              disabled={!receiverScopeEnabled || !selectedReceiverId || receiverOptions.length === 0}
+            >
+              <option value="">No comparison</option>
+              {receiverOptions.map((receiver) => (
+                <option key={`compare-${receiver.id}`} value={receiver.id}>
                   {receiver.id} ({receiver.count})
                 </option>
               ))}
