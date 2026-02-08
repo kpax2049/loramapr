@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.6 - 2026-02-08
+
+### Highlights
+- Meshtastic parity for receiver filtering: receiver list from /api/receivers (QUERY key), receiverId filters for points/tracks, and a compare overlay for two receivers (sampled when needed).
+- Meshtastic receiver stats surfaced in the UI (dev-only) and receiver list responses normalized in the frontend.
+- Backend Meshtastic ingest normalization (receiverId from gatewayId), receivers aggregation endpoint, and receiverId support on measurements/tracks.
+- README updates for Meshtastic ingest/debug and playback notes.
+
+### Notes
+- No regressions to LoRaWAN gateway filtering.
+
 ## v0.8.5 - 2026-02-07
 
 ### Highlights
