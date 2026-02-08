@@ -77,6 +77,46 @@ export class MeshtasticService {
       }
     });
   }
+
+  async listReceivers(params: {
+    deviceId?: string;
+    sessionId?: string;
+    from?: Date;
+    to?: Date;
+  }) {
+    const where: Record<string, unknown> = {
+      gatewayId: { not: null }
+    };
+    if (params.deviceId) {
+      where.deviceId = params.deviceId;
+    }
+    if (params.sessionId) {
+      where.sessionId = params.sessionId;
+    }
+    if (params.from || params.to) {
+      const capturedAt: Record<string, Date> = {};
+      if (params.from) {
+        capturedAt.gte = params.from;
+      }
+      if (params.to) {
+        capturedAt.lte = params.to;
+      }
+      where.capturedAt = capturedAt;
+    }
+
+    const rows = await this.prisma.measurement.groupBy({
+      by: ['gatewayId'],
+      where,
+      _count: { _all: true },
+      _max: { capturedAt: true }
+    });
+
+    return rows.map((row) => ({
+      receiverId: row.gatewayId as string,
+      count: row._count._all,
+      lastSeenAt: row._max.capturedAt ?? null
+    }));
+  }
 }
 
 function getDeviceUid(body: unknown): string {

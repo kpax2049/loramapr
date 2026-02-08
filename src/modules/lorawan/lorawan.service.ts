@@ -359,6 +359,7 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
         rssi: normalized.rssi,
         snr: normalized.snr,
         gatewayId: normalized.gatewayId ?? undefined,
+        rxMetadata: normalized.rxMetadata,
         payloadRaw: normalized.payloadRaw
       }
     ]);
@@ -381,6 +382,12 @@ type MeshtasticNormalized = {
   rssi?: number;
   snr?: number;
   gatewayId?: string | null;
+  rxMetadata?: Array<{
+    nodeId: string;
+    rssi?: number;
+    snr?: number;
+    hop?: number;
+  }>;
   payloadRaw: Record<string, unknown>;
 };
 
@@ -407,6 +414,7 @@ function normalizeMeshtasticPayload(
   const rssi = getNumber(record.rssi);
   const snr = getNumber(record.snr);
   const gatewayId = getGatewayId(record);
+  const rxMetadata = buildMeshtasticRxMetadata(record, gatewayId, rssi, snr);
 
   const capturedAt = resolveCapturedAt(record, receivedAt);
   const deviceUid = getMeshtasticDeviceUid(record);
@@ -419,6 +427,7 @@ function normalizeMeshtasticPayload(
     rssi: rssi ?? undefined,
     snr: snr ?? undefined,
     gatewayId: gatewayId ?? null,
+    rxMetadata,
     payloadRaw: record
   };
 }
@@ -489,6 +498,13 @@ function getMeshtasticDeviceUid(record: Record<string, unknown>): string {
 }
 
 function getGatewayId(record: Record<string, unknown>): string | null {
+  const rxNodeId = record.rxNodeId;
+  if (typeof rxNodeId === 'string' && rxNodeId.trim().length > 0) {
+    return rxNodeId;
+  }
+  if (typeof rxNodeId === 'number' && Number.isFinite(rxNodeId)) {
+    return String(rxNodeId);
+  }
   const receiver = record.receiver;
   if (typeof receiver === 'string' && receiver.trim().length > 0) {
     return receiver;
@@ -502,6 +518,110 @@ function getGatewayId(record: Record<string, unknown>): string | null {
   }
   if (typeof via === 'number' && Number.isFinite(via)) {
     return String(via);
+  }
+  return null;
+}
+
+function buildMeshtasticRxMetadata(
+  record: Record<string, unknown>,
+  gatewayId: string | null,
+  rssi: number | null,
+  snr: number | null
+): Array<{ nodeId: string; rssi?: number; snr?: number; hop?: number }> | undefined {
+  const entries: Array<{ nodeId: string; rssi?: number; snr?: number; hop?: number }> = [];
+  const seen = new Set<string>();
+
+  const addEntry = (entry: { nodeId: string; rssi?: number; snr?: number; hop?: number } | null) => {
+    if (!entry) {
+      return;
+    }
+    const key = `${entry.nodeId}|${entry.hop ?? ''}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    entries.push(entry);
+  };
+
+  const primaryHop = getNumber(record.hop);
+  addEntry(
+    gatewayId
+      ? {
+          nodeId: gatewayId,
+          rssi: rssi ?? undefined,
+          snr: snr ?? undefined,
+          hop: primaryHop !== null ? Math.trunc(primaryHop) : undefined
+        }
+      : null
+  );
+
+  const hops = record.hops;
+  if (Array.isArray(hops)) {
+    for (const hopEntry of hops) {
+      addEntry(buildRxEntryFromUnknown(hopEntry));
+    }
+  }
+
+  const relays = record.relays ?? record.route;
+  if (Array.isArray(relays)) {
+    for (const relayEntry of relays) {
+      addEntry(buildRxEntryFromUnknown(relayEntry));
+    }
+  }
+
+  return entries.length > 0 ? entries : undefined;
+}
+
+function buildRxEntryFromUnknown(
+  value: unknown
+): { nodeId: string; rssi?: number; snr?: number; hop?: number } | null {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return { nodeId: value };
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { nodeId: String(value) };
+  }
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const nodeId = pickNodeId(record);
+  if (!nodeId) {
+    return null;
+  }
+  const rssi = getNumber(record.rssi);
+  const snr = getNumber(record.snr);
+  const hop = getNumber(record.hop);
+
+  const entry: { nodeId: string; rssi?: number; snr?: number; hop?: number } = { nodeId };
+  if (rssi !== null) {
+    entry.rssi = rssi;
+  }
+  if (snr !== null) {
+    entry.snr = snr;
+  }
+  if (hop !== null) {
+    entry.hop = Math.trunc(hop);
+  }
+  return entry;
+}
+
+function pickNodeId(record: Record<string, unknown>): string | null {
+  const candidates = [
+    record.rxNodeId,
+    record.nodeId,
+    record.receiver,
+    record.via,
+    record.from,
+    record.id
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate;
+    }
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return String(candidate);
+    }
   }
   return null;
 }

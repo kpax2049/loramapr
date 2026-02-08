@@ -12,6 +12,7 @@ type TracksQuery = {
   limit?: string | string[];
   sample?: string | string[];
   gatewayId?: string | string[];
+  receiverId?: string | string[];
   rxGatewayId?: string | string[];
 };
 
@@ -49,6 +50,11 @@ export class TracksController {
     const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
 
     const gatewayId = getSingleValue(query.gatewayId, 'gatewayId');
+    const receiverId = getSingleValue(query.receiverId, 'receiverId');
+    if (receiverId && gatewayId && receiverId !== gatewayId) {
+      throw new BadRequestException('receiverId and gatewayId must match when both are provided');
+    }
+    const effectiveGatewayId = receiverId ?? gatewayId;
     const rxGatewayId = getSingleValue(query.rxGatewayId, 'rxGatewayId');
 
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
@@ -63,7 +69,7 @@ export class TracksController {
       bbox,
       limit,
       sample,
-      gatewayId: gatewayId ?? undefined,
+      gatewayId: effectiveGatewayId ?? undefined,
       rxGatewayId: rxGatewayId ?? undefined,
       ownerId
     });

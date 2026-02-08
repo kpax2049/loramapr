@@ -11,6 +11,7 @@ import { CoverageModule } from './modules/coverage/coverage.module';
 import { ExportModule } from './modules/export/export.module';
 import { GatewaysModule } from './modules/gateways/gateways.module';
 import { MeshtasticModule } from './modules/meshtastic/meshtastic.module';
+import { ReceiversModule } from './modules/receivers/receivers.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ExportModule,
     GatewaysModule,
     MeshtasticModule,
+    ReceiversModule,
     PrismaModule
   ]
 })
