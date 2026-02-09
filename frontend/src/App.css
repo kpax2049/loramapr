@@ -1093,3 +1093,480 @@
   fill: var(--map-point-weak);
   background: var(--map-point-weak);
 }
+
+/* App.css (append near the bottom) */
+/* Theme variant: yellow-black-sat */
+.theme-yellow-black-sat {
+  /* core surfaces */
+  --panel-bg: rgba(0, 0, 0, 0.92);
+  --panel-surface: rgba(0, 0, 0, 0.70);
+  --panel-text: #f7f1c7;                 /* warm off-yellow text */
+  --panel-muted: rgba(247, 241, 199, 0.65);
+
+  /* neon linework */
+  --panel-accent: #f4c430;               /* satellite yellow */
+  --panel-border: rgba(244, 196, 48, 0.65);
+
+  /* hard, “printed” shadow */
+  --panel-shadow: 0 10px 0 rgba(0, 0, 0, 0.9), 0 18px 40px rgba(0, 0, 0, 0.55);
+
+  /* slightly squarer corners */
+  --panel-radius: 6px;
+
+  /* map point palette (optional) */
+  --map-point-strong: #f4c430;
+  --map-point-medium: #f4c430;
+  --map-point-weak: #ef4444;
+  --map-point-unknown: rgba(247, 241, 199, 0.55);
+  --map-point-default: #f4c430;
+  --map-point-compare: #f472b6;
+  --map-point-cursor: #f4c430;
+}
+
+/* shared “sat” linework tweaks (keep selectors broad and minimal) */
+.theme-yellow-black-sat .controls,
+.theme-yellow-black-sat .playback-panel,
+.theme-yellow-black-sat .sessions-panel,
+.theme-yellow-black-sat .lorawan-panel,
+.theme-yellow-black-sat .gateway-stats,
+.theme-yellow-black-sat .stats-card,
+.theme-yellow-black-sat .point-details {
+  border: 2px solid var(--panel-border);
+  box-shadow: var(--panel-shadow);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  border-left: 6px solid var(--panel-accent);
+}
+
+/* buttons: hard-outline, minimal fill */
+.theme-yellow-black-sat .controls__button,
+.theme-yellow-black-sat .playback-panel__button,
+.theme-yellow-black-sat .lorawan-panel__header button,
+.theme-yellow-black-sat .lorawan-panel__actions button,
+.theme-yellow-black-sat .sessions-panel__buttons button,
+.theme-yellow-black-sat .sessions-panel__item {
+  border: 2px solid rgba(244, 196, 48, 0.75);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--panel-text);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.9);
+}
+
+.theme-yellow-black-sat .controls__button:hover,
+.theme-yellow-black-sat .playback-panel__button:hover,
+.theme-yellow-black-sat .lorawan-panel__header button:hover,
+.theme-yellow-black-sat .lorawan-panel__actions button:hover,
+.theme-yellow-black-sat .sessions-panel__buttons button:hover,
+.theme-yellow-black-sat .sessions-panel__item:hover {
+  background: rgba(244, 196, 48, 0.10);
+}
+
+/* segmented: thin grid + bright active */
+.theme-yellow-black-sat .controls__segmented {
+  border: 2px solid rgba(244, 196, 48, 0.75);
+  background: rgba(0, 0, 0, 0.55);
+}
+.theme-yellow-black-sat .controls__segment {
+  color: rgba(247, 241, 199, 0.8);
+}
+.theme-yellow-black-sat .controls__segment.is-active {
+  background: var(--panel-accent);
+  color: #0b0b0b;
+}
+
+/* inputs/selects: hard-outline */
+.theme-yellow-black-sat .controls select,
+.theme-yellow-black-sat .controls input[type='datetime-local'],
+.theme-yellow-black-sat .sessions-panel__actions input {
+  border: 2px solid rgba(244, 196, 48, 0.6);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--panel-text);
+}
+
+/* optional: page background for ui-kit */
+.theme-yellow-black-sat {
+  background: #070707;
+}
+
+/* Theme variant: yellow-black-sat (no rounding) */
+.theme-yellow-black-sat {
+  --panel-radius: 0px;
+}
+
+/* Force square corners on all overlay primitives */
+.theme-yellow-black-sat .controls,
+.theme-yellow-black-sat .playback-panel,
+.theme-yellow-black-sat .sessions-panel,
+.theme-yellow-black-sat .lorawan-panel,
+.theme-yellow-black-sat .gateway-stats,
+.theme-yellow-black-sat .stats-card,
+.theme-yellow-black-sat .point-details,
+.theme-yellow-black-sat .controls__button,
+.theme-yellow-black-sat .playback-panel__button,
+.theme-yellow-black-sat .lorawan-panel__header button,
+.theme-yellow-black-sat .lorawan-panel__actions button,
+.theme-yellow-black-sat .sessions-panel__buttons button,
+.theme-yellow-black-sat .sessions-panel__item,
+.theme-yellow-black-sat .sessions-panel__stop,
+.theme-yellow-black-sat .controls__segmented,
+.theme-yellow-black-sat .controls select,
+.theme-yellow-black-sat .controls input[type='datetime-local'],
+.theme-yellow-black-sat .sessions-panel__actions input {
+  border-radius: 0 !important;
+}
+
+/* Theme variant: space-map */
+.theme-space-map {
+  /* palette */
+  --panel-text: #d7f7ff;
+  --panel-muted: rgba(215, 247, 255, 0.62);
+  --panel-accent: #4ce7ff;                 /* HUD cyan */
+  --panel-border: rgba(76, 231, 255, 0.40);
+
+  /* surfaces */
+  --panel-bg: rgba(0, 10, 16, 0.88);
+  --panel-surface: rgba(0, 16, 22, 0.62);
+
+  /* geometry */
+  --panel-radius: 0px;
+
+  /* depth */
+  --panel-shadow: 0 0 0 1px rgba(76, 231, 255, 0.18), 0 18px 44px rgba(0, 0, 0, 0.60);
+
+  /* map points (optional) */
+  --map-point-default: #4ce7ff;
+  --map-point-strong: #4ce7ff;
+  --map-point-medium: #a7ff6a;
+  --map-point-weak: #ff4d6d;
+  --map-point-unknown: rgba(215, 247, 255, 0.45);
+  --map-point-cursor: #4ce7ff;
+
+  /* optional: ui-kit page background */
+  background-color: #05080b;
+  background-image:
+    radial-gradient(circle at 25% 20%, rgba(76,231,255,0.08), transparent 45%),
+    radial-gradient(circle at 70% 65%, rgba(76,231,255,0.05), transparent 50%),
+    linear-gradient(to bottom, rgba(255,255,255,0.03), rgba(0,0,0,0.10));
+  background-attachment: fixed;
+}
+
+/* Panels: cyan frame + subtle inner glow */
+.theme-space-map .controls,
+.theme-space-map .playback-panel,
+.theme-space-map .sessions-panel,
+.theme-space-map .lorawan-panel,
+.theme-space-map .gateway-stats,
+.theme-space-map .stats-card,
+.theme-space-map .point-details {
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--panel-accent);
+  border-radius: 0 !important;
+  box-shadow: var(--panel-shadow);
+  background:
+    linear-gradient(to bottom, rgba(76,231,255,0.06), transparent 30%),
+    var(--panel-bg);
+  color: var(--panel-text);
+}
+
+/* Buttons: thin cyan outline, minimal fill */
+.theme-space-map .controls__button,
+.theme-space-map .playback-panel__button,
+.theme-space-map .lorawan-panel__header button,
+.theme-space-map .lorawan-panel__actions button,
+.theme-space-map .sessions-panel__buttons button,
+.theme-space-map .sessions-panel__item,
+.theme-space-map .sessions-panel__stop {
+  border: 1px solid rgba(76, 231, 255, 0.50);
+  background:
+    linear-gradient(to bottom, rgba(76,231,255,0.08), rgba(0,0,0,0.25));
+  color: var(--panel-text);
+  border-radius: 0 !important;
+  box-shadow: 0 0 0 1px rgba(76,231,255,0.10) inset;
+}
+
+.theme-space-map .controls__button:hover,
+.theme-space-map .playback-panel__button:hover,
+.theme-space-map .lorawan-panel__header button:hover,
+.theme-space-map .lorawan-panel__actions button:hover,
+.theme-space-map .sessions-panel__buttons button:hover,
+.theme-space-map .sessions-panel__item:hover {
+  background:
+    linear-gradient(to bottom, rgba(76,231,255,0.14), rgba(0,0,0,0.22));
+}
+
+/* Segmented: cyan frame; active = brighter cyan */
+.theme-space-map .controls__segmented {
+  border: 1px solid rgba(76, 231, 255, 0.55);
+  background: rgba(0, 16, 22, 0.55);
+  border-radius: 0 !important;
+}
+.theme-space-map .controls__segment {
+  color: rgba(215, 247, 255, 0.78);
+}
+.theme-space-map .controls__segment.is-active {
+  background: rgba(76, 231, 255, 0.22);
+  color: var(--panel-text);
+}
+
+/* Inputs/selects: cyan outline */
+.theme-space-map .controls select,
+.theme-space-map .controls input[type='datetime-local'],
+.theme-space-map .sessions-panel__actions input {
+  border: 1px solid rgba(76, 231, 255, 0.50);
+  background: rgba(0, 16, 22, 0.55);
+  color: var(--panel-text);
+  border-radius: 0 !important;
+}
+
+/* Theme variant: retro-future-gadget */
+.theme-retro-future-gadget {
+  /* palette (phosphor/olive + rust accents) */
+  --panel-text: #cfe3c7;
+  --panel-muted: rgba(207, 227, 199, 0.55);
+  --panel-accent: #93b38f;                 /* soft phosphor */
+  --panel-border: rgba(147, 179, 143, 0.45);
+
+  /* surfaces (dark green glass) */
+  --panel-bg: rgba(10, 18, 14, 0.92);
+  --panel-surface: rgba(14, 26, 18, 0.70);
+
+  /* geometry */
+  --panel-radius: 0px;
+
+  /* depth (inset, “device” feel) */
+  --panel-shadow:
+    0 0 0 1px rgba(147,179,143,0.18) inset,
+    0 0 0 2px rgba(0,0,0,0.55) inset,
+    0 12px 28px rgba(0,0,0,0.70);
+
+  /* optional background */
+  background-color: #070b08;
+  background-image:
+    radial-gradient(circle at 50% 15%, rgba(147,179,143,0.06), transparent 55%),
+    linear-gradient(to bottom, rgba(255,255,255,0.025), rgba(0,0,0,0.12));
+  background-attachment: fixed;
+}
+
+/* Panels: framed, slightly “worn” */
+.theme-retro-future-gadget .controls,
+.theme-retro-future-gadget .playback-panel,
+.theme-retro-future-gadget .sessions-panel,
+.theme-retro-future-gadget .lorawan-panel,
+.theme-retro-future-gadget .gateway-stats,
+.theme-retro-future-gadget .stats-card,
+.theme-retro-future-gadget .point-details {
+  border: 1px solid var(--panel-border);
+  border-left: 0;
+  border-radius: 0 !important;
+  box-shadow: var(--panel-shadow);
+  background:
+    linear-gradient(to bottom, rgba(147,179,143,0.06), transparent 34%),
+    var(--panel-bg);
+  color: var(--panel-text);
+  outline: 1px solid rgba(0,0,0,0.65);
+  outline-offset: -6px; /* inner frame line */
+}
+
+/* Buttons: chunky, inset, minimal glow */
+.theme-retro-future-gadget .controls__button,
+.theme-retro-future-gadget .playback-panel__button,
+.theme-retro-future-gadget .lorawan-panel__header button,
+.theme-retro-future-gadget .lorawan-panel__actions button,
+.theme-retro-future-gadget .sessions-panel__buttons button,
+.theme-retro-future-gadget .sessions-panel__item,
+.theme-retro-future-gadget .sessions-panel__stop {
+  border: 1px solid rgba(147, 179, 143, 0.55);
+  background:
+    linear-gradient(to bottom, rgba(147,179,143,0.10), rgba(0,0,0,0.25));
+  color: var(--panel-text);
+  border-radius: 0 !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.65) inset,
+    0 2px 0 rgba(0,0,0,0.85);
+}
+
+/* Hover: brighter phosphor wash */
+.theme-retro-future-gadget .controls__button:hover,
+.theme-retro-future-gadget .playback-panel__button:hover,
+.theme-retro-future-gadget .lorawan-panel__header button:hover,
+.theme-retro-future-gadget .lorawan-panel__actions button:hover,
+.theme-retro-future-gadget .sessions-panel__buttons button:hover,
+.theme-retro-future-gadget .sessions-panel__item:hover {
+  background:
+    linear-gradient(to bottom, rgba(147,179,143,0.16), rgba(0,0,0,0.22));
+}
+
+/* Segmented: boxy tabs */
+.theme-retro-future-gadget .controls__segmented {
+  border: 1px solid rgba(147, 179, 143, 0.55);
+  background: rgba(14, 26, 18, 0.65);
+  border-radius: 0 !important;
+}
+.theme-retro-future-gadget .controls__segment {
+  color: rgba(207, 227, 199, 0.72);
+}
+.theme-retro-future-gadget .controls__segment.is-active {
+  background: rgba(147, 179, 143, 0.22);
+  color: var(--panel-text);
+}
+
+/* Inputs/selects: device glass */
+.theme-retro-future-gadget .controls select,
+.theme-retro-future-gadget .controls input[type='datetime-local'],
+.theme-retro-future-gadget .sessions-panel__actions input {
+  border: 1px solid rgba(147, 179, 143, 0.55);
+  background: rgba(14, 26, 18, 0.65);
+  color: var(--panel-text);
+  border-radius: 0 !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.55) inset;
+}
+
+/* Theme variant: white-grid-industrial (panel-scoped background) */
+.theme-white-grid-industrial {
+  --panel-text: #0b0f14;
+  --panel-muted: rgba(11, 15, 20, 0.62);
+  --panel-accent: #0b0f14;
+  --panel-border: rgba(11, 15, 20, 0.30);
+
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-surface: rgba(255, 255, 255, 0.70);
+
+  --panel-radius: 0px;
+  --panel-shadow: none;
+
+  /* keep page neutral */
+  background: #0b0f14;
+}
+
+/* Panels: hard outline + internal grid + gray field blocks */
+.theme-white-grid-industrial .controls,
+.theme-white-grid-industrial .playback-panel,
+.theme-white-grid-industrial .sessions-panel,
+.theme-white-grid-industrial .lorawan-panel,
+.theme-white-grid-industrial .gateway-stats,
+.theme-white-grid-industrial .stats-card,
+.theme-white-grid-industrial .point-details {
+  position: relative;
+  border: 2px solid rgba(11, 15, 20, 0.85);
+  border-radius: 0 !important;
+  color: var(--panel-text);
+  box-shadow: none;
+
+  background-color: rgba(250, 250, 250, 0.96);
+  background-image:
+    /* gray blocks overlay (EXTRACTED from reference; 648x1152) */
+    url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27648%27%20height=%271152%27%20viewBox=%270%200%20648%201152%27%3E%3Cg%20fill=%27%23000000%27%20fill-opacity=%270.10%27%3E%3Cpolygon%20points=%270,0%20189,0%20188,33%2095,126%2056,131%2048,174%200,220%27/%3E%3Cpolygon%20points=%270,382%2032,359%20189,360%20188,521%200,705%27/%3E%3Cpolygon%20points=%270,869%2028,846%20189,846%20185,1011%2049,1151%200,1151%27/%3E%3Cpolygon%20points=%27571,0%20647,0%20647,256%20618,278%20458,278%20459,118%27/%3E%3Cpolygon%20points=%27458,604%20647,417%20647,740%20617,763%20459,763%27/%3E%3Cpolygon%20points=%27458,1090%20647,904%20647,1151%20458,1151%27/%3E%3C/g%3E%3Cg%20fill=%27%230b0f14%27%20fill-opacity=%270.70%27%3E%3Crect%20x=%27470.5%27%20y=%27239.2%27%20width=%2741.0%27%20height=%279.6%27%20transform=%27rotate(-45%20491.0%20244.0)%27/%3E%3Crect%20x=%27135.5%27%20y=%27389.2%27%20width=%2741.0%27%20height=%279.6%27%20transform=%27rotate(-45%20156.0%20394.0)%27/%3E%3Crect%20x=%27470.5%27%20y=%27725.2%27%20width=%2741.0%27%20height=%279.6%27%20transform=%27rotate(-45%20491.0%20730.0)%27/%3E%3Crect%20x=%27135.5%27%20y=%27875.2%27%20width=%2741.0%27%20height=%279.6%27%20transform=%27rotate(-45%20156.0%20880.0)%27/%3E%3C/g%3E%3C/svg%3E"),
+
+    /* fine grid */
+    linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px),
+
+    /* coarse grid */
+    linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px),
+
+    /* intersection ticks (wraparound) */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg fill='%237a7a7a' fill-opacity='0.22'%3E%3Crect x='2.0' y='0.0' width='3.0' height='1.0'/%3E%3Crect x='0.0' y='2.0' width='1.0' height='3.0'/%3E%3Crect x='19.0' y='0.0' width='3.0' height='1.0'/%3E%3Crect x='0.0' y='19.0' width='1.0' height='3.0'/%3E%3C/g%3E%3C/svg%3E");
+
+  /* sizes/positions */
+  background-size:
+    cover,
+    24px 24px,
+    24px 24px,
+    120px 120px,
+    120px 120px,
+    24px 24px;
+
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+
+  background-repeat:
+    no-repeat,
+    repeat,
+    repeat,
+    repeat,
+    repeat,
+    repeat;
+}
+
+.theme-white-grid-industrial .controls {
+  position: absolute;
+}
+
+/* Corner “brackets” + cut-corner strip (no markup changes) */
+.theme-white-grid-industrial .controls::before,
+.theme-white-grid-industrial .playback-panel::before,
+.theme-white-grid-industrial .sessions-panel::before,
+.theme-white-grid-industrial .lorawan-panel::before,
+.theme-white-grid-industrial .gateway-stats::before,
+.theme-white-grid-industrial .stats-card::before,
+.theme-white-grid-industrial .point-details::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  background:
+    /* top-left bracket */
+    linear-gradient(#0b0f14,#0b0f14) 12px 0 / 26px 2px no-repeat,
+    linear-gradient(#0b0f14,#0b0f14) 0 12px / 2px 26px no-repeat,
+    /* top-right bracket */
+    linear-gradient(#0b0f14,#0b0f14) calc(100% - 38px) 0 / 26px 2px no-repeat,
+    linear-gradient(#0b0f14,#0b0f14) 100% 12px / 2px 26px no-repeat,
+    /* bottom-left bracket */
+    linear-gradient(#0b0f14,#0b0f14) 12px 100% / 26px 2px no-repeat,
+    linear-gradient(#0b0f14,#0b0f14) 0 calc(100% - 38px) / 2px 26px no-repeat,
+    /* bottom-right bracket */
+    linear-gradient(#0b0f14,#0b0f14) calc(100% - 38px) 100% / 26px 2px no-repeat,
+    linear-gradient(#0b0f14,#0b0f14) 100% calc(100% - 38px) / 2px 26px no-repeat,
+    /* small diagonal “slash” mark (like the ref) */
+    linear-gradient(135deg, transparent 46%, #0b0f14 46% 54%, transparent 54%)
+      calc(100% - 18px) 18px / 14px 14px no-repeat;
+}
+
+/* Typography: punchier, more “technical sheet” */
+.theme-white-grid-industrial .playback-panel__header h3,
+.theme-white-grid-industrial .sessions-panel__header h3,
+.theme-white-grid-industrial .lorawan-panel__header h3,
+.theme-white-grid-industrial .gateway-stats h3,
+.theme-white-grid-industrial .stats-card h3,
+.theme-white-grid-industrial .point-details h2 {
+  color: #0b0f14;
+  letter-spacing: 0.12em;
+}
+
+.theme-white-grid-industrial .controls label,
+.theme-white-grid-industrial .controls__label,
+.theme-white-grid-industrial .controls__device-meta,
+.theme-white-grid-industrial .controls__legend,
+.theme-white-grid-industrial .controls__status,
+.theme-white-grid-industrial .lorawan-panel__summary {
+  color: rgba(11, 15, 20, 0.62);
+}
+
+/* Buttons/inputs: outlined, white fill */
+.theme-white-grid-industrial .controls__button,
+.theme-white-grid-industrial .playback-panel__button,
+.theme-white-grid-industrial .lorawan-panel__header button,
+.theme-white-grid-industrial .lorawan-panel__actions button,
+.theme-white-grid-industrial .sessions-panel__buttons button,
+.theme-white-grid-industrial .sessions-panel__item,
+.theme-white-grid-industrial .sessions-panel__stop,
+.theme-white-grid-industrial .controls__segmented,
+.theme-white-grid-industrial .controls select,
+.theme-white-grid-industrial .controls input[type='datetime-local'],
+.theme-white-grid-industrial .sessions-panel__actions input {
+  border: 2px solid rgba(11, 15, 20, 0.75);
+  background: rgba(255,255,255,0.85);
+  color: #0b0f14;
+  border-radius: 0 !important;
+  box-shadow: none;
+}
+
+.theme-white-grid-industrial .controls__segment.is-active {
+  background: #0b0f14;
+  color: #f4f5f6;
+}
