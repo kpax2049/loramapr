@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import {
+  getAutoSession,
   getCoverageBins,
   getDeviceLatest,
   getGatewayStats,
   getMeasurements,
   getStats,
   getTrack,
+  updateAutoSession,
   listReceivers,
   listGateways,
   listDevices
@@ -24,6 +27,7 @@ import type {
 } from '../api/endpoints';
 import type {
   CoverageBinsResponse,
+  AutoSessionConfig,
   Device,
   DeviceLatest,
   GatewayStats,
@@ -180,6 +184,32 @@ export function useDeviceLatest(deviceId?: string) {
     onError: (error) => {
       if (error instanceof ApiError && error.status === 404) {
         setUnsupported(true);
+      }
+    }
+  });
+}
+
+export function useAutoSession(
+  deviceId?: string | null,
+  options?: QueryOptions<AutoSessionConfig>
+) {
+  const enabled = options?.enabled ?? Boolean(deviceId);
+
+  return useQuery<AutoSessionConfig>({
+    queryKey: ['auto-session', deviceId ?? 'none'],
+    queryFn: ({ signal }) => getAutoSession(deviceId as string, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useUpdateAutoSession(deviceId?: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AutoSessionConfig) => updateAutoSession(deviceId as string, input),
+    onSuccess: () => {
+      if (deviceId) {
+        queryClient.invalidateQueries({ queryKey: ['auto-session', deviceId] });
       }
     }
   });

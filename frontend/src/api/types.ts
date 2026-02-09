@@ -131,6 +131,15 @@ export type DeviceLatest = {
   latestWebhookSource: string | null;
 };
 
+export type AutoSessionConfig = {
+  enabled: boolean;
+  homeLat: number | null;
+  homeLon: number | null;
+  radiusMeters: number | null;
+  minOutsideSeconds: number | null;
+  minInsideSeconds: number | null;
+};
+
 export type LorawanEvent = {
   id: string;
   receivedAt: string;

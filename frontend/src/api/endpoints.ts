@@ -10,6 +10,7 @@ import type {
   LorawanEventDetail,
   LorawanSummary,
   Measurement,
+  AutoSessionConfig,
   ReceiverSummary,
   MeshtasticEvent,
   MeshtasticEventDetail,
@@ -439,4 +440,20 @@ export async function listReceivers(
     return data as ListResponse<ReceiverSummary>;
   }
   return { items: [], count: 0 };
+}
+
+export async function getAutoSession(deviceId: string, options?: RequestOptions): Promise<AutoSessionConfig> {
+  return getJson<AutoSessionConfig>(`/api/devices/${deviceId}/auto-session`, withQueryApiKey(options));
+}
+
+export async function updateAutoSession(
+  deviceId: string,
+  input: AutoSessionConfig,
+  options?: RequestOptions
+): Promise<AutoSessionConfig> {
+  return requestJson<AutoSessionConfig>(`/api/devices/${deviceId}/auto-session`, {
+    method: 'PUT',
+    json: input,
+    ...withQueryApiKey(options)
+  });
 }

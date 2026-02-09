@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import type { DeviceLatest } from '../api/types';
-import { useDevices, useGateways, useReceivers } from '../query/hooks';
+import { useEffect, useMemo, useState } from 'react';
+import type { AutoSessionConfig, DeviceLatest } from '../api/types';
+import { useAutoSession, useDevices, useGateways, useReceivers, useUpdateAutoSession } from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
@@ -93,6 +93,65 @@ export default function Controls({
   const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [autoSessionForm, setAutoSessionForm] = useState({
+    enabled: false,
+    homeLat: '',
+    homeLon: '',
+    radiusMeters: '20',
+    minOutsideSeconds: '30',
+    minInsideSeconds: '120'
+  });
+  const [autoSessionDirty, setAutoSessionDirty] = useState(false);
+  const [autoSessionError, setAutoSessionError] = useState<string | null>(null);
+  const autoSessionQuery = useAutoSession(deviceId, { enabled: Boolean(deviceId) });
+  const updateAutoSessionMutation = useUpdateAutoSession(deviceId);
+  const autoSessionStatus = getErrorStatus(autoSessionQuery.error);
+  const autoSessionMutationStatus = getErrorStatus(updateAutoSessionMutation.error);
+  const autoSessionAuthError =
+    autoSessionStatus === 401 ||
+    autoSessionStatus === 403 ||
+    autoSessionMutationStatus === 401 ||
+    autoSessionMutationStatus === 403;
+
+  const autoSessionConfig = autoSessionQuery.data;
+  const autoSessionDefaults = useMemo(
+    () => ({
+      enabled: autoSessionConfig?.enabled ?? false,
+      homeLat: autoSessionConfig?.homeLat !== null && autoSessionConfig?.homeLat !== undefined
+        ? String(autoSessionConfig.homeLat)
+        : '',
+      homeLon: autoSessionConfig?.homeLon !== null && autoSessionConfig?.homeLon !== undefined
+        ? String(autoSessionConfig.homeLon)
+        : '',
+      radiusMeters:
+        autoSessionConfig?.radiusMeters !== null && autoSessionConfig?.radiusMeters !== undefined
+          ? String(autoSessionConfig.radiusMeters)
+          : '20',
+      minOutsideSeconds:
+        autoSessionConfig?.minOutsideSeconds !== null &&
+        autoSessionConfig?.minOutsideSeconds !== undefined
+          ? String(autoSessionConfig.minOutsideSeconds)
+          : '30',
+      minInsideSeconds:
+        autoSessionConfig?.minInsideSeconds !== null &&
+        autoSessionConfig?.minInsideSeconds !== undefined
+          ? String(autoSessionConfig.minInsideSeconds)
+          : '120'
+    }),
+    [autoSessionConfig]
+  );
+
+  useEffect(() => {
+    setAutoSessionDirty(false);
+    setAutoSessionError(null);
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (!autoSessionConfig || autoSessionDirty) {
+      return;
+    }
+    setAutoSessionForm(autoSessionDefaults);
+  }, [autoSessionConfig, autoSessionDefaults, autoSessionDirty]);
   const gatewayScope =
     filterMode === 'session'
       ? {
@@ -143,6 +202,54 @@ export default function Controls({
     setExportError(null);
   }, [selectedSessionId, filterMode]);
 
+  const updateAutoSessionField = (field: keyof typeof autoSessionForm, value: string | boolean) => {
+    setAutoSessionDirty(true);
+    setAutoSessionForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAutoSessionSave = () => {
+    if (!deviceId) {
+      return;
+    }
+    setAutoSessionError(null);
+
+    const parseNumber = (value: string): number | null => {
+      if (value.trim() === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const payload: AutoSessionConfig = {
+      enabled: Boolean(autoSessionForm.enabled),
+      homeLat: parseNumber(autoSessionForm.homeLat),
+      homeLon: parseNumber(autoSessionForm.homeLon),
+      radiusMeters: parseNumber(autoSessionForm.radiusMeters),
+      minOutsideSeconds: parseNumber(autoSessionForm.minOutsideSeconds),
+      minInsideSeconds: parseNumber(autoSessionForm.minInsideSeconds)
+    };
+
+    const numericFields: Array<[string, number | null]> = [
+      ['homeLat', payload.homeLat],
+      ['homeLon', payload.homeLon],
+      ['radiusMeters', payload.radiusMeters],
+      ['minOutsideSeconds', payload.minOutsideSeconds],
+      ['minInsideSeconds', payload.minInsideSeconds]
+    ];
+    const hasInvalid = numericFields.some(([, value]) => value === null);
+    if (hasInvalid) {
+      setAutoSessionError('Enter valid numeric values for all fields.');
+      return;
+    }
+
+    updateAutoSessionMutation.mutate(payload, {
+      onSuccess: () => {
+        setAutoSessionDirty(false);
+      }
+    });
+  };
+
   return (
     <section className="controls" aria-label="Map controls">
       <div className="controls__group">
@@ -162,19 +269,100 @@ export default function Controls({
             </option>
           ))}
         </select>
-        {selectedDevice ? (
-          <div className="controls__device-meta">
-            <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
-            <button
-              type="button"
-              className="controls__button controls__button--compact"
-              onClick={() => copyDeviceUid(selectedDevice.deviceUid)}
-            >
-              Copy deviceUid
-            </button>
+      {selectedDevice ? (
+        <div className="controls__device-meta">
+          <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
+          <button
+            type="button"
+            className="controls__button controls__button--compact"
+            onClick={() => copyDeviceUid(selectedDevice.deviceUid)}
+          >
+            Copy deviceUid
+          </button>
+        </div>
+      ) : null}
+    </div>
+
+      {deviceId && (
+        <div className="controls__group">
+          <span className="controls__label">Auto Session (Home Geofence)</span>
+          <label className="controls__toggle">
+            <input
+              type="checkbox"
+              checked={autoSessionForm.enabled}
+              onChange={(event) => updateAutoSessionField('enabled', event.target.checked)}
+            />
+            Enabled
+          </label>
+          <div className="controls__row">
+            <div className="controls__group">
+              <label htmlFor="auto-home-lat">homeLat</label>
+              <input
+                id="auto-home-lat"
+                type="number"
+                value={autoSessionForm.homeLat}
+                onChange={(event) => updateAutoSessionField('homeLat', event.target.value)}
+              />
+            </div>
+            <div className="controls__group">
+              <label htmlFor="auto-home-lon">homeLon</label>
+              <input
+                id="auto-home-lon"
+                type="number"
+                value={autoSessionForm.homeLon}
+                onChange={(event) => updateAutoSessionField('homeLon', event.target.value)}
+              />
+            </div>
           </div>
-        ) : null}
-      </div>
+          <div className="controls__row">
+            <div className="controls__group">
+              <label htmlFor="auto-radius">radiusMeters</label>
+              <input
+                id="auto-radius"
+                type="number"
+                value={autoSessionForm.radiusMeters}
+                onChange={(event) => updateAutoSessionField('radiusMeters', event.target.value)}
+              />
+            </div>
+            <div className="controls__group">
+              <label htmlFor="auto-min-outside">minOutsideSeconds</label>
+              <input
+                id="auto-min-outside"
+                type="number"
+                value={autoSessionForm.minOutsideSeconds}
+                onChange={(event) => updateAutoSessionField('minOutsideSeconds', event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="controls__row">
+            <div className="controls__group">
+              <label htmlFor="auto-min-inside">minInsideSeconds</label>
+              <input
+                id="auto-min-inside"
+                type="number"
+                value={autoSessionForm.minInsideSeconds}
+                onChange={(event) => updateAutoSessionField('minInsideSeconds', event.target.value)}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            className="controls__button"
+            onClick={handleAutoSessionSave}
+            disabled={autoSessionQuery.isLoading || updateAutoSessionMutation.isPending}
+          >
+            {updateAutoSessionMutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+          {autoSessionAuthError ? (
+            <div className="controls__gateway-error">
+              Auto session requires QUERY key
+            </div>
+          ) : null}
+          {autoSessionError ? (
+            <div className="controls__gateway-error">{autoSessionError}</div>
+          ) : null}
+        </div>
+      )}
 
       <div className="controls__group">
         <span className="controls__label">Filter mode</span>
