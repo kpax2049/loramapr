@@ -152,3 +152,5 @@ If API requests fail in the browser, check that `frontend/.env` has `VITE_API_BA
 ## Contributor note
 
 - Use `prisma migrate dev` only when changing schema; otherwise use `prisma migrate deploy` (the default in Docker).
+- Feature branches: branch off `main`, open a PR, and squash-merge once approved (standard feature-branch workflow).
+- Keep experimental UI or debug-only surfaces behind `import.meta.env.DEV` gates so production builds stay clean.
