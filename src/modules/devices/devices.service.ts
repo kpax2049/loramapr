@@ -23,6 +23,24 @@ export type DeviceSummary = {
   lastSeenAt: Date | null;
 };
 
+export type DeviceAutoSessionConfigResult = {
+  deviceId: string;
+  enabled: boolean;
+  homeLat: number | null;
+  homeLon: number | null;
+  radiusMeters: number | null;
+  minOutsideSeconds: number | null;
+  minInsideSeconds: number | null;
+  updatedAt: Date | null;
+};
+
+export type DeviceLatestPosition = {
+  deviceId: string;
+  capturedAt: Date | null;
+  lat: number | null;
+  lon: number | null;
+};
+
 @Injectable()
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -104,6 +122,119 @@ export class DevicesService {
         lastSeenAt: true
       }
     });
+  }
+
+  async getAutoSessionConfig(deviceId: string): Promise<DeviceAutoSessionConfigResult | null> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    const config = await this.prisma.deviceAutoSessionConfig.findUnique({
+      where: { deviceId },
+      select: {
+        deviceId: true,
+        enabled: true,
+        homeLat: true,
+        homeLon: true,
+        radiusMeters: true,
+        minOutsideSeconds: true,
+        minInsideSeconds: true,
+        updatedAt: true
+      }
+    });
+
+    if (!config) {
+      return {
+        deviceId,
+        enabled: false,
+        homeLat: null,
+        homeLon: null,
+        radiusMeters: null,
+        minOutsideSeconds: null,
+        minInsideSeconds: null,
+        updatedAt: null
+      };
+    }
+
+    return config;
+  }
+
+  async upsertAutoSessionConfig(
+    deviceId: string,
+    data: {
+      enabled: boolean;
+      homeLat: number | null;
+      homeLon: number | null;
+      radiusMeters: number;
+      minOutsideSeconds: number;
+      minInsideSeconds: number;
+    }
+  ): Promise<DeviceAutoSessionConfigResult | null> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    return this.prisma.deviceAutoSessionConfig.upsert({
+      where: { deviceId },
+      update: {
+        enabled: data.enabled,
+        homeLat: data.homeLat,
+        homeLon: data.homeLon,
+        radiusMeters: data.radiusMeters,
+        minOutsideSeconds: data.minOutsideSeconds,
+        minInsideSeconds: data.minInsideSeconds
+      },
+      create: {
+        deviceId,
+        enabled: data.enabled,
+        homeLat: data.homeLat,
+        homeLon: data.homeLon,
+        radiusMeters: data.radiusMeters,
+        minOutsideSeconds: data.minOutsideSeconds,
+        minInsideSeconds: data.minInsideSeconds
+      },
+      select: {
+        deviceId: true,
+        enabled: true,
+        homeLat: true,
+        homeLon: true,
+        radiusMeters: true,
+        minOutsideSeconds: true,
+        minInsideSeconds: true,
+        updatedAt: true
+      }
+    });
+  }
+
+  async getLatestPositionByUid(deviceUid: string): Promise<DeviceLatestPosition | null> {
+    const device = await this.prisma.device.findUnique({
+      where: { deviceUid },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    const latest = await this.prisma.measurement.findFirst({
+      where: { deviceId: device.id },
+      orderBy: { capturedAt: 'desc' },
+      select: { capturedAt: true, lat: true, lon: true }
+    });
+
+    return {
+      deviceId: device.id,
+      capturedAt: latest?.capturedAt ?? null,
+      lat: latest?.lat ?? null,
+      lon: latest?.lon ?? null
+    };
   }
 }
 

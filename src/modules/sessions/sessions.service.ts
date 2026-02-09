@@ -186,6 +186,58 @@ export class SessionsService {
       }))
     };
   }
+
+  async startForDeviceUid(deviceUid: string, name?: string) {
+    const device = await this.prisma.device.findUnique({
+      where: { deviceUid },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    const existing = await this.prisma.session.findFirst({
+      where: { deviceId: device.id, endedAt: null },
+      orderBy: { startedAt: 'desc' }
+    });
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.session.create({
+      data: {
+        deviceId: device.id,
+        name: name ?? undefined,
+        startedAt: new Date()
+      }
+    });
+  }
+
+  async stopForDeviceUid(deviceUid: string) {
+    const device = await this.prisma.device.findUnique({
+      where: { deviceUid },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    const active = await this.prisma.session.findFirst({
+      where: { deviceId: device.id, endedAt: null },
+      orderBy: { startedAt: 'desc' }
+    });
+
+    if (!active) {
+      return { stopped: false };
+    }
+
+    const session = await this.prisma.session.update({
+      where: { id: active.id },
+      data: { endedAt: new Date() }
+    });
+
+    return { stopped: true, session };
+  }
 }
 
 function sampleItems<T>(items: T[], sample: number): T[] {

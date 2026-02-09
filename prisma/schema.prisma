@@ -31,6 +31,7 @@ model Device {
   sessions     Session[]
   measurements Measurement[]
   coverageBins CoverageBin[]
+  autoSessionConfig DeviceAutoSessionConfig?
 
   @@index([deviceUid])
 }
@@ -163,4 +164,21 @@ model CoverageBin {
   @@index([sessionId, day])
   @@index([gatewayId, day])
   @@unique([deviceId, sessionId, gatewayId, day, latBin, lonBin])
+}
+
+model DeviceAutoSessionConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  deviceId         String   @unique @db.Uuid
+  device           Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  enabled          Boolean  @default(false)
+
+  homeLat          Float?
+  homeLon          Float?
+  radiusMeters     Int?
+
+  minOutsideSeconds Int?
+  minInsideSeconds  Int?
+
+  updatedAt        DateTime @updatedAt
 }
