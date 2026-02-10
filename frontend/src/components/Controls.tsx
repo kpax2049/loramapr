@@ -677,7 +677,8 @@ export default function Controls({
       {(latest?.latestMeasurementAt ||
         latest?.latestWebhookReceivedAt ||
         latest?.latestWebhookError ||
-        latest?.latestWebhookSource) && (
+        latest?.latestWebhookSource ||
+        autoSessionConfig) && (
         <div className="controls__status" aria-live="polite">
           {latest?.latestMeasurementAt && (
             <div className="controls__status-row">
@@ -709,6 +710,18 @@ export default function Controls({
                   ? formatRelativeTime(latest.latestWebhookReceivedAt)
                   : '—'}
               </strong>
+            </div>
+          )}
+          {autoSessionConfig && (
+            <div className="controls__status-row">
+              <span>Auto session:</span>
+              <strong>{autoSessionConfig.enabled ? 'enabled' : 'disabled'}</strong>
+            </div>
+          )}
+          {autoSessionConfig?.enabled && autoSessionConfig.radiusMeters !== null && (
+            <div className="controls__status-row">
+              <span>Home radius:</span>
+              <strong>{Math.round(autoSessionConfig.radiusMeters)}m</strong>
             </div>
           )}
         </div>
