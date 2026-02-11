@@ -29,6 +29,17 @@ type ResizeStart = {
   startWidth: number;
 };
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof Element)) {
+    return false;
+  }
+  const tag = target.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    return true;
+  }
+  return target.hasAttribute('contenteditable');
+}
+
 function clampSidebarWidth(width: number): number {
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
 }
@@ -135,6 +146,40 @@ export default function Layout({
   const isSidebarCollapsed = forceSidebarCollapsed || sidebarCollapsed;
   const computedSidebarWidth = isSidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : sidebarWidth;
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        if (forceSidebarCollapsed || isSidebarCollapsed) {
+          return;
+        }
+        event.preventDefault();
+        setSidebarCollapsed(true);
+        return;
+      }
+
+      if (
+        event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === 'b'
+      ) {
+        if (forceSidebarCollapsed) {
+          return;
+        }
+        event.preventDefault();
+        setSidebarCollapsed((value) => !value);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [forceSidebarCollapsed, isSidebarCollapsed]);
+
   return (
     <div className={`layout${isResizing ? ' layout--resizing' : ''}`}>
       <aside
@@ -149,23 +194,6 @@ export default function Layout({
           {!isSidebarCollapsed ? (
             <div className="layout__sidebar-header-content">{sidebarHeader}</div>
           ) : null}
-        </div>
-        <div className="layout__sidebar-top-right">
-          {sidebarHeaderActions ? (
-            <div className="layout__sidebar-header-actions">{sidebarHeaderActions}</div>
-          ) : null}
-          <div className="layout__sidebar-header-actions">
-            <button
-              type="button"
-              className="layout__toggle-button"
-              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              disabled={forceSidebarCollapsed}
-              onClick={() => setSidebarCollapsed((value) => !value)}
-            >
-              {isSidebarCollapsed ? '>' : '<'}
-            </button>
-          </div>
         </div>
         <div className="layout__sidebar-body">
           {isSidebarCollapsed ? (
@@ -184,6 +212,23 @@ export default function Layout({
               {isSidebarCollapsed ? 'SB' : `${Math.round(sidebarWidth)}px`}
             </span>
           )}
+        </div>
+        <div className="layout__sidebar-top-right">
+          {sidebarHeaderActions ? (
+            <div className="layout__sidebar-header-actions">{sidebarHeaderActions}</div>
+          ) : null}
+          <div className="layout__sidebar-header-actions">
+            <button
+              type="button"
+              className="layout__toggle-button"
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              disabled={forceSidebarCollapsed}
+              onClick={() => setSidebarCollapsed((value) => !value)}
+            >
+              {isSidebarCollapsed ? '>' : '<'}
+            </button>
+          </div>
         </div>
         {!isSidebarCollapsed && (
           <div

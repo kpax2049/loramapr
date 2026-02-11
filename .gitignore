@@ -4,3 +4,8 @@ node_modules/
 # build output
 dist/
 tmp/
+
+# playwright output
+frontend/playwright-report/
+frontend/test-results/
+frontend/tests/e2e/screenshots/

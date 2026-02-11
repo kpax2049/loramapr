@@ -1388,6 +1388,7 @@ function App() {
             key={tab.key}
             type="button"
             role="tab"
+            aria-label={tab.label}
             aria-selected={sidebarTab === tab.key}
             className={`sidebar-header__tab${sidebarTab === tab.key ? ' is-active' : ''}`}
             onClick={() => setSidebarTab(tab.key)}
