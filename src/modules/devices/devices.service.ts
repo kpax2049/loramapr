@@ -41,6 +41,18 @@ export type DeviceLatestPosition = {
   lon: number | null;
 };
 
+export type DeviceAgentDecision = {
+  id: string;
+  deviceId: string;
+  deviceUid: string;
+  decision: string;
+  reason: string | null;
+  inside: boolean | null;
+  distanceM: number | null;
+  capturedAt: Date | null;
+  createdAt: Date;
+};
+
 export type AgentAutoSessionConfig = {
   deviceUid: string;
   deviceId: string;
@@ -250,6 +262,36 @@ export class DevicesService {
       lat: latest?.lat ?? null,
       lon: latest?.lon ?? null
     };
+  }
+
+  async listAgentDecisions(
+    deviceId: string,
+    limit: number
+  ): Promise<DeviceAgentDecision[] | null> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    return this.prisma.agentDecision.findMany({
+      where: { deviceId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        deviceId: true,
+        deviceUid: true,
+        decision: true,
+        reason: true,
+        inside: true,
+        distanceM: true,
+        capturedAt: true,
+        createdAt: true
+      }
+    });
   }
 
   async getAgentAutoSessionConfigByUid(deviceUid: string): Promise<AgentAutoSessionConfig | null> {

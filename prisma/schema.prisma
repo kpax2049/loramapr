@@ -31,6 +31,7 @@ model Device {
   sessions     Session[]
   measurements Measurement[]
   coverageBins CoverageBin[]
+  agentDecisions AgentDecision[]
   autoSessionConfig DeviceAutoSessionConfig?
 
   @@index([deviceUid])
@@ -164,6 +165,22 @@ model CoverageBin {
   @@index([sessionId, day])
   @@index([gatewayId, day])
   @@unique([deviceId, sessionId, gatewayId, day, latBin, lonBin])
+}
+
+model AgentDecision {
+  id         String   @id @default(uuid()) @db.Uuid
+  deviceId   String   @db.Uuid
+  deviceUid  String
+  decision   String
+  reason     String?
+  inside     Boolean?
+  distanceM  Float?
+  capturedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, createdAt])
 }
 
 model DeviceAutoSessionConfig {

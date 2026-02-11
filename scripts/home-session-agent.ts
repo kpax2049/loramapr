@@ -1,9 +1,10 @@
-import { isInsideGeofence } from '../src/common/geo/geofence';
+import { distanceMeters } from '../src/common/geo/haversine';
 
 type AgentState = {
   lastInside: boolean | null;
   lastChangeAt: number;
   lastTriggeredFor: boolean | null;
+  mode: 'inside' | 'outside' | 'stale' | 'disabled' | null;
 };
 
 type LatestPositionResponse = {
@@ -14,6 +15,17 @@ type LatestPositionResponse = {
   lon: number | null;
 };
 
+type AutoSessionConfigResponse = {
+  deviceUid: string;
+  deviceId: string;
+  enabled: boolean;
+  homeLat: number | null;
+  homeLon: number | null;
+  radiusMeters: number | null;
+  minOutsideSeconds: number;
+  minInsideSeconds: number;
+};
+
 const API_BASE_URL = requiredEnv('API_BASE_URL');
 const INGEST_API_KEY = requiredEnv('INGEST_API_KEY');
 const DEVICE_UIDS = requiredEnv('DEVICE_UIDS')
@@ -22,12 +34,8 @@ const DEVICE_UIDS = requiredEnv('DEVICE_UIDS')
   .filter(Boolean);
 
 const POLL_INTERVAL_MS = parseIntEnv('POLL_INTERVAL_MS', 5000);
-
-const HOME_LAT = requiredNumberEnv('HOME_LAT');
-const HOME_LON = requiredNumberEnv('HOME_LON');
-const RADIUS_METERS = parseIntEnv('RADIUS_METERS', 20);
-const MIN_OUTSIDE_SECONDS = parseIntEnv('MIN_OUTSIDE_SECONDS', 30);
-const MIN_INSIDE_SECONDS = parseIntEnv('MIN_INSIDE_SECONDS', 120);
+const STALE_SECONDS = parseIntEnv('STALE_SECONDS', 60);
+const API_BASE = API_BASE_URL.replace(/\/$/, '');
 
 if (DEVICE_UIDS.length === 0) {
   throw new Error('DEVICE_UIDS must include at least one device');
@@ -57,61 +65,175 @@ async function tick() {
 }
 
 async function handleDevice(deviceUid: string) {
+  const config = await fetchAutoSessionConfig(deviceUid);
+  if (!config) {
+    return;
+  }
+
+  const state = getState(deviceUid);
+
+  if (!config.enabled) {
+    transitionMode(
+      deviceUid,
+      state,
+      'disabled',
+      null,
+      null,
+      null,
+      'auto_session_disabled'
+    );
+    state.lastTriggeredFor = null;
+    return;
+  }
+
   const latest = await fetchLatestPosition(deviceUid);
   if (!latest) {
     return;
   }
-  if (latest.lat === null || latest.lon === null || !latest.capturedAt) {
-    log(deviceUid, 'No GPS yet; skipping.');
+
+  if (!latest.capturedAt || latest.lat === null || latest.lon === null) {
+    transitionMode(deviceUid, state, 'stale', null, null, latest.capturedAt, 'no_position');
     return;
   }
 
-  const inside = isInsideGeofence(latest.lat, latest.lon, HOME_LAT, HOME_LON, RADIUS_METERS);
-  const now = Date.now();
-  const state = getState(deviceUid, inside, now);
-
-  if (state.lastInside !== inside) {
-    const durationMs = now - state.lastChangeAt;
-    log(
+  const capturedAtMs = Date.parse(latest.capturedAt);
+  if (!Number.isFinite(capturedAtMs)) {
+    transitionMode(
       deviceUid,
-      `State change: ${state.lastInside ? 'inside' : 'outside'} -> ${
-        inside ? 'inside' : 'outside'
-      } (after ${Math.round(durationMs / 1000)}s)`
+      state,
+      'stale',
+      null,
+      null,
+      latest.capturedAt,
+      'invalid_capturedAt'
     );
+    return;
+  }
+
+  const now = Date.now();
+  if (now - capturedAtMs > STALE_SECONDS * 1000) {
+    transitionMode(
+      deviceUid,
+      state,
+      'stale',
+      null,
+      null,
+      latest.capturedAt,
+      'stale_position'
+    );
+    return;
+  }
+
+  if (config.homeLat === null || config.homeLon === null) {
+    transitionMode(
+      deviceUid,
+      state,
+      'disabled',
+      null,
+      null,
+      latest.capturedAt,
+      'missing_home_coordinates'
+    );
+    state.lastTriggeredFor = null;
+    return;
+  }
+
+  const radiusMeters = config.radiusMeters ?? 20;
+  const minOutsideSeconds = config.minOutsideSeconds ?? 30;
+  const minInsideSeconds = config.minInsideSeconds ?? 120;
+
+  const distanceM = distanceMeters(latest.lat, latest.lon, config.homeLat, config.homeLon);
+  const inside = distanceM <= radiusMeters;
+
+  transitionMode(
+    deviceUid,
+    state,
+    inside ? 'inside' : 'outside',
+    distanceM,
+    inside,
+    latest.capturedAt
+  );
+
+  if (state.lastInside === null) {
+    state.lastInside = inside;
+    state.lastChangeAt = now;
+    state.lastTriggeredFor = null;
+  } else if (state.lastInside !== inside) {
     state.lastInside = inside;
     state.lastChangeAt = now;
     state.lastTriggeredFor = null;
   }
 
   const elapsedMs = now - state.lastChangeAt;
-  if (!inside && elapsedMs >= MIN_OUTSIDE_SECONDS * 1000 && state.lastTriggeredFor !== false) {
-    await startSession(deviceUid);
+  if (!inside && elapsedMs >= minOutsideSeconds * 1000 && state.lastTriggeredFor !== false) {
+    await startSession(deviceUid, distanceM, inside, latest.capturedAt);
     state.lastTriggeredFor = false;
   }
-  if (inside && elapsedMs >= MIN_INSIDE_SECONDS * 1000 && state.lastTriggeredFor !== true) {
-    await stopSession(deviceUid);
+  if (inside && elapsedMs >= minInsideSeconds * 1000 && state.lastTriggeredFor !== true) {
+    await stopSession(deviceUid, distanceM, inside, latest.capturedAt);
     state.lastTriggeredFor = true;
   }
 }
 
-function getState(deviceUid: string, inside: boolean, now: number): AgentState {
+function getState(deviceUid: string): AgentState {
   let state = stateByDevice.get(deviceUid);
   if (!state) {
     state = {
-      lastInside: inside,
-      lastChangeAt: now,
-      lastTriggeredFor: null
+      lastInside: null,
+      lastChangeAt: Date.now(),
+      lastTriggeredFor: null,
+      mode: null
     };
     stateByDevice.set(deviceUid, state);
-    log(deviceUid, `Initial state: ${inside ? 'inside' : 'outside'}`);
   }
   return state;
 }
 
+function transitionMode(
+  deviceUid: string,
+  state: AgentState,
+  nextMode: AgentState['mode'],
+  distanceM: number | null,
+  inside: boolean | null,
+  capturedAt: string | null,
+  reason?: string
+) {
+  if (state.mode === nextMode) {
+    return;
+  }
+  const from = state.mode ?? 'unknown';
+  const suffix = reason ? ` reason=${reason}` : '';
+  log(
+    deviceUid,
+    `transition ${from}->${nextMode ?? 'unknown'} distanceM=${formatDistance(
+      distanceM
+    )} inside=${formatInside(inside)} capturedAt=${capturedAt ?? 'null'}${suffix}`
+  );
+  state.mode = nextMode;
+}
+
+async function fetchAutoSessionConfig(
+  deviceUid: string
+): Promise<AutoSessionConfigResponse | null> {
+  const url = `${API_BASE}/api/agent/devices/${encodeURIComponent(deviceUid)}/auto-session`;
+  const response = await fetch(url, {
+    headers: {
+      'X-API-Key': INGEST_API_KEY
+    }
+  });
+  if (response.status === 404) {
+    log(deviceUid, 'Auto-session config: device not found.');
+    return null;
+  }
+  if (!response.ok) {
+    log(deviceUid, `Auto-session config fetch failed: ${response.status}`);
+    return null;
+  }
+  return (await response.json()) as AutoSessionConfigResponse;
+}
+
 async function fetchLatestPosition(deviceUid: string): Promise<LatestPositionResponse | null> {
-  const url = `${API_BASE_URL.replace(/\\/$/, '')}/api/agent/devices/${encodeURIComponent(
-    deviceUid
-  )}/latest-position`;
+  const url = `${API_BASE}/api/agent/devices/${encodeURIComponent(deviceUid)}/latest-position`;
   const response = await fetch(url, {
     headers: {
       'X-API-Key': INGEST_API_KEY
@@ -128,8 +250,13 @@ async function fetchLatestPosition(deviceUid: string): Promise<LatestPositionRes
   return (await response.json()) as LatestPositionResponse;
 }
 
-async function startSession(deviceUid: string) {
-  const url = `${API_BASE_URL.replace(/\\/$/, '')}/api/agent/sessions/start`;
+async function startSession(
+  deviceUid: string,
+  distanceM: number,
+  inside: boolean,
+  capturedAt: string
+) {
+  const url = `${API_BASE}/api/agent/sessions/start`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -139,15 +266,30 @@ async function startSession(deviceUid: string) {
     body: JSON.stringify({ deviceUid })
   });
   if (!response.ok) {
-    log(deviceUid, `Start session failed: ${response.status}`);
+    log(
+      deviceUid,
+      `action=start failed status=${response.status} distanceM=${formatDistance(
+        distanceM
+      )} inside=${formatInside(inside)} capturedAt=${capturedAt}`
+    );
     return;
   }
   const session = await response.json();
-  log(deviceUid, `Start session response: ${JSON.stringify(session)}`);
+  log(
+    deviceUid,
+    `action=start ok distanceM=${formatDistance(distanceM)} inside=${formatInside(
+      inside
+    )} capturedAt=${capturedAt} response=${JSON.stringify(session)}`
+  );
 }
 
-async function stopSession(deviceUid: string) {
-  const url = `${API_BASE_URL.replace(/\\/$/, '')}/api/agent/sessions/stop`;
+async function stopSession(
+  deviceUid: string,
+  distanceM: number,
+  inside: boolean,
+  capturedAt: string
+) {
+  const url = `${API_BASE}/api/agent/sessions/stop`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -157,11 +299,21 @@ async function stopSession(deviceUid: string) {
     body: JSON.stringify({ deviceUid })
   });
   if (!response.ok) {
-    log(deviceUid, `Stop session failed: ${response.status}`);
+    log(
+      deviceUid,
+      `action=stop failed status=${response.status} distanceM=${formatDistance(
+        distanceM
+      )} inside=${formatInside(inside)} capturedAt=${capturedAt}`
+    );
     return;
   }
   const payload = await response.json();
-  log(deviceUid, `Stop session response: ${JSON.stringify(payload)}`);
+  log(
+    deviceUid,
+    `action=stop ok distanceM=${formatDistance(distanceM)} inside=${formatInside(
+      inside
+    )} capturedAt=${capturedAt} response=${JSON.stringify(payload)}`
+  );
 }
 
 function log(deviceUid: string, message: string) {
@@ -176,15 +328,6 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-function requiredNumberEnv(name: string): number {
-  const value = requiredEnv(name);
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${name} must be a number`);
-  }
-  return parsed;
-}
-
 function parseIntEnv(name: string, defaultValue: number): number {
   const value = process.env[name];
   if (!value) {
@@ -195,6 +338,20 @@ function parseIntEnv(name: string, defaultValue: number): number {
     throw new Error(`${name} must be an integer`);
   }
   return parsed;
+}
+
+function formatDistance(value: number | null): string {
+  if (value === null) {
+    return 'na';
+  }
+  return value.toFixed(1);
+}
+
+function formatInside(value: boolean | null): string {
+  if (value === null) {
+    return 'na';
+  }
+  return value ? 'true' : 'false';
 }
 
 void main();

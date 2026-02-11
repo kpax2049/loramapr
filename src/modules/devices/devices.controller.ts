@@ -1,10 +1,10 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Put, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
-import { DeviceLatestStatus, DeviceListItem, DeviceSummary, DevicesService } from './devices.service';
+import { DeviceAgentDecision, DeviceLatestStatus, DeviceListItem, DeviceSummary, DevicesService } from './devices.service';
 
 @Controller('api/devices')
 export class DevicesController {
@@ -78,6 +78,22 @@ export class DevicesController {
     }
     return formatAutoSessionConfig(config);
   }
+
+  @Get(':id/agent-decisions')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  async getAgentDecisions(
+    @Param('id') id: string,
+    @Query('limit') limitParam?: string
+  ): Promise<{ items: AgentDecisionResponse[]; count: number }> {
+    const limit = parseLimit(limitParam);
+    const decisions = await this.devicesService.listAgentDecisions(id, limit);
+    if (!decisions) {
+      throw new NotFoundException('Device not found');
+    }
+    const items = decisions.map(formatAgentDecision);
+    return { items, count: items.length };
+  }
 }
 
 function formatLatestResponse(latest: DeviceLatestStatus) {
@@ -111,9 +127,23 @@ type AutoSessionConfigResponse = {
   updatedAt: string | null;
 };
 
+type AgentDecisionResponse = {
+  id: string;
+  deviceId: string;
+  deviceUid: string;
+  decision: string;
+  reason: string | null;
+  inside: boolean | null;
+  distanceM: number | null;
+  capturedAt: string | null;
+  createdAt: string;
+};
+
 const DEFAULT_RADIUS_METERS = 20;
 const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
+const DEFAULT_AGENT_DECISIONS_LIMIT = 200;
+const MAX_AGENT_DECISIONS_LIMIT = 1000;
 
 function parseAutoSessionBody(body: AutoSessionConfigBody) {
   if (typeof body?.enabled !== 'boolean') {
@@ -162,6 +192,17 @@ function parseOptionalInt(value: number | null | undefined, name: string): numbe
   return Math.trunc(value);
 }
 
+function parseLimit(value?: string): number {
+  if (value === undefined) {
+    return DEFAULT_AGENT_DECISIONS_LIMIT;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  return Math.min(parsed, MAX_AGENT_DECISIONS_LIMIT);
+}
+
 function formatAutoSessionConfig(config: {
   deviceId: string;
   enabled: boolean;
@@ -181,5 +222,19 @@ function formatAutoSessionConfig(config: {
     minOutsideSeconds: config.minOutsideSeconds ?? DEFAULT_MIN_OUTSIDE_SECONDS,
     minInsideSeconds: config.minInsideSeconds ?? DEFAULT_MIN_INSIDE_SECONDS,
     updatedAt: config.updatedAt ? config.updatedAt.toISOString() : null
+  };
+}
+
+function formatAgentDecision(decision: DeviceAgentDecision): AgentDecisionResponse {
+  return {
+    id: decision.id,
+    deviceId: decision.deviceId,
+    deviceUid: decision.deviceUid,
+    decision: decision.decision,
+    reason: decision.reason,
+    inside: decision.inside,
+    distanceM: decision.distanceM,
+    capturedAt: decision.capturedAt ? decision.capturedAt.toISOString() : null,
+    createdAt: decision.createdAt.toISOString()
   };
 }
