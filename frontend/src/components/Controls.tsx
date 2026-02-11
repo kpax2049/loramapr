@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import type { AutoSessionConfig, DeviceLatest } from '../api/types';
 import {
   useAgentDecisions,
@@ -8,9 +8,16 @@ import {
   useReceivers,
   useUpdateAutoSession
 } from '../query/hooks';
+import { useLorawanEvents } from '../query/lorawan';
+import { useMeshtasticEvents } from '../query/meshtastic';
+import GatewayStatsPanel from './GatewayStatsPanel';
+import LorawanEventsPanel from './LorawanEventsPanel';
+import MeshtasticEventsPanel from './MeshtasticEventsPanel';
+import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
+  activeTab: 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
   deviceId: string | null;
   onDeviceChange: (deviceId: string | null) => void;
   filterMode: 'time' | 'session';
@@ -52,9 +59,11 @@ type ControlsProps = {
   showTrack: boolean;
   onShowPointsChange: (value: boolean) => void;
   onShowTrackChange: (value: boolean) => void;
+  playbackControls?: ReactNode;
 };
 
 export default function Controls({
+  activeTab,
   deviceId,
   onDeviceChange,
   filterMode,
@@ -93,7 +102,8 @@ export default function Controls({
   showPoints,
   showTrack,
   onShowPointsChange,
-  onShowTrackChange
+  onShowTrackChange,
+  playbackControls
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = devicesData?.items ?? [];
@@ -264,40 +274,60 @@ export default function Controls({
     });
   };
 
+  const showDeviceTab = activeTab === 'device';
+  const showSessionsTab = activeTab === 'sessions';
+  const showPlaybackTab = activeTab === 'playback';
+  const showCoverageTab = activeTab === 'coverage';
+  const showDebugTab = activeTab === 'debug';
+  const isPlaybackMode = viewMode === 'playback';
+  const selectedReceiver =
+    receiverOptions.find((receiver) => receiver.id === selectedReceiverId) ?? null;
+  const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
+  const debugProbeEnabled = showDebugTab && hasQueryApiKey;
+  const lorawanDebugProbe = useLorawanEvents(selectedDevice?.deviceUid, 1, debugProbeEnabled);
+  const meshtasticDebugProbe = useMeshtasticEvents(selectedDevice?.deviceUid, 1, debugProbeEnabled);
+  const lorawanDebugStatus = getErrorStatus(lorawanDebugProbe.error);
+  const meshtasticDebugStatus = getErrorStatus(meshtasticDebugProbe.error);
+  const debugAuthError =
+    !hasQueryApiKey ||
+    lorawanDebugStatus === 401 ||
+    lorawanDebugStatus === 403 ||
+    meshtasticDebugStatus === 401 ||
+    meshtasticDebugStatus === 403 ||
+    gatewayErrorStatus === 401 ||
+    gatewayErrorStatus === 403 ||
+    receiverErrorStatus === 401 ||
+    receiverErrorStatus === 403;
+
   return (
     <section className="controls" aria-label="Map controls">
-      <div className="controls__group">
-        <label htmlFor="device-select">Device</label>
-        <select
-          id="device-select"
-          value={deviceId ?? ''}
-          onChange={(event) => onDeviceChange(event.target.value || null)}
-          disabled={isLoading || devices.length === 0}
-        >
-          <option value="">
-            {isLoading ? 'Loading devices...' : 'Select a device'}
-          </option>
-          {devices.map((device) => (
-            <option key={device.id} value={device.id}>
-              {formatDeviceLabel(device.name, device.deviceUid)}
-            </option>
-          ))}
-        </select>
-      {selectedDevice ? (
-        <div className="controls__device-meta">
-          <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
-          <button
-            type="button"
-            className="controls__button controls__button--compact"
-            onClick={() => copyDeviceUid(selectedDevice.deviceUid)}
+      {showDeviceTab && (
+        <div className="controls__group">
+          <label htmlFor="device-select">Device</label>
+          <select
+            id="device-select"
+            value={deviceId ?? ''}
+            onChange={(event) => onDeviceChange(event.target.value || null)}
+            disabled={isLoading || devices.length === 0}
           >
-            Copy deviceUid
-          </button>
+            <option value="">
+              {isLoading ? 'Loading devices...' : 'Select a device'}
+            </option>
+            {devices.map((device) => (
+              <option key={device.id} value={device.id}>
+                {formatDeviceLabel(device.name, device.deviceUid)}
+              </option>
+            ))}
+          </select>
+          {selectedDevice ? (
+            <div className="controls__device-meta">
+              <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+      )}
 
-      {deviceId && (
+      {showDeviceTab && deviceId && (
         <div className="controls__group">
           <span className="controls__label">Auto Session (Home Geofence)</span>
           <label className="controls__toggle">
@@ -378,85 +408,92 @@ export default function Controls({
         </div>
       )}
 
-      <div className="controls__group">
-        <span className="controls__label">Filter mode</span>
-        <div className="controls__segmented" role="radiogroup" aria-label="Filter mode">
-          <label className={`controls__segment ${filterMode === 'time' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="filter-mode"
-              value="time"
-              checked={filterMode === 'time'}
-              onChange={() => onFilterModeChange('time')}
-            />
-            Time
-          </label>
-          <label className={`controls__segment ${filterMode === 'session' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="filter-mode"
-              value="session"
-              checked={filterMode === 'session'}
-              onChange={() => onFilterModeChange('session')}
-            />
-            Session
-          </label>
+      {showSessionsTab && !isPlaybackMode && (
+        <div className="controls__group">
+          <span className="controls__label">Filter mode</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="Filter mode">
+            <label className={`controls__segment ${filterMode === 'time' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="filter-mode"
+                value="time"
+                checked={filterMode === 'time'}
+                onChange={() => onFilterModeChange('time')}
+              />
+              Time
+            </label>
+            <label className={`controls__segment ${filterMode === 'session' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="filter-mode"
+                value="session"
+                checked={filterMode === 'session'}
+                onChange={() => onFilterModeChange('session')}
+              />
+              Session
+            </label>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="controls__group">
-        <span className="controls__label">View mode</span>
-        <div className="controls__segmented" role="radiogroup" aria-label="View mode">
-          <label className={`controls__segment ${viewMode === 'explore' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="view-mode"
-              value="explore"
-              checked={viewMode === 'explore'}
-              onChange={() => onViewModeChange('explore')}
-            />
-            Explore
-          </label>
-          <label className={`controls__segment ${viewMode === 'playback' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="view-mode"
-              value="playback"
-              checked={viewMode === 'playback'}
-              onChange={() => onViewModeChange('playback')}
-            />
-            Playback
-          </label>
+      {showPlaybackTab && (
+        <div className="controls__group">
+          <span className="controls__label">View mode</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="View mode">
+            <label className={`controls__segment ${viewMode === 'explore' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="view-mode"
+                value="explore"
+                checked={viewMode === 'explore'}
+                onChange={() => onViewModeChange('explore')}
+              />
+              Explore
+            </label>
+            <label className={`controls__segment ${viewMode === 'playback' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="view-mode"
+                value="playback"
+                checked={viewMode === 'playback'}
+                onChange={() => onViewModeChange('playback')}
+              />
+              Playback
+            </label>
+          </div>
+          {isPlaybackMode && playbackControls}
         </div>
-      </div>
+      )}
 
-      <div className="controls__group">
-        <span className="controls__label">Map layer</span>
-        <div className="controls__segmented" role="radiogroup" aria-label="Map layer">
-          <label className={`controls__segment ${mapLayerMode === 'points' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="map-mode"
-              value="points"
-              checked={mapLayerMode === 'points'}
-              onChange={() => onMapLayerModeChange('points')}
-            />
-            Points
-          </label>
-          <label className={`controls__segment ${mapLayerMode === 'coverage' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="map-mode"
-              value="coverage"
-              checked={mapLayerMode === 'coverage'}
-              onChange={() => onMapLayerModeChange('coverage')}
-            />
-            Coverage
-          </label>
+      {showCoverageTab && (
+        <div className="controls__group">
+          <span className="controls__label">Map layer</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="Map layer">
+            <label className={`controls__segment ${mapLayerMode === 'points' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="map-mode"
+                value="points"
+                checked={mapLayerMode === 'points'}
+                onChange={() => onMapLayerModeChange('points')}
+              />
+              Points
+            </label>
+            <label className={`controls__segment ${mapLayerMode === 'coverage' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="map-mode"
+                value="coverage"
+                checked={mapLayerMode === 'coverage'}
+                onChange={() => onMapLayerModeChange('coverage')}
+              />
+              Coverage
+            </label>
+          </div>
         </div>
-      </div>
+      )}
 
-      {mapLayerMode === 'coverage' ? (
+      {showCoverageTab && mapLayerMode === 'coverage' ? (
         <div className="controls__group">
           <label htmlFor="coverage-metric">Coverage metric</label>
           <select
@@ -472,7 +509,13 @@ export default function Controls({
         </div>
       ) : null}
 
-      {filterMode === 'time' ? (
+      {showSessionsTab && isPlaybackMode ? (
+        <div className="controls__group">
+          <span className="controls__label">
+            Playback mode is active. Use Playback tab controls for replay.
+          </span>
+        </div>
+      ) : showSessionsTab && filterMode === 'time' ? (
         <>
           <div className="controls__group">
             <label htmlFor="range-preset">Range</label>
@@ -528,7 +571,7 @@ export default function Controls({
             </div>
           )}
         </>
-      ) : (
+      ) : showSessionsTab ? (
         <div className="controls__group">
           {deviceId ? (
             <>
@@ -558,199 +601,233 @@ export default function Controls({
             <span className="controls__label">Select a device</span>
           )}
         </div>
+      ) : null}
+
+      {showCoverageTab && (
+        <div className="controls__group">
+          <span className="controls__label">Receiver source</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="Receiver source">
+            <label className={`controls__segment ${receiverSource === 'lorawan' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="receiver-source"
+                value="lorawan"
+                checked={receiverSource === 'lorawan'}
+                onChange={() => onReceiverSourceChange('lorawan')}
+              />
+              LoRaWAN
+            </label>
+            <label
+              className={`controls__segment ${receiverSource === 'meshtastic' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="receiver-source"
+                value="meshtastic"
+                checked={receiverSource === 'meshtastic'}
+                onChange={() => onReceiverSourceChange('meshtastic')}
+              />
+              Meshtastic
+            </label>
+          </div>
+        </div>
       )}
 
-      <div className="controls__group">
-        <span className="controls__label">Receiver source</span>
-        <div className="controls__segmented" role="radiogroup" aria-label="Receiver source">
-          <label className={`controls__segment ${receiverSource === 'lorawan' ? 'is-active' : ''}`}>
-            <input
-              type="radio"
-              name="receiver-source"
-              value="lorawan"
-              checked={receiverSource === 'lorawan'}
-              onChange={() => onReceiverSourceChange('lorawan')}
-            />
-            LoRaWAN
-          </label>
-          <label
-            className={`controls__segment ${receiverSource === 'meshtastic' ? 'is-active' : ''}`}
-          >
-            <input
-              type="radio"
-              name="receiver-source"
-              value="meshtastic"
-              checked={receiverSource === 'meshtastic'}
-              onChange={() => onReceiverSourceChange('meshtastic')}
-            />
-            Meshtastic
-          </label>
-        </div>
-      </div>
-
-      <div className="controls__group">
-        {receiverSource === 'meshtastic' ? (
-          <>
-            <label htmlFor="receiver-select">Receiver</label>
-            <select
-              id="receiver-select"
-              value={selectedReceiverId ?? ''}
-              onChange={(event) => onSelectReceiverId(event.target.value || null)}
-              disabled={!receiverScopeEnabled || receiverOptions.length === 0}
-            >
-              <option value="">All receivers</option>
-              {receiverOptions.map((receiver) => (
-                <option key={receiver.id} value={receiver.id}>
-                  {receiver.id} ({receiver.count})
-                </option>
-              ))}
-            </select>
-            <label htmlFor="receiver-compare">Compare receiver</label>
-            <select
-              id="receiver-compare"
-              value={compareReceiverId ?? ''}
-              onChange={(event) => onSelectCompareReceiverId(event.target.value || null)}
-              disabled={!receiverScopeEnabled || !selectedReceiverId || receiverOptions.length === 0}
-            >
-              <option value="">No comparison</option>
-              {receiverOptions.map((receiver) => (
-                <option key={`compare-${receiver.id}`} value={receiver.id}>
-                  {receiver.id} ({receiver.count})
-                </option>
-              ))}
-            </select>
-            {receiverErrorStatus === 401 || receiverErrorStatus === 403 ? (
-              <div className="controls__gateway-error">Receiver analysis requires QUERY key</div>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <label htmlFor="gateway-select">Gateway</label>
-            <select
-              id="gateway-select"
-              value={selectedGatewayId ?? ''}
-              onChange={(event) => onSelectGatewayId(event.target.value || null)}
-              disabled={!gatewayScopeEnabled || gatewayOptions.length === 0}
-            >
-              <option value="">All gateways</option>
-              {gatewayOptions.map((gateway) => (
-                <option key={gateway.gatewayId} value={gateway.gatewayId}>
-                  {gateway.gatewayId} ({gateway.count})
-                </option>
-              ))}
-            </select>
-            <label htmlFor="gateway-compare">Compare gateway</label>
-            <select
-              id="gateway-compare"
-              value={compareGatewayId ?? ''}
-              onChange={(event) => onSelectCompareGatewayId(event.target.value || null)}
-              disabled={!gatewayScopeEnabled || !selectedGatewayId || gatewayOptions.length === 0}
-            >
-              <option value="">No comparison</option>
-              {gatewayOptions.map((gateway) => (
-                <option key={`compare-${gateway.gatewayId}`} value={gateway.gatewayId}>
-                  {gateway.gatewayId} ({gateway.count})
-                </option>
-              ))}
-            </select>
-            {gatewayErrorStatus === 401 || gatewayErrorStatus === 403 ? (
-              <div className="controls__gateway-error">Gateway analysis requires QUERY key</div>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      <div className="controls__group">
-        <span className="controls__label">Map</span>
-        <button type="button" className="controls__button" onClick={onFitToData}>
-          Fit to data
-        </button>
-      </div>
-
-      <div className="controls__group">
-        <span className="controls__label">Layers</span>
-        <label className="controls__toggle">
-          <input
-            type="checkbox"
-            checked={showPoints}
-            onChange={(event) => onShowPointsChange(event.target.checked)}
-            disabled={mapLayerMode === 'coverage'}
-          />
-          Show points
-        </label>
-        <label className="controls__toggle">
-          <input
-            type="checkbox"
-            checked={showTrack}
-            onChange={(event) => onShowTrackChange(event.target.checked)}
-          />
-          Show track
-        </label>
-      </div>
-
-      {(latest?.latestMeasurementAt ||
-        latest?.latestWebhookReceivedAt ||
-        latest?.latestWebhookError ||
-        latest?.latestWebhookSource ||
-        autoSessionConfig ||
-        showAgentDecision) && (
-        <div className="controls__status" aria-live="polite">
-          {latest?.latestMeasurementAt && (
-            <div className="controls__status-row">
-              <span>Last measurement:</span>
-              <strong>{formatRelativeTime(latest.latestMeasurementAt)}</strong>
-            </div>
-          )}
-          {(latest?.latestWebhookReceivedAt || latest?.latestWebhookError) && (
-            <div
-              className={`controls__status-row ${
-                latest?.latestWebhookError ? 'controls__status-error' : ''
-              }`}
-            >
-              <span>Last webhook:</span>
-              <strong>
-                {latest?.latestWebhookReceivedAt
-                  ? formatRelativeTime(latest.latestWebhookReceivedAt)
-                  : '—'}
-                {latest?.latestWebhookError ? ` (${latest.latestWebhookError})` : ''}
-              </strong>
-            </div>
-          )}
-          {(latest?.latestWebhookSource || latest?.latestWebhookReceivedAt) && (
-            <div className="controls__status-row">
-              <span>Last ingest:</span>
-              <strong>
-                {latest?.latestWebhookSource ?? '—'} @{' '}
-                {latest?.latestWebhookReceivedAt
-                  ? formatRelativeTime(latest.latestWebhookReceivedAt)
-                  : '—'}
-              </strong>
-            </div>
-          )}
-          {autoSessionConfig && (
-            <div className="controls__status-row">
-              <span>Auto session:</span>
-              <strong>{autoSessionConfig.enabled ? 'enabled' : 'disabled'}</strong>
-            </div>
-          )}
-          {autoSessionConfig?.enabled && autoSessionConfig.radiusMeters !== null && (
-            <div className="controls__status-row">
-              <span>Home radius:</span>
-              <strong>{Math.round(autoSessionConfig.radiusMeters)}m</strong>
-            </div>
-          )}
-          {showAgentDecision && (
-            <div className="controls__status-row">
-              <span>Agent:</span>
-              <strong>
-                last decision {agentDecision?.decision ?? '—'} @{' '}
-                {agentDecisionTime ? formatRelativeTime(agentDecisionTime) : '—'}
-                {agentDecision?.reason ? ` (${agentDecision.reason})` : ''}
-              </strong>
-            </div>
+      {showCoverageTab && (
+        <div className="controls__group">
+          {receiverSource === 'meshtastic' ? (
+            <>
+              <label htmlFor="receiver-select">Receiver</label>
+              <select
+                id="receiver-select"
+                value={selectedReceiverId ?? ''}
+                onChange={(event) => onSelectReceiverId(event.target.value || null)}
+                disabled={!receiverScopeEnabled || receiverOptions.length === 0}
+              >
+                <option value="">All receivers</option>
+                {receiverOptions.map((receiver) => (
+                  <option key={receiver.id} value={receiver.id}>
+                    {receiver.id} ({receiver.count})
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="receiver-compare">Compare receiver</label>
+              <select
+                id="receiver-compare"
+                value={compareReceiverId ?? ''}
+                onChange={(event) => onSelectCompareReceiverId(event.target.value || null)}
+                disabled={!receiverScopeEnabled || !selectedReceiverId || receiverOptions.length === 0}
+              >
+                <option value="">No comparison</option>
+                {receiverOptions.map((receiver) => (
+                  <option key={`compare-${receiver.id}`} value={receiver.id}>
+                    {receiver.id} ({receiver.count})
+                  </option>
+                ))}
+              </select>
+              {receiverErrorStatus === 401 || receiverErrorStatus === 403 ? (
+                <div className="controls__gateway-error">Receiver analysis requires QUERY key</div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <label htmlFor="gateway-select">Gateway</label>
+              <select
+                id="gateway-select"
+                value={selectedGatewayId ?? ''}
+                onChange={(event) => onSelectGatewayId(event.target.value || null)}
+                disabled={!gatewayScopeEnabled || gatewayOptions.length === 0}
+              >
+                <option value="">All gateways</option>
+                {gatewayOptions.map((gateway) => (
+                  <option key={gateway.gatewayId} value={gateway.gatewayId}>
+                    {gateway.gatewayId} ({gateway.count})
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="gateway-compare">Compare gateway</label>
+              <select
+                id="gateway-compare"
+                value={compareGatewayId ?? ''}
+                onChange={(event) => onSelectCompareGatewayId(event.target.value || null)}
+                disabled={!gatewayScopeEnabled || !selectedGatewayId || gatewayOptions.length === 0}
+              >
+                <option value="">No comparison</option>
+                {gatewayOptions.map((gateway) => (
+                  <option key={`compare-${gateway.gatewayId}`} value={gateway.gatewayId}>
+                    {gateway.gatewayId} ({gateway.count})
+                  </option>
+                ))}
+              </select>
+              {gatewayErrorStatus === 401 || gatewayErrorStatus === 403 ? (
+                <div className="controls__gateway-error">Gateway analysis requires QUERY key</div>
+              ) : null}
+            </>
           )}
         </div>
       )}
+
+      {showCoverageTab && (
+        <div className="controls__group">
+          <span className="controls__label">Map</span>
+          <button type="button" className="controls__button" onClick={onFitToData}>
+            Fit to data
+          </button>
+        </div>
+      )}
+
+      {showCoverageTab && (
+        <div className="controls__group">
+          <span className="controls__label">Layers</span>
+          {mapLayerMode === 'points' && (
+            <label className="controls__toggle">
+              <input
+                type="checkbox"
+                checked={showPoints}
+                onChange={(event) => onShowPointsChange(event.target.checked)}
+              />
+              Show points
+            </label>
+          )}
+          <label className="controls__toggle">
+            <input
+              type="checkbox"
+              checked={showTrack}
+              onChange={(event) => onShowTrackChange(event.target.checked)}
+            />
+            Show track
+          </label>
+        </div>
+      )}
+
+      {showDebugTab ? (
+        <>
+          {debugAuthError ? (
+            <div className="controls__debug-message">Debug requires QUERY key</div>
+          ) : (
+            <>
+              <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
+              <MeshtasticEventsPanel deviceUid={selectedDevice?.deviceUid} />
+              {receiverSource === 'lorawan' ? (
+                <GatewayStatsPanel
+                  gatewayId={selectedGatewayId}
+                  scope={gatewayScope}
+                  enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
+                />
+              ) : (
+                <ReceiverStatsPanel
+                  receiverId={selectedReceiverId}
+                  count={selectedReceiver?.count ?? null}
+                  lastSeenAt={selectedReceiver?.lastSeenAt ?? null}
+                />
+              )}
+            </>
+          )}
+          {(latest?.latestMeasurementAt ||
+            latest?.latestWebhookReceivedAt ||
+            latest?.latestWebhookError ||
+            latest?.latestWebhookSource ||
+            autoSessionConfig ||
+            showAgentDecision) && (
+            <div className="controls__status" aria-live="polite">
+              {latest?.latestMeasurementAt && (
+                <div className="controls__status-row">
+                  <span>Last measurement:</span>
+                  <strong>{formatRelativeTime(latest.latestMeasurementAt)}</strong>
+                </div>
+              )}
+              {(latest?.latestWebhookReceivedAt || latest?.latestWebhookError) && (
+                <div
+                  className={`controls__status-row ${
+                    latest?.latestWebhookError ? 'controls__status-error' : ''
+                  }`}
+                >
+                  <span>Last webhook:</span>
+                  <strong>
+                    {latest?.latestWebhookReceivedAt
+                      ? formatRelativeTime(latest.latestWebhookReceivedAt)
+                      : '—'}
+                    {latest?.latestWebhookError ? ` (${latest.latestWebhookError})` : ''}
+                  </strong>
+                </div>
+              )}
+              {(latest?.latestWebhookSource || latest?.latestWebhookReceivedAt) && (
+                <div className="controls__status-row">
+                  <span>Last ingest:</span>
+                  <strong>
+                    {latest?.latestWebhookSource ?? '—'} @{' '}
+                    {latest?.latestWebhookReceivedAt
+                      ? formatRelativeTime(latest.latestWebhookReceivedAt)
+                      : '—'}
+                  </strong>
+                </div>
+              )}
+              {autoSessionConfig && (
+                <div className="controls__status-row">
+                  <span>Auto session:</span>
+                  <strong>{autoSessionConfig.enabled ? 'enabled' : 'disabled'}</strong>
+                </div>
+              )}
+              {autoSessionConfig?.enabled && autoSessionConfig.radiusMeters !== null && (
+                <div className="controls__status-row">
+                  <span>Home radius:</span>
+                  <strong>{Math.round(autoSessionConfig.radiusMeters)}m</strong>
+                </div>
+              )}
+              {showAgentDecision && (
+                <div className="controls__status-row">
+                  <span>Agent:</span>
+                  <strong>
+                    last decision {agentDecision?.decision ?? '—'} @{' '}
+                    {agentDecisionTime ? formatRelativeTime(agentDecisionTime) : '—'}
+                    {agentDecision?.reason ? ` (${agentDecision.reason})` : ''}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : null}
     </section>
   );
 }
@@ -850,23 +927,6 @@ function formatDeviceLabel(name: string | null | undefined, deviceUid: string): 
     return deviceUid;
   }
   return `${trimmedName} (${deviceUid})`;
-}
-
-function copyDeviceUid(deviceUid: string) {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(deviceUid).catch(() => undefined);
-    return;
-  }
-  try {
-    const input = document.createElement('input');
-    input.value = deviceUid;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand('copy');
-    document.body.removeChild(input);
-  } catch {
-    // no-op: avoid noisy errors
-  }
 }
 
 type CoverageLegendItem = {

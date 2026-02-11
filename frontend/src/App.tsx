@@ -3,20 +3,17 @@ import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
 import type { Measurement, SessionWindowPoint } from './api/types';
 import Controls from './components/Controls';
-import GatewayStatsPanel from './components/GatewayStatsPanel';
-import LorawanEventsPanel from './components/LorawanEventsPanel';
+import Layout from './components/Layout';
 import MapView, { type MapViewHandle } from './components/MapView';
-import MeshtasticEventsPanel from './components/MeshtasticEventsPanel';
 import PlaybackPanel from './components/PlaybackPanel';
 import PointDetails from './components/PointDetails';
-import ReceiverStatsPanel from './components/ReceiverStatsPanel';
+import SelectedDeviceHeader from './components/SelectedDeviceHeader';
 import StatsCard from './components/StatsCard';
 import {
   useCoverageBins,
   useDevice,
   useDeviceLatest,
   useMeasurements,
-  useReceivers,
   useStats,
   useTrack
 } from './query/hooks';
@@ -31,6 +28,10 @@ const BBOX_DEBOUNCE_MS = 300;
 const SAMPLE_ZOOM_LOW = 12;
 const SAMPLE_ZOOM_MEDIUM = 14;
 const LORAWAN_DIAG_WINDOW_MINUTES = 10;
+const SIDEBAR_TAB_KEY = 'sidebarTab';
+const ZEN_MODE_KEY = 'zenMode';
+
+type SidebarTab = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
 
 type InitialQueryState = {
   deviceId: string | null;
@@ -48,6 +49,14 @@ type InitialQueryState = {
   playbackWindowMs: number;
   playbackSpeed: 0.25 | 0.5 | 1 | 2 | 4;
 };
+
+const SIDEBAR_TABS: Array<{ key: SidebarTab; label: string; shortLabel: string }> = [
+  { key: 'device', label: 'Device', shortLabel: 'D' },
+  { key: 'sessions', label: 'Sessions', shortLabel: 'S' },
+  { key: 'playback', label: 'Playback', shortLabel: 'P' },
+  { key: 'coverage', label: 'Coverage', shortLabel: 'C' },
+  { key: 'debug', label: 'Debug', shortLabel: 'B' }
+];
 
 function parseBoolean(value: string | null, defaultValue: boolean): boolean {
   if (value === null) {
@@ -109,6 +118,24 @@ function parseExploreRangePreset(value: string | null): ExploreRangePreset {
     default:
       return 'all';
   }
+}
+
+function readInitialSidebarTab(): SidebarTab {
+  if (typeof window === 'undefined') {
+    return 'device';
+  }
+  const raw = window.localStorage.getItem(SIDEBAR_TAB_KEY);
+  if (raw === 'device' || raw === 'sessions' || raw === 'playback' || raw === 'coverage' || raw === 'debug') {
+    return raw;
+  }
+  return 'device';
+}
+
+function readStoredZenMode(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(ZEN_MODE_KEY) === 'true';
 }
 
 function computePresetRange(
@@ -248,6 +275,8 @@ function App() {
   const [playbackLastGoodItems, setPlaybackLastGoodItems] = useState<SessionWindowPoint[]>([]);
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() => readInitialSidebarTab());
+  const [zenMode, setZenMode] = useState<boolean>(() => readStoredZenMode());
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -274,6 +303,39 @@ function App() {
 
     return () => window.clearTimeout(handle);
   }, [bbox]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(SIDEBAR_TAB_KEY, sidebarTab);
+  }, [sidebarTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(ZEN_MODE_KEY, zenMode ? 'true' : 'false');
+  }, [zenMode]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+      if (event.key.toLowerCase() !== 'z') {
+        return;
+      }
+      event.preventDefault();
+      setZenMode((value) => !value);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1035,40 +1097,6 @@ function App() {
     1,
     Boolean(selectedDeviceUid)
   );
-  const receiverScope =
-    filterMode === 'session'
-      ? {
-          sessionId: selectedSessionId ?? undefined
-        }
-      : {
-          deviceId: deviceId ?? undefined,
-          from: exploreRange.from,
-          to: exploreRange.to
-        };
-  const receiverScopeEnabled =
-    filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
-  const receiversQuery = useReceivers(
-    { source: receiverSource, ...receiverScope },
-    { enabled: receiverScopeEnabled && receiverSource === 'meshtastic' },
-    { filterMode }
-  );
-  const selectedReceiver = useMemo(
-    () => receiversQuery.data?.items.find((item) => item.id === selectedReceiverId) ?? null,
-    [receiversQuery.data?.items, selectedReceiverId]
-  );
-  const gatewayScope =
-    filterMode === 'session'
-      ? {
-          sessionId: selectedSessionId ?? undefined
-        }
-      : {
-          deviceId: deviceId ?? undefined,
-          from: exploreRange.from,
-          to: exploreRange.to
-        };
-  const gatewayScopeEnabled =
-    filterMode === 'session' ? Boolean(selectedSessionId) : Boolean(deviceId);
-
   const selectedMeasurement = useMemo<Measurement | null>(() => {
     if (!selectedPointId) {
       return null;
@@ -1294,153 +1322,225 @@ function App() {
     hasRecentLorawanEvent &&
     isMissingGps &&
     (latestMeasurementAt === null || noMeasurementsReturned);
+  const zenStatusDevice = selectedDevice
+    ? formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)
+    : 'No device';
+  const zenStatusCount =
+    effectiveMapLayerMode === 'coverage'
+      ? `Bins ${renderedBinCount}`
+      : `Points ${renderedPointCount}`;
+  const zenStatusError = error ? (error as Error).message || 'Failed to load data' : null;
+
+  const sidebarHeader = (
+    <div className="sidebar-header" aria-label="Sidebar header">
+      <SelectedDeviceHeader device={selectedDevice} onFitToData={handleFitToData} />
+      <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs">
+        {SIDEBAR_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={sidebarTab === tab.key}
+            className={`sidebar-header__tab${sidebarTab === tab.key ? ' is-active' : ''}`}
+            onClick={() => setSidebarTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const sidebarCollapsedRail = (
+    <>
+      {SIDEBAR_TABS.map((tab) => (
+        <button
+          key={`rail-${tab.key}`}
+          type="button"
+          title={tab.label}
+          aria-label={tab.label}
+          className={`layout__rail-icon${sidebarTab === tab.key ? ' is-active' : ''}`}
+          onClick={() => setSidebarTab(tab.key)}
+        >
+          {tab.shortLabel}
+        </button>
+      ))}
+    </>
+  );
+
+  const sidebarFooter = <span className="layout__sidebar-footer-meta">{sidebarTab}</span>;
+  const zenToggleButton = (
+    <button
+      type="button"
+      className={`layout__toggle-button${zenMode ? ' is-active' : ''}`}
+      title={zenMode ? 'Disable zen mode (z)' : 'Enable zen mode (z)'}
+      aria-label={zenMode ? 'Disable zen mode' : 'Enable zen mode'}
+      onClick={() => setZenMode((value) => !value)}
+    >
+      Z
+    </button>
+  );
+
+  const playbackControls = (
+    <PlaybackPanel
+      deviceId={deviceId}
+      sessionId={playbackSessionId}
+      onSelectSessionId={setPlaybackSessionId}
+      timeline={playbackTimelineQuery.data ?? null}
+      timelineLoading={playbackTimelineQuery.isLoading}
+      timelineError={playbackTimelineQuery.error}
+      windowFrom={playbackWindowSummary?.from ?? null}
+      windowTo={playbackWindowSummary?.to ?? null}
+      windowCount={playbackWindowSummary?.count ?? 0}
+      windowItems={playbackWindowItems}
+      sampleNote={playbackSampleNote}
+      emptyNote={playbackEmptyNote}
+      playbackCursorMs={playbackCursorMs}
+      onPlaybackCursorMsChange={handlePlaybackCursorMsChange}
+      playbackWindowMs={playbackWindowMs}
+      onPlaybackWindowMsChange={setPlaybackWindowMs}
+      playbackIsPlaying={playbackIsPlaying}
+      onPlaybackIsPlayingChange={setPlaybackIsPlaying}
+      playbackSpeed={playbackSpeed}
+      onPlaybackSpeedChange={setPlaybackSpeed}
+    />
+  );
+
+  const controlsPanel = (
+    <Controls
+      activeTab={sidebarTab}
+      deviceId={deviceId}
+      onDeviceChange={setDeviceId}
+      filterMode={filterMode}
+      onFilterModeChange={handleFilterModeChange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      exploreRangePreset={exploreRangePreset}
+      onExploreRangePresetChange={handleExploreRangePresetChange}
+      useAdvancedRange={useAdvancedRange}
+      onUseAdvancedRangeChange={handleUseAdvancedRangeChange}
+      selectedSessionId={selectedSessionId}
+      onSelectSessionId={setSelectedSessionId}
+      onStartSession={handleSessionStart}
+      receiverSource={receiverSource}
+      onReceiverSourceChange={handleReceiverSourceChange}
+      selectedReceiverId={selectedReceiverId}
+      onSelectReceiverId={setSelectedReceiverId}
+      compareReceiverId={compareReceiverId}
+      onSelectCompareReceiverId={setCompareReceiverId}
+      selectedGatewayId={selectedGatewayId}
+      onSelectGatewayId={setSelectedGatewayId}
+      compareGatewayId={compareGatewayId}
+      onSelectCompareGatewayId={setCompareGatewayId}
+      latest={latestDeviceQuery.data}
+      onFitToData={handleFitToData}
+      mapLayerMode={mapLayerMode}
+      onMapLayerModeChange={setMapLayerMode}
+      coverageMetric={coverageMetric}
+      onCoverageMetricChange={setCoverageMetric}
+      rangeFrom={exploreRange.from}
+      rangeTo={exploreRange.to}
+      from={from}
+      to={to}
+      onFromChange={setFrom}
+      onToChange={setTo}
+      showPoints={showPoints}
+      showTrack={showTrack}
+      onShowPointsChange={setShowPoints}
+      onShowTrackChange={setShowTrack}
+      playbackControls={playbackControls}
+    />
+  );
 
   return (
     <div className="app">
-      <MapView
-        ref={mapRef}
-        mapLayerMode={effectiveMapLayerMode}
-        coverageMetric={coverageMetric}
-        measurements={activeMeasurements}
-        compareMeasurements={activeCompareMeasurements}
-        track={activeTrack}
-        overviewTrack={isPlaybackMode ? playbackOverviewTrack : []}
-        coverageBins={coverageQuery.data?.items ?? []}
-        coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
-        showPoints={showPoints}
-        showTrack={showTrack}
-        playbackCursorPosition={playbackCursorPosition}
-        onBoundsChange={setBbox}
-        onSelectPoint={setSelectedPointId}
-        onOverviewSelectTime={isPlaybackMode ? handlePlaybackCursorMsChange : undefined}
-        onZoomChange={setCurrentZoom}
-        selectedPointId={selectedPointId}
-        onUserInteraction={() => setUserInteractedWithMap(true)}
-      />
-      {viewMode === 'playback' && !playbackSessionId && (
-        <div className="playback-blocker" role="alert">
-          <div className="playback-blocker__message">Select a session</div>
-        </div>
-      )}
-      {import.meta.env.DEV && (
-        <div className="dev-counter">
-          {effectiveMapLayerMode === 'coverage'
-            ? `Coverage bins: ${renderedBinCount}`
-            : `Points: ${renderedPointCount}`}
-        </div>
-      )}
-      {activeMeasurementsQuery.data &&
-        activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit && (
-          <div className="limit-banner">Result limited; zoom in or narrow filters</div>
-        )}
-      {shouldShowLorawanBanner && (
-        <div className="diagnostic-banner">
-          LoRaWAN uplinks received, but decoded payload has no lat/lon. Configure payload formatter
-          to output GPS.{' '}
-          <a href="../docs/tts-payload-formatter-js.md" target="_blank" rel="noreferrer">
-            docs/tts-payload-formatter-js.md
-          </a>
-        </div>
-      )}
-      <div className="right-column">
-        {viewMode === 'playback' && (
-          <PlaybackPanel
-            deviceId={deviceId}
-            sessionId={playbackSessionId}
-            onSelectSessionId={setPlaybackSessionId}
-            timeline={playbackTimelineQuery.data ?? null}
-            timelineLoading={playbackTimelineQuery.isLoading}
-            timelineError={playbackTimelineQuery.error}
-            windowFrom={playbackWindowSummary?.from ?? null}
-            windowTo={playbackWindowSummary?.to ?? null}
-            windowCount={playbackWindowSummary?.count ?? 0}
-            windowItems={playbackWindowItems}
-            sampleNote={playbackSampleNote}
-            emptyNote={playbackEmptyNote}
-            playbackCursorMs={playbackCursorMs}
-            onPlaybackCursorMsChange={handlePlaybackCursorMsChange}
-            playbackWindowMs={playbackWindowMs}
-            onPlaybackWindowMsChange={setPlaybackWindowMs}
-            playbackIsPlaying={playbackIsPlaying}
-            onPlaybackIsPlayingChange={setPlaybackIsPlaying}
-            playbackSpeed={playbackSpeed}
-            onPlaybackSpeedChange={setPlaybackSpeed}
-          />
-        )}
-        <PointDetails measurement={selectedMeasurement} />
-        <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
-        <MeshtasticEventsPanel deviceUid={selectedDevice?.deviceUid} />
-        {receiverSource === 'lorawan' && (
-          <GatewayStatsPanel
-            gatewayId={selectedGatewayId}
-            scope={gatewayScope}
-            enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
-          />
-        )}
-        {import.meta.env.DEV && receiverSource === 'meshtastic' && (
-          <ReceiverStatsPanel
-            receiverId={selectedReceiverId}
-            count={selectedReceiver?.count ?? null}
-            lastSeenAt={selectedReceiver?.lastSeenAt ?? null}
-          />
-        )}
-        <StatsCard
-          stats={statsQuery.data}
-          isLoading={statsQuery.isLoading}
-          error={statsQuery.error as Error | null}
+      <Layout
+        sidebarHeader={sidebarHeader}
+        sidebarFooter={sidebarFooter}
+        sidebarHeaderActions={zenToggleButton}
+        sidebarCollapsedContent={zenMode ? null : sidebarCollapsedRail}
+        sidebar={controlsPanel}
+        forceSidebarCollapsed={zenMode}
+      >
+        <MapView
+          ref={mapRef}
+          mapLayerMode={effectiveMapLayerMode}
+          coverageMetric={coverageMetric}
+          measurements={activeMeasurements}
+          compareMeasurements={activeCompareMeasurements}
+          track={activeTrack}
+          overviewTrack={isPlaybackMode ? playbackOverviewTrack : []}
+          coverageBins={coverageQuery.data?.items ?? []}
+          coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
+          showPoints={showPoints}
+          showTrack={showTrack}
+          playbackCursorPosition={playbackCursorPosition}
+          onBoundsChange={setBbox}
+          onSelectPoint={setSelectedPointId}
+          onOverviewSelectTime={isPlaybackMode ? handlePlaybackCursorMsChange : undefined}
+          onZoomChange={setCurrentZoom}
+          selectedPointId={selectedPointId}
+          onUserInteraction={() => setUserInteractedWithMap(true)}
         />
-      </div>
-      <Controls
-        deviceId={deviceId}
-        onDeviceChange={setDeviceId}
-        filterMode={filterMode}
-        onFilterModeChange={handleFilterModeChange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        exploreRangePreset={exploreRangePreset}
-        onExploreRangePresetChange={handleExploreRangePresetChange}
-        useAdvancedRange={useAdvancedRange}
-        onUseAdvancedRangeChange={handleUseAdvancedRangeChange}
-        selectedSessionId={selectedSessionId}
-        onSelectSessionId={setSelectedSessionId}
-        onStartSession={handleSessionStart}
-        receiverSource={receiverSource}
-        onReceiverSourceChange={handleReceiverSourceChange}
-        selectedReceiverId={selectedReceiverId}
-        onSelectReceiverId={setSelectedReceiverId}
-        compareReceiverId={compareReceiverId}
-        onSelectCompareReceiverId={setCompareReceiverId}
-        selectedGatewayId={selectedGatewayId}
-        onSelectGatewayId={setSelectedGatewayId}
-        compareGatewayId={compareGatewayId}
-        onSelectCompareGatewayId={setCompareGatewayId}
-        latest={latestDeviceQuery.data}
-        onFitToData={handleFitToData}
-        mapLayerMode={mapLayerMode}
-        onMapLayerModeChange={setMapLayerMode}
-        coverageMetric={coverageMetric}
-        onCoverageMetricChange={setCoverageMetric}
-        rangeFrom={exploreRange.from}
-        rangeTo={exploreRange.to}
-        from={from}
-        to={to}
-        onFromChange={setFrom}
-        onToChange={setTo}
-        showPoints={showPoints}
-        showTrack={showTrack}
-        onShowPointsChange={setShowPoints}
-        onShowTrackChange={setShowTrack}
-      />
-      {(isLoading || error) && (
-        <div className="status">
-          {isLoading && <p>Loading map data…</p>}
-          {error && (
-            <p className="status__error">
-              {(error as Error).message || 'Failed to load map data.'}
-            </p>
+        {!zenMode && viewMode === 'playback' && !playbackSessionId && (
+          <div className="playback-blocker" role="alert">
+            <div className="playback-blocker__message">Select a session</div>
+          </div>
+        )}
+        {import.meta.env.DEV && !zenMode && (
+          <div className="dev-counter">
+            {effectiveMapLayerMode === 'coverage'
+              ? `Coverage bins: ${renderedBinCount}`
+              : `Points: ${renderedPointCount}`}
+          </div>
+        )}
+        {!zenMode &&
+          activeMeasurementsQuery.data &&
+          activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit && (
+            <div className="limit-banner">Result limited; zoom in or narrow filters</div>
           )}
-        </div>
-      )}
+        {!zenMode && shouldShowLorawanBanner && (
+          <div className="diagnostic-banner">
+            LoRaWAN uplinks received, but decoded payload has no lat/lon. Configure payload formatter
+            to output GPS.{' '}
+            <a href="../docs/tts-payload-formatter-js.md" target="_blank" rel="noreferrer">
+              docs/tts-payload-formatter-js.md
+            </a>
+          </div>
+        )}
+        {!zenMode && (
+          <div className="right-column">
+            <PointDetails measurement={selectedMeasurement} />
+            <StatsCard
+              stats={statsQuery.data}
+              isLoading={statsQuery.isLoading}
+              error={statsQuery.error as Error | null}
+            />
+          </div>
+        )}
+        {zenMode && (
+          <div className="zen-status-strip" aria-live="polite">
+            <span>{zenStatusDevice}</span>
+            <span>{viewMode === 'playback' ? 'Playback' : 'Explore'}</span>
+            <span>{effectiveMapLayerMode === 'coverage' ? 'Coverage' : 'Points'}</span>
+            <span>{zenStatusCount}</span>
+            {latestMeasurementAt ? <span>Last {formatRelativeTime(latestMeasurementAt)}</span> : null}
+            {viewMode === 'playback' && !playbackSessionId ? <span>Select a session</span> : null}
+            {isLoading ? <span>Loading…</span> : null}
+            {zenStatusError ? <span className="zen-status-strip__error">{zenStatusError}</span> : null}
+          </div>
+        )}
+        {!zenMode && (isLoading || error) && (
+          <div className="status">
+            {isLoading && <p>Loading map data…</p>}
+            {error && (
+              <p className="status__error">
+                {(error as Error).message || 'Failed to load map data.'}
+              </p>
+            )}
+          </div>
+        )}
+      </Layout>
     </div>
   );
 }
