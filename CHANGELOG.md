@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.3 - 2026-02-11
+
+### Added
+- Theme mode selector with `System / Light / Dark` options in the sidebar controls, plus Zen-mode access in the map status strip.
+- Theme documentation and validation checklist in `docs/ui-v0.9.3-theme.md` with captured light/dark screenshots under `docs/assets/`.
+
+### Changed
+- Introduced explicit theme tokens for status strip and coverage legend surfaces/text/borders.
+- Improved Leaflet UI readability (zoom controls, attribution, popups, tooltips) using theme-scoped CSS overrides without changing tile style.
+- Repositioned sidebar header controls to avoid clipping in collapsed mode and reduce header overlap.
+
+### Notes
+- No breaking changes.
+
 ## v0.9.2 - 2026-02-11
 
 ### Added
