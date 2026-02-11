@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import {
   getAutoSession,
+  getAgentDecisions,
   getCoverageBins,
   getDeviceLatest,
   getGatewayStats,
@@ -28,6 +29,7 @@ import type {
 import type {
   CoverageBinsResponse,
   AutoSessionConfig,
+  AgentDecision,
   Device,
   DeviceLatest,
   GatewayStats,
@@ -212,6 +214,21 @@ export function useUpdateAutoSession(deviceId?: string | null) {
         queryClient.invalidateQueries({ queryKey: ['auto-session', deviceId] });
       }
     }
+  });
+}
+
+export function useAgentDecisions(
+  deviceId?: string | null,
+  limit = 1,
+  options?: QueryOptions<ListResponse<AgentDecision>>
+) {
+  const enabled = options?.enabled ?? Boolean(deviceId);
+
+  return useQuery<ListResponse<AgentDecision>>({
+    queryKey: ['agent-decisions', deviceId ?? 'none', limit],
+    queryFn: ({ signal }) => getAgentDecisions(deviceId as string, limit, { signal }),
+    ...options,
+    enabled
   });
 }
 

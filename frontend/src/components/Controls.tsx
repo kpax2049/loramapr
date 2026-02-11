@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AutoSessionConfig, DeviceLatest } from '../api/types';
-import { useAutoSession, useDevices, useGateways, useReceivers, useUpdateAutoSession } from '../query/hooks';
+import {
+  useAgentDecisions,
+  useAutoSession,
+  useDevices,
+  useGateways,
+  useReceivers,
+  useUpdateAutoSession
+} from '../query/hooks';
 import SessionsPanel from './SessionsPanel';
 
 type ControlsProps = {
@@ -112,6 +119,13 @@ export default function Controls({
     autoSessionStatus === 403 ||
     autoSessionMutationStatus === 401 ||
     autoSessionMutationStatus === 403;
+
+  const agentDecisionsQuery = useAgentDecisions(deviceId, 1, { enabled: Boolean(deviceId) });
+  const agentDecisionStatus = getErrorStatus(agentDecisionsQuery.error);
+  const agentDecisionAuthError = agentDecisionStatus === 401 || agentDecisionStatus === 403;
+  const agentDecision = agentDecisionsQuery.data?.items?.[0] ?? null;
+  const agentDecisionTime = agentDecision?.capturedAt ?? agentDecision?.createdAt ?? null;
+  const showAgentDecision = Boolean(agentDecision) && !agentDecisionAuthError;
 
   const autoSessionConfig = autoSessionQuery.data;
   const autoSessionDefaults = useMemo(
@@ -678,7 +692,8 @@ export default function Controls({
         latest?.latestWebhookReceivedAt ||
         latest?.latestWebhookError ||
         latest?.latestWebhookSource ||
-        autoSessionConfig) && (
+        autoSessionConfig ||
+        showAgentDecision) && (
         <div className="controls__status" aria-live="polite">
           {latest?.latestMeasurementAt && (
             <div className="controls__status-row">
@@ -722,6 +737,16 @@ export default function Controls({
             <div className="controls__status-row">
               <span>Home radius:</span>
               <strong>{Math.round(autoSessionConfig.radiusMeters)}m</strong>
+            </div>
+          )}
+          {showAgentDecision && (
+            <div className="controls__status-row">
+              <span>Agent:</span>
+              <strong>
+                last decision {agentDecision?.decision ?? '—'} @{' '}
+                {agentDecisionTime ? formatRelativeTime(agentDecisionTime) : '—'}
+                {agentDecision?.reason ? ` (${agentDecision.reason})` : ''}
+              </strong>
             </div>
           )}
         </div>

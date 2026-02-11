@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.1 - 2026-02-11
+
+### Highlights
+- Agent now pulls per-device auto-session config from backend via the INGEST-scoped endpoint.
+- Stale GPS handling added to prevent start/stop flapping in agent decisions.
+- Start/stop session endpoints remain idempotent and consistent under repeated calls.
+- Agent decision audit trail is stored server-side and surfaced in UI status as last decision.
+
+### Notes
+- No breaking changes.
+
 ## v0.9.0 - 2026-02-10
 
 ### Highlights

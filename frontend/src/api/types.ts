@@ -140,6 +140,18 @@ export type AutoSessionConfig = {
   minInsideSeconds: number | null;
 };
 
+export type AgentDecision = {
+  id: string;
+  deviceId: string;
+  deviceUid: string;
+  decision: string;
+  reason: string | null;
+  inside: boolean | null;
+  distanceM: number | null;
+  capturedAt: string | null;
+  createdAt: string;
+};
+
 export type LorawanEvent = {
   id: string;
   receivedAt: string;

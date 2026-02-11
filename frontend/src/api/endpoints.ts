@@ -11,6 +11,7 @@ import type {
   LorawanSummary,
   Measurement,
   AutoSessionConfig,
+  AgentDecision,
   ReceiverSummary,
   MeshtasticEvent,
   MeshtasticEventDetail,
@@ -456,4 +457,20 @@ export async function updateAutoSession(
     json: input,
     ...withQueryApiKey(options)
   });
+}
+
+export async function getAgentDecisions(
+  deviceId: string,
+  limit = 1,
+  options?: RequestOptions
+): Promise<ListResponse<AgentDecision>> {
+  const query = new URLSearchParams();
+  if (Number.isFinite(limit) && limit > 0) {
+    query.set('limit', String(Math.floor(limit)));
+  }
+  const suffix = query.toString();
+  const path = suffix
+    ? `/api/devices/${deviceId}/agent-decisions?${suffix}`
+    : `/api/devices/${deviceId}/agent-decisions`;
+  return getJson<ListResponse<AgentDecision>>(path, withQueryApiKey(options));
 }
