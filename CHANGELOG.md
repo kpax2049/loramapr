@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.9.2 - 2026-02-11
+
+### Added
+- Collapsible, resizable left sidebar with persisted layout state.
+- Tabbed sidebar navigation (Device / Sessions / Playback / Coverage / Debug).
+- Zen map mode to maximize map area.
+- Always-visible compact status strip overlay on the map.
+
+### Changed
+- Sidebar layout is viewport-height safe with fixed header/footer and scrollable body.
+- Debug tooling moved into a dedicated Debug tab and lazy-mounted to reduce clutter and improve performance.
+- Controls are context-sensitive (playback/coverage/explore) to reduce vertical bloat.
+
+### Developer
+- UI acceptance checklist and screenshot capture flow added under docs.
+
+### Notes
+- No breaking changes.
+
 ## v0.9.1 - 2026-02-11
 
 ### Highlights
