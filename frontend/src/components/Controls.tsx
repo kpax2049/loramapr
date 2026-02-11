@@ -24,8 +24,6 @@ type ControlsProps = {
   onFilterModeChange: (mode: 'time' | 'session') => void;
   viewMode: 'explore' | 'playback';
   onViewModeChange: (mode: 'explore' | 'playback') => void;
-  themeMode: 'system' | 'light' | 'dark';
-  onThemeModeChange: (mode: 'system' | 'light' | 'dark') => void;
   exploreRangePreset: 'last15m' | 'last1h' | 'last6h' | 'last24h' | 'all';
   onExploreRangePresetChange: (
     preset: 'last15m' | 'last1h' | 'last6h' | 'last24h' | 'all'
@@ -72,8 +70,6 @@ export default function Controls({
   onFilterModeChange,
   viewMode,
   onViewModeChange,
-  themeMode,
-  onThemeModeChange,
   exploreRangePreset,
   onExploreRangePresetChange,
   useAdvancedRange,
@@ -328,23 +324,6 @@ export default function Controls({
               <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
             </div>
           ) : null}
-        </div>
-      )}
-
-      {showDeviceTab && (
-        <div className="controls__group">
-          <label htmlFor="theme-mode-select">Theme</label>
-          <select
-            id="theme-mode-select"
-            value={themeMode}
-            onChange={(event) =>
-              onThemeModeChange(event.target.value as 'system' | 'light' | 'dark')
-            }
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
         </div>
       )}
 

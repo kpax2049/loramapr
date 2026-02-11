@@ -41,7 +41,10 @@ function copyDeviceUid(deviceUid: string) {
   }
 }
 
-export default function SelectedDeviceHeader({ device, onFitToData }: SelectedDeviceHeaderProps) {
+export default function SelectedDeviceHeader({
+  device,
+  onFitToData
+}: SelectedDeviceHeaderProps) {
   const deviceId = device?.id ?? undefined;
   const sessionsQuery = useSessions(deviceId, { enabled: Boolean(deviceId) });
   const autoSessionQuery = useAutoSession(deviceId, { enabled: Boolean(deviceId), retry: false });

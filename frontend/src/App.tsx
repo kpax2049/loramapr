@@ -1441,7 +1441,10 @@ function App() {
 
   const sidebarHeader = (
     <div className="sidebar-header" aria-label="Sidebar header">
-      <SelectedDeviceHeader device={selectedDevice} onFitToData={handleFitToData} />
+      <SelectedDeviceHeader
+        device={selectedDevice}
+        onFitToData={handleFitToData}
+      />
       <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs">
         {SIDEBAR_TABS.map((tab) => (
           <button
@@ -1489,6 +1492,19 @@ function App() {
       Z
     </button>
   );
+  const themeModeControl = (
+    <select
+      className="layout__sidebar-theme-select"
+      aria-label="Theme mode"
+      title="Theme mode"
+      value={themeMode}
+      onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
+    >
+      <option value="system">System</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  );
 
   const playbackControls = (
     <PlaybackPanel
@@ -1524,8 +1540,6 @@ function App() {
       onFilterModeChange={handleFilterModeChange}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
-      themeMode={themeMode}
-      onThemeModeChange={setThemeMode}
       exploreRangePreset={exploreRangePreset}
       onExploreRangePresetChange={handleExploreRangePresetChange}
       useAdvancedRange={useAdvancedRange}
@@ -1569,6 +1583,7 @@ function App() {
         sidebarHeader={sidebarHeader}
         sidebarFooter={sidebarFooter}
         sidebarHeaderActions={zenToggleButton}
+        sidebarHeaderBottomActions={themeModeControl}
         sidebarCollapsedContent={zenMode ? null : sidebarCollapsedRail}
         sidebar={controlsPanel}
         forceSidebarCollapsed={zenMode}
@@ -1626,6 +1641,9 @@ function App() {
           latestWebhookReceivedAt={latestDeviceQuery.data?.latestWebhookReceivedAt ?? null}
           activeSessionId={statusSessionId}
           formatRelativeTime={formatRelativeTime}
+          showThemeSwitcher={zenMode}
+          themeMode={themeMode}
+          onThemeModeChange={setThemeMode}
         />
         {!zenMode && (
           <div className="right-column">

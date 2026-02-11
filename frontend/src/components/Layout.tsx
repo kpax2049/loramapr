@@ -18,6 +18,7 @@ type LayoutProps = {
   sidebarHeader?: ReactNode;
   sidebarFooter?: ReactNode;
   sidebarHeaderActions?: ReactNode;
+  sidebarHeaderBottomActions?: ReactNode;
   sidebarCollapsedContent?: ReactNode;
   sidebar: ReactNode;
   children: ReactNode;
@@ -77,6 +78,7 @@ export default function Layout({
   sidebarHeader,
   sidebarFooter,
   sidebarHeaderActions,
+  sidebarHeaderBottomActions,
   sidebarCollapsedContent,
   sidebar,
   children,
@@ -214,10 +216,10 @@ export default function Layout({
           )}
         </div>
         <div className="layout__sidebar-top-right">
-          {sidebarHeaderActions ? (
-            <div className="layout__sidebar-header-actions">{sidebarHeaderActions}</div>
-          ) : null}
-          <div className="layout__sidebar-header-actions">
+          <div className="layout__sidebar-top-right-main">
+            {sidebarHeaderActions ? (
+              <div className="layout__sidebar-header-actions">{sidebarHeaderActions}</div>
+            ) : null}
             <button
               type="button"
               className="layout__toggle-button"
@@ -229,6 +231,9 @@ export default function Layout({
               {isSidebarCollapsed ? '>' : '<'}
             </button>
           </div>
+          {sidebarHeaderBottomActions ? (
+            <div className="layout__sidebar-top-right-bottom">{sidebarHeaderBottomActions}</div>
+          ) : null}
         </div>
         {!isSidebarCollapsed && (
           <div
