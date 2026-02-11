@@ -24,20 +24,30 @@ export default function StatusStrip({
 }: StatusStripProps) {
   return (
     <div className="status-strip" aria-live="polite">
-      <span className="status-strip__item">Device {deviceLabel}</span>
+      <span className="status-strip__item">
+        <span className="status-strip__label">Device</span>
+        <span className="status-strip__value">{deviceLabel}</span>
+      </span>
       {latestMeasurementAt ? (
         <span className="status-strip__item">
-          Last measurement {formatRelativeTime(latestMeasurementAt)}
+          <span className="status-strip__label">Last measurement</span>
+          <span className="status-strip__value">{formatRelativeTime(latestMeasurementAt)}</span>
         </span>
       ) : null}
       {latestWebhookSource || latestWebhookReceivedAt ? (
         <span className="status-strip__item">
-          Webhook {latestWebhookSource ?? 'unknown'}
-          {latestWebhookReceivedAt ? ` @ ${formatRelativeTime(latestWebhookReceivedAt)}` : ''}
+          <span className="status-strip__label">Webhook</span>
+          <span className="status-strip__value">
+            {latestWebhookSource ?? 'unknown'}
+            {latestWebhookReceivedAt ? ` @ ${formatRelativeTime(latestWebhookReceivedAt)}` : ''}
+          </span>
         </span>
       ) : null}
       {activeSessionId ? (
-        <span className="status-strip__item">Session {shortenId(activeSessionId)}</span>
+        <span className="status-strip__item">
+          <span className="status-strip__label">Session</span>
+          <span className="status-strip__value">{shortenId(activeSessionId)}</span>
+        </span>
       ) : null}
     </div>
   );

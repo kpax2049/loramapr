@@ -6,6 +6,7 @@ import {
   Rectangle,
   TileLayer,
   Tooltip,
+  useMap,
   useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
@@ -117,6 +118,57 @@ function BoundsListener({
       onZoomChange(map.getZoom());
     }
   }, [map, onChange]);
+
+  return null;
+}
+
+function MapResizeSync() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    let frame: number | null = null;
+
+    const invalidate = () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+      frame = window.requestAnimationFrame(() => {
+        map.invalidateSize();
+      });
+    };
+
+    invalidate();
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            invalidate();
+          })
+        : null;
+
+    resizeObserver?.observe(container);
+    if (container.parentElement) {
+      resizeObserver?.observe(container.parentElement);
+    }
+
+    const transitionTarget = container.closest('.layout');
+    const handleTransitionEnd = () => {
+      invalidate();
+    };
+
+    window.addEventListener('resize', invalidate);
+    transitionTarget?.addEventListener('transitionend', handleTransitionEnd);
+
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+      window.removeEventListener('resize', invalidate);
+      transitionTarget?.removeEventListener('transitionend', handleTransitionEnd);
+      resizeObserver?.disconnect();
+    };
+  }, [map]);
 
   return null;
 }
@@ -363,6 +415,7 @@ ref
         mapRef.current = mapInstance;
       }}
     >
+      <MapResizeSync />
       <BoundsListener
         onChange={onBoundsChange}
         onZoomChange={setCurrentZoom}
