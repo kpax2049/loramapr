@@ -41,6 +41,21 @@ export type DeviceLatestPosition = {
   lon: number | null;
 };
 
+export type AgentAutoSessionConfig = {
+  deviceUid: string;
+  deviceId: string;
+  enabled: boolean;
+  homeLat: number | null;
+  homeLon: number | null;
+  radiusMeters: number | null;
+  minOutsideSeconds: number;
+  minInsideSeconds: number;
+};
+
+const DEFAULT_RADIUS_METERS = 20;
+const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
+const DEFAULT_MIN_INSIDE_SECONDS = 120;
+
 @Injectable()
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -234,6 +249,40 @@ export class DevicesService {
       capturedAt: latest?.capturedAt ?? null,
       lat: latest?.lat ?? null,
       lon: latest?.lon ?? null
+    };
+  }
+
+  async getAgentAutoSessionConfigByUid(deviceUid: string): Promise<AgentAutoSessionConfig | null> {
+    const device = await this.prisma.device.findUnique({
+      where: { deviceUid },
+      select: { id: true, deviceUid: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    const config = await this.prisma.deviceAutoSessionConfig.findUnique({
+      where: { deviceId: device.id },
+      select: {
+        enabled: true,
+        homeLat: true,
+        homeLon: true,
+        radiusMeters: true,
+        minOutsideSeconds: true,
+        minInsideSeconds: true
+      }
+    });
+
+    const enabled = config?.enabled ?? false;
+    return {
+      deviceUid: device.deviceUid,
+      deviceId: device.id,
+      enabled,
+      homeLat: config?.homeLat ?? null,
+      homeLon: config?.homeLon ?? null,
+      radiusMeters: config?.radiusMeters ?? (enabled ? DEFAULT_RADIUS_METERS : null),
+      minOutsideSeconds: config?.minOutsideSeconds ?? DEFAULT_MIN_OUTSIDE_SECONDS,
+      minInsideSeconds: config?.minInsideSeconds ?? DEFAULT_MIN_INSIDE_SECONDS
     };
   }
 }

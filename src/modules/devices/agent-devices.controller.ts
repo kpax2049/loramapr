@@ -24,4 +24,13 @@ export class AgentDevicesController {
       lon: latest.lon
     };
   }
+
+  @Get(':deviceUid/auto-session')
+  async getAutoSession(@Param('deviceUid') deviceUid: string) {
+    const config = await this.devicesService.getAgentAutoSessionConfigByUid(deviceUid);
+    if (!config) {
+      throw new NotFoundException('Device not found');
+    }
+    return config;
+  }
 }
