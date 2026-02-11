@@ -31,8 +31,11 @@ const SAMPLE_ZOOM_MEDIUM = 14;
 const LORAWAN_DIAG_WINDOW_MINUTES = 10;
 const SIDEBAR_TAB_KEY = 'sidebarTab';
 const ZEN_MODE_KEY = 'zenMode';
+const THEME_MODE_KEY = 'themeMode';
 
 type SidebarTab = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
+type ThemeMode = 'system' | 'light' | 'dark';
+type EffectiveTheme = 'light' | 'dark';
 
 type InitialQueryState = {
   deviceId: string | null;
@@ -137,6 +140,24 @@ function readStoredZenMode(): boolean {
     return false;
   }
   return window.localStorage.getItem(ZEN_MODE_KEY) === 'true';
+}
+
+function readStoredThemeMode(): ThemeMode {
+  if (typeof window === 'undefined') {
+    return 'system';
+  }
+  const raw = window.localStorage.getItem(THEME_MODE_KEY);
+  if (raw === 'system' || raw === 'light' || raw === 'dark') {
+    return raw;
+  }
+  return 'system';
+}
+
+function readSystemTheme(): EffectiveTheme {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'dark';
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function computePresetRange(
@@ -329,6 +350,8 @@ function App() {
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() => readInitialSidebarTab());
   const [zenMode, setZenMode] = useState<boolean>(() => readStoredZenMode());
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
+  const [systemTheme, setSystemTheme] = useState<EffectiveTheme>(() => readSystemTheme());
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -369,6 +392,43 @@ function App() {
     }
     window.localStorage.setItem(ZEN_MODE_KEY, zenMode ? 'true' : 'false');
   }, [zenMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(THEME_MODE_KEY, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = (matches: boolean) => setSystemTheme(matches ? 'dark' : 'light');
+    update(mediaQuery.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      update(event.matches);
+    };
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  const effectiveTheme: EffectiveTheme = themeMode === 'system' ? systemTheme : themeMode;
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    document.documentElement.dataset.theme = effectiveTheme;
+  }, [effectiveTheme]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1464,6 +1524,8 @@ function App() {
       onFilterModeChange={handleFilterModeChange}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
+      themeMode={themeMode}
+      onThemeModeChange={setThemeMode}
       exploreRangePreset={exploreRangePreset}
       onExploreRangePresetChange={handleExploreRangePresetChange}
       useAdvancedRange={useAdvancedRange}

@@ -1,0 +1,116 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --fg: #e2e8f0;
+  --border: rgba(148, 163, 184, 0.25);
+  --border-soft: rgba(148, 163, 184, 0.2);
+  --border-strong: rgba(148, 163, 184, 0.35);
+  --divider: rgba(148, 163, 184, 0.16);
+  --muted: rgba(148, 163, 184, 0.8);
+  --accent: #f59e0b;
+  --accent-fg: #fcd34d;
+  --accent-contrast: #0b1220;
+  --focus-ring: rgba(245, 158, 11, 0.92);
+  --border-hover: rgba(148, 163, 184, 0.6);
+  --surface-hover: rgba(148, 163, 184, 0.08);
+  --panel-bg: rgba(15, 23, 42, 0.96);
+  --panel-fg: var(--fg);
+  --panel-text: var(--panel-fg);
+  --panel-surface: rgba(2, 6, 23, 0.55);
+  --panel-border: var(--border);
+  --panel-shadow: 0 16px 40px rgba(2, 6, 23, 0.65);
+  --panel-muted: var(--muted);
+  --panel-accent: var(--accent);
+  --panel-radius: 10px;
+  --sidebar-bg: rgba(2, 6, 23, 0.35);
+  --sidebar-bg-collapsed: rgba(2, 6, 23, 0.45);
+  --background-radial: rgba(56, 189, 248, 0.08);
+  --background-grid: rgba(148, 163, 184, 0.08);
+  --danger-fg: #fecaca;
+  --danger-border: rgba(248, 113, 113, 0.45);
+  --danger-bg: rgba(127, 29, 29, 0.24);
+  --danger-bg-soft: rgba(239, 68, 68, 0.15);
+  --overlay-scrim: rgba(2, 6, 23, 0.55);
+  --accent-border: rgba(245, 158, 11, 0.6);
+  --accent-bg-soft: rgba(245, 158, 11, 0.15);
+  --accent-bg-strong: rgba(245, 158, 11, 0.2);
+  --map-point-strong: #22c55e;
+  --map-point-medium: #f59e0b;
+  --map-point-weak: #ef4444;
+  --map-point-unknown: #94a3b8;
+  --map-point-default: #38bdf8;
+  --map-point-compare: #f472b6;
+  --map-point-cursor: var(--panel-accent);
+  --map-controls-clearance-x: 4.75rem;
+}
+
+:root[data-theme='dark'],
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --fg: #e2e8f0;
+  --border: rgba(148, 163, 184, 0.25);
+  --border-soft: rgba(148, 163, 184, 0.2);
+  --border-strong: rgba(148, 163, 184, 0.35);
+  --divider: rgba(148, 163, 184, 0.16);
+  --muted: rgba(148, 163, 184, 0.8);
+  --accent: #f59e0b;
+  --accent-fg: #fcd34d;
+  --accent-contrast: #0b1220;
+  --focus-ring: rgba(245, 158, 11, 0.92);
+  --border-hover: rgba(148, 163, 184, 0.6);
+  --surface-hover: rgba(148, 163, 184, 0.08);
+  --panel-bg: rgba(15, 23, 42, 0.96);
+  --panel-fg: var(--fg);
+  --panel-text: var(--panel-fg);
+  --panel-surface: rgba(2, 6, 23, 0.55);
+  --panel-border: var(--border);
+  --panel-shadow: 0 16px 40px rgba(2, 6, 23, 0.65);
+  --panel-muted: var(--muted);
+  --panel-accent: var(--accent);
+  --sidebar-bg: rgba(2, 6, 23, 0.35);
+  --sidebar-bg-collapsed: rgba(2, 6, 23, 0.45);
+  --background-radial: rgba(56, 189, 248, 0.08);
+  --background-grid: rgba(148, 163, 184, 0.08);
+  --accent-border: rgba(245, 158, 11, 0.6);
+  --accent-bg-soft: rgba(245, 158, 11, 0.15);
+  --accent-bg-strong: rgba(245, 158, 11, 0.2);
+}
+
+:root[data-theme='light'],
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef3fb;
+  --fg: #111827;
+  --border: rgba(30, 41, 59, 0.18);
+  --border-soft: rgba(30, 41, 59, 0.14);
+  --border-strong: rgba(30, 41, 59, 0.24);
+  --divider: rgba(30, 41, 59, 0.12);
+  --muted: rgba(71, 85, 105, 0.9);
+  --accent: #d97706;
+  --accent-fg: #92400e;
+  --accent-contrast: #ffffff;
+  --focus-ring: rgba(217, 119, 6, 0.9);
+  --border-hover: rgba(30, 41, 59, 0.35);
+  --surface-hover: rgba(30, 41, 59, 0.08);
+  --panel-bg: rgba(255, 255, 255, 0.95);
+  --panel-fg: #111827;
+  --panel-text: var(--panel-fg);
+  --panel-surface: rgba(248, 250, 252, 0.95);
+  --panel-border: var(--border);
+  --panel-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  --panel-muted: rgba(71, 85, 105, 0.9);
+  --panel-accent: var(--accent);
+  --sidebar-bg: rgba(255, 255, 255, 0.9);
+  --sidebar-bg-collapsed: rgba(248, 250, 252, 0.98);
+  --background-radial: rgba(14, 165, 233, 0.12);
+  --background-grid: rgba(71, 85, 105, 0.08);
+  --danger-fg: #b91c1c;
+  --danger-border: rgba(220, 38, 38, 0.35);
+  --danger-bg: rgba(254, 226, 226, 0.9);
+  --danger-bg-soft: rgba(254, 226, 226, 0.85);
+  --overlay-scrim: rgba(15, 23, 42, 0.2);
+  --accent-border: rgba(217, 119, 6, 0.5);
+  --accent-bg-soft: rgba(217, 119, 6, 0.14);
+  --accent-bg-strong: rgba(217, 119, 6, 0.22);
+}
