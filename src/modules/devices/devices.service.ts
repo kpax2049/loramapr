@@ -327,6 +327,37 @@ export class DevicesService {
       minInsideSeconds: config?.minInsideSeconds ?? DEFAULT_MIN_INSIDE_SECONDS
     };
   }
+
+  async recordAgentDecisionByUid(input: {
+    deviceUid: string;
+    decision: string;
+    reason?: string | null;
+    inside?: boolean;
+    distanceM?: number;
+    capturedAt?: Date;
+  }): Promise<boolean> {
+    const device = await this.prisma.device.findUnique({
+      where: { deviceUid: input.deviceUid },
+      select: { id: true, deviceUid: true }
+    });
+    if (!device) {
+      return false;
+    }
+
+    await this.prisma.agentDecision.create({
+      data: {
+        deviceId: device.id,
+        deviceUid: device.deviceUid,
+        decision: input.decision,
+        reason: input.reason ?? undefined,
+        inside: input.inside,
+        distanceM: input.distanceM,
+        capturedAt: input.capturedAt
+      }
+    });
+
+    return true;
+  }
 }
 
 function normalizeWebhookSource(source?: string | null): string | null {

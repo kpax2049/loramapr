@@ -26,6 +26,8 @@ type AutoSessionConfigResponse = {
   minInsideSeconds: number;
 };
 
+type AgentDecisionType = 'start' | 'stop' | 'noop' | 'stale' | 'disabled';
+
 const API_BASE_URL = requiredEnv('API_BASE_URL');
 const INGEST_API_KEY = requiredEnv('INGEST_API_KEY');
 const DEVICE_UIDS = requiredEnv('DEVICE_UIDS')
@@ -73,7 +75,7 @@ async function handleDevice(deviceUid: string) {
   const state = getState(deviceUid);
 
   if (!config.enabled) {
-    transitionMode(
+    const changed = transitionMode(
       deviceUid,
       state,
       'disabled',
@@ -82,6 +84,13 @@ async function handleDevice(deviceUid: string) {
       null,
       'auto_session_disabled'
     );
+    if (changed) {
+      await postAgentDecision({
+        deviceUid,
+        decision: 'disabled',
+        reason: 'auto_session_disabled'
+      });
+    }
     state.lastTriggeredFor = null;
     return;
   }
@@ -92,13 +101,29 @@ async function handleDevice(deviceUid: string) {
   }
 
   if (!latest.capturedAt || latest.lat === null || latest.lon === null) {
-    transitionMode(deviceUid, state, 'stale', null, null, latest.capturedAt, 'no_position');
+    const changed = transitionMode(
+      deviceUid,
+      state,
+      'stale',
+      null,
+      null,
+      latest.capturedAt,
+      'no_position'
+    );
+    if (changed) {
+      await postAgentDecision({
+        deviceUid,
+        decision: 'stale',
+        reason: 'no_position',
+        capturedAt: latest.capturedAt
+      });
+    }
     return;
   }
 
   const capturedAtMs = Date.parse(latest.capturedAt);
   if (!Number.isFinite(capturedAtMs)) {
-    transitionMode(
+    const changed = transitionMode(
       deviceUid,
       state,
       'stale',
@@ -107,12 +132,20 @@ async function handleDevice(deviceUid: string) {
       latest.capturedAt,
       'invalid_capturedAt'
     );
+    if (changed) {
+      await postAgentDecision({
+        deviceUid,
+        decision: 'stale',
+        reason: 'invalid_capturedAt',
+        capturedAt: latest.capturedAt
+      });
+    }
     return;
   }
 
   const now = Date.now();
   if (now - capturedAtMs > STALE_SECONDS * 1000) {
-    transitionMode(
+    const changed = transitionMode(
       deviceUid,
       state,
       'stale',
@@ -121,11 +154,19 @@ async function handleDevice(deviceUid: string) {
       latest.capturedAt,
       'stale_position'
     );
+    if (changed) {
+      await postAgentDecision({
+        deviceUid,
+        decision: 'stale',
+        reason: 'stale_position',
+        capturedAt: latest.capturedAt
+      });
+    }
     return;
   }
 
   if (config.homeLat === null || config.homeLon === null) {
-    transitionMode(
+    const changed = transitionMode(
       deviceUid,
       state,
       'disabled',
@@ -134,6 +175,14 @@ async function handleDevice(deviceUid: string) {
       latest.capturedAt,
       'missing_home_coordinates'
     );
+    if (changed) {
+      await postAgentDecision({
+        deviceUid,
+        decision: 'disabled',
+        reason: 'missing_home_coordinates',
+        capturedAt: latest.capturedAt
+      });
+    }
     state.lastTriggeredFor = null;
     return;
   }
@@ -197,9 +246,9 @@ function transitionMode(
   inside: boolean | null,
   capturedAt: string | null,
   reason?: string
-) {
+): boolean {
   if (state.mode === nextMode) {
-    return;
+    return false;
   }
   const from = state.mode ?? 'unknown';
   const suffix = reason ? ` reason=${reason}` : '';
@@ -210,6 +259,7 @@ function transitionMode(
     )} inside=${formatInside(inside)} capturedAt=${capturedAt ?? 'null'}${suffix}`
   );
   state.mode = nextMode;
+  return true;
 }
 
 async function fetchAutoSessionConfig(
@@ -281,6 +331,14 @@ async function startSession(
       inside
     )} capturedAt=${capturedAt} response=${JSON.stringify(session)}`
   );
+  await postAgentDecision({
+    deviceUid,
+    decision: 'start',
+    reason: 'outside_threshold_met',
+    inside,
+    distanceM,
+    capturedAt
+  });
 }
 
 async function stopSession(
@@ -314,6 +372,58 @@ async function stopSession(
       inside
     )} capturedAt=${capturedAt} response=${JSON.stringify(payload)}`
   );
+  await postAgentDecision({
+    deviceUid,
+    decision: 'stop',
+    reason: 'inside_threshold_met',
+    inside,
+    distanceM,
+    capturedAt
+  });
+}
+
+async function postAgentDecision(input: {
+  deviceUid: string;
+  decision: AgentDecisionType;
+  reason?: string;
+  inside?: boolean;
+  distanceM?: number | null;
+  capturedAt?: string | null;
+}) {
+  const payload: Record<string, unknown> = {
+    deviceUid: input.deviceUid,
+    decision: input.decision
+  };
+  if (input.reason !== undefined) {
+    payload.reason = input.reason;
+  }
+  if (input.inside !== undefined) {
+    payload.inside = input.inside;
+  }
+  if (input.distanceM !== undefined && input.distanceM !== null) {
+    payload.distanceM = input.distanceM;
+  }
+  if (input.capturedAt !== undefined && input.capturedAt !== null) {
+    payload.capturedAt = input.capturedAt;
+  }
+
+  const response = await fetch(`${API_BASE}/api/agent/decisions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': INGEST_API_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    log(
+      input.deviceUid,
+      `decision post failed status=${response.status} decision=${input.decision} reason=${
+        input.reason ?? 'na'
+      }`
+    );
+  }
 }
 
 function log(deviceUid: string, message: string) {

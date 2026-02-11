@@ -19,6 +19,7 @@
     "db:studio": "prisma studio",
     "apikey:mint": "ts-node scripts/mint-api-key.ts",
     "simulate:walk": "ts-node scripts/simulate-walk.ts",
+    "test:home-agent:e2e": "bash scripts/test-home-agent-e2e.sh",
     "dev:tts:fixture": "ts-node scripts/post-tts-fixture.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
