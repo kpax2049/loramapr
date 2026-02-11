@@ -141,10 +141,16 @@ export default function Layout({
         className={`layout__sidebar${isSidebarCollapsed ? ' layout__sidebar--collapsed' : ''}`}
         style={{ width: `${computedSidebarWidth}px` }}
       >
-        <div className="layout__sidebar-header">
-          <div className="layout__sidebar-header-content">
-            {!isSidebarCollapsed ? sidebarHeader : null}
-          </div>
+        <div
+          className={`layout__sidebar-header${
+            isSidebarCollapsed ? ' layout__sidebar-header--collapsed' : ''
+          }`}
+        >
+          {!isSidebarCollapsed ? (
+            <div className="layout__sidebar-header-content">{sidebarHeader}</div>
+          ) : null}
+        </div>
+        <div className="layout__sidebar-top-right">
           {sidebarHeaderActions ? (
             <div className="layout__sidebar-header-actions">{sidebarHeaderActions}</div>
           ) : null}

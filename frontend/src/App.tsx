@@ -8,6 +8,7 @@ import MapView, { type MapViewHandle } from './components/MapView';
 import PlaybackPanel from './components/PlaybackPanel';
 import PointDetails from './components/PointDetails';
 import SelectedDeviceHeader from './components/SelectedDeviceHeader';
+import StatusStrip from './components/StatusStrip';
 import StatsCard from './components/StatsCard';
 import {
   useCoverageBins,
@@ -183,6 +184,57 @@ function isTypingTarget(target: EventTarget | null): boolean {
     return true;
   }
   return target.hasAttribute('contenteditable');
+}
+
+function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const absSeconds = Math.abs(seconds);
+
+  if (typeof Intl !== 'undefined' && 'RelativeTimeFormat' in Intl) {
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+    if (absSeconds < 60) {
+      return rtf.format(seconds, 'second');
+    }
+    const minutes = Math.round(seconds / 60);
+    if (Math.abs(minutes) < 60) {
+      return rtf.format(minutes, 'minute');
+    }
+    const hours = Math.round(minutes / 60);
+    if (Math.abs(hours) < 24) {
+      return rtf.format(hours, 'hour');
+    }
+    const days = Math.round(hours / 24);
+    return rtf.format(days, 'day');
+  }
+
+  const minutes = Math.round(absSeconds / 60);
+  if (minutes < 1) {
+    return `${absSeconds}s ago`;
+  }
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function formatDeviceLabel(name: string | null | undefined, deviceUid: string): string {
+  const trimmedName = name?.trim();
+  if (!trimmedName) {
+    return deviceUid;
+  }
+  if (trimmedName.toLowerCase() === deviceUid.toLowerCase()) {
+    return deviceUid;
+  }
+  return `${trimmedName} (${deviceUid})`;
 }
 
 function readInitialQueryState(): InitialQueryState {
@@ -1322,14 +1374,10 @@ function App() {
     hasRecentLorawanEvent &&
     isMissingGps &&
     (latestMeasurementAt === null || noMeasurementsReturned);
-  const zenStatusDevice = selectedDevice
+  const statusDeviceLabel = selectedDevice
     ? formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)
     : 'No device';
-  const zenStatusCount =
-    effectiveMapLayerMode === 'coverage'
-      ? `Bins ${renderedBinCount}`
-      : `Points ${renderedPointCount}`;
-  const zenStatusError = error ? (error as Error).message || 'Failed to load data' : null;
+  const statusSessionId = playbackSessionId ?? selectedSessionId;
 
   const sidebarHeader = (
     <div className="sidebar-header" aria-label="Sidebar header">
@@ -1508,6 +1556,14 @@ function App() {
             </a>
           </div>
         )}
+        <StatusStrip
+          deviceLabel={statusDeviceLabel}
+          latestMeasurementAt={latestMeasurementAt}
+          latestWebhookSource={latestDeviceQuery.data?.latestWebhookSource ?? null}
+          latestWebhookReceivedAt={latestDeviceQuery.data?.latestWebhookReceivedAt ?? null}
+          activeSessionId={statusSessionId}
+          formatRelativeTime={formatRelativeTime}
+        />
         {!zenMode && (
           <div className="right-column">
             <PointDetails measurement={selectedMeasurement} />
@@ -1516,18 +1572,6 @@ function App() {
               isLoading={statsQuery.isLoading}
               error={statsQuery.error as Error | null}
             />
-          </div>
-        )}
-        {zenMode && (
-          <div className="zen-status-strip" aria-live="polite">
-            <span>{zenStatusDevice}</span>
-            <span>{viewMode === 'playback' ? 'Playback' : 'Explore'}</span>
-            <span>{effectiveMapLayerMode === 'coverage' ? 'Coverage' : 'Points'}</span>
-            <span>{zenStatusCount}</span>
-            {latestMeasurementAt ? <span>Last {formatRelativeTime(latestMeasurementAt)}</span> : null}
-            {viewMode === 'playback' && !playbackSessionId ? <span>Select a session</span> : null}
-            {isLoading ? <span>Loading…</span> : null}
-            {zenStatusError ? <span className="zen-status-strip__error">{zenStatusError}</span> : null}
           </div>
         )}
         {!zenMode && (isLoading || error) && (
