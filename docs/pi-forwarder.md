@@ -36,7 +36,7 @@ echo '{"from":"dev-1","position":{"latitude":37.77,"longitude":-122.43}}' \
 
 ## CLI Source Mode
 
-Use an external CLI command that prints one JSON event per line:
+Meshtastic CLI exists and can output packet JSON while listening. Configure `SOURCE=cli` to run the CLI listener and forward each parsed packet object.
 
 ```bash
 API_BASE_URL=http://localhost:3000 \
@@ -47,36 +47,47 @@ MESHTASTIC_PORT=/dev/ttyUSB0 \
 npm run start
 ```
 
-The forwarder starts `meshtastic --listen --json` and restarts the source command automatically if it exits.
+The forwarder starts `meshtastic --listen` (plus `--port` when configured) and restarts the source command automatically if it exits.
 
 ## systemd
 
-1. Build package:
+1. Build the package:
 ```bash
-cd /opt/loramapr/apps/pi-forwarder
+cd /path/to/repo/apps/pi-forwarder
 npm install
 npm run build
 ```
-2. Put env file at `/etc/loramapr/pi-forwarder.env`:
+2. Copy build output to `/opt/loramapr/pi-forwarder`:
+```bash
+sudo mkdir -p /opt/loramapr/pi-forwarder
+sudo cp -R dist /opt/loramapr/pi-forwarder/
+sudo cp package.json /opt/loramapr/pi-forwarder/
+sudo cp package-lock.json /opt/loramapr/pi-forwarder/
+cd /opt/loramapr/pi-forwarder
+sudo npm install --omit=dev
+```
+3. Create `/etc/loramapr/pi-forwarder.env` (example):
 ```bash
 API_BASE_URL=http://localhost:3000
 INGEST_API_KEY=replace_me
+DEVICE_HINT=pi-home-node
 SOURCE=cli
 CLI_PATH=meshtastic
 MESHTASTIC_PORT=/dev/ttyUSB0
+MESHTASTIC_HOST=
 POLL_HEARTBEAT_SECONDS=60
 POST_TIMEOUT_MS=8000
 RETRY_BASE_MS=500
 RETRY_MAX_MS=10000
 MAX_QUEUE=5000
 ```
-3. Install unit:
+4. Install and start the service:
 ```bash
-sudo cp /opt/loramapr/apps/pi-forwarder/systemd/loramapr-pi-forwarder.service /etc/systemd/system/
+sudo cp /path/to/repo/apps/pi-forwarder/systemd/loramapr-pi-forwarder.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now loramapr-pi-forwarder
 ```
-4. Check logs:
+5. Follow logs:
 ```bash
 journalctl -u loramapr-pi-forwarder -f
 ```

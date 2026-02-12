@@ -7,14 +7,13 @@ Wants=network-online.target
 Type=simple
 User=pi
 Group=pi
-WorkingDirectory=/opt/loramapr/apps/pi-forwarder
+WorkingDirectory=/opt/loramapr/pi-forwarder
 EnvironmentFile=/etc/loramapr/pi-forwarder.env
-ExecStart=/usr/bin/node /opt/loramapr/apps/pi-forwarder/dist/index.js
+ExecStart=/usr/bin/node /opt/loramapr/pi-forwarder/dist/index.js
 Restart=always
-RestartSec=5
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   NotFoundException,
   Param,
@@ -23,8 +24,11 @@ export class MeshtasticController {
   @UseGuards(ApiKeyGuard)
   @RequireApiKeyScope(ApiKeyScope.INGEST)
   @HttpCode(200)
-  async ingest(@Body() body: unknown): Promise<{ status: string }> {
-    await this.meshtasticService.ingestEvent(body);
+  async ingest(
+    @Body() body: unknown,
+    @Headers('x-idempotency-key') idempotencyKey?: string
+  ): Promise<{ status: string }> {
+    await this.meshtasticService.ingestEvent(body, idempotencyKey);
     return { status: 'ok' };
   }
 

@@ -7,9 +7,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class MeshtasticService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async ingestEvent(body: unknown): Promise<void> {
+  async ingestEvent(body: unknown, idempotencyKeyHeader?: string): Promise<void> {
     const deviceUid = getDeviceUid(body);
-    const eventId = getEventId(body);
+    const eventId = normalizeIdempotencyKey(idempotencyKeyHeader) ?? getEventId(body);
 
     try {
       await this.prisma.webhookEvent.create({
@@ -117,6 +117,14 @@ export class MeshtasticService {
       lastSeenAt: row._max.capturedAt ?? null
     }));
   }
+}
+
+function normalizeIdempotencyKey(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function getDeviceUid(body: unknown): string {
