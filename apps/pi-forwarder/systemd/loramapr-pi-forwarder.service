@@ -1,0 +1,20 @@
+[Unit]
+Description=LoraMapr Pi Forwarder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/loramapr/apps/pi-forwarder
+EnvironmentFile=/etc/loramapr/pi-forwarder.env
+ExecStart=/usr/bin/node /opt/loramapr/apps/pi-forwarder/dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

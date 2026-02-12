@@ -1,0 +1,23 @@
+{
+  "name": "@loramapr/pi-forwarder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pi-side forwarder that posts Meshtastic/CLI JSON events to the LoraMapr backend.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "echo \"No lint configured\""
+  },
+  "dependencies": {
+    "pino": "^9.4.0",
+    "undici": "^6.20.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
