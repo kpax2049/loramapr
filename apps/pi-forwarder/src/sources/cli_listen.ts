@@ -16,6 +16,7 @@ type CliListenSourceOptions = {
 const BASE_RESTART_MS = 2000;
 const MAX_RESTART_MS = 30000;
 const NON_JSON_DEBUG_EVERY = 100;
+const STDERR_DEBUG_EVERY = 100;
 
 export async function runCliListenSource(options: CliListenSourceOptions): Promise<void> {
   let stopRequested = false;
@@ -76,6 +77,7 @@ async function runOnce(
   onSpawn(child);
   let parsedObjects = 0;
   let nonJsonLines = 0;
+  let noisyStderrLines = 0;
 
   const stdoutReader = consumeStreamLines(child.stdout, async (line) => {
     const trimmed = line.trim();
@@ -117,7 +119,30 @@ async function runOnce(
     if (!trimmed) {
       return;
     }
-    options.logger.warn({ stderr: trimmed }, 'Source stderr');
+
+    const fallbackPayload = parsePacketFromStderr(trimmed);
+    if (fallbackPayload) {
+      parsedObjects += 1;
+      await options.onEvent(fallbackPayload);
+      options.logger.debug(
+        { packetId: fallbackPayload.packetId, from: fallbackPayload.from ?? fallbackPayload.nodeId },
+        'Parsed Meshtastic packet from stderr fallback'
+      );
+      return;
+    }
+
+    if (isImportantStderr(trimmed)) {
+      options.logger.warn({ stderr: trimmed }, 'Source stderr');
+      return;
+    }
+
+    noisyStderrLines += 1;
+    if (noisyStderrLines % STDERR_DEBUG_EVERY === 0) {
+      options.logger.debug(
+        { noisyStderrLines, sample: trimmed.slice(0, 280) },
+        'Ignoring non-packet stderr lines'
+      );
+    }
   });
 
   const result = await new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>(
@@ -159,4 +184,80 @@ function buildMeshtasticListenArgs(port?: string): string[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parsePacketFromStderr(line: string): Record<string, unknown> | null {
+  if (!line.includes('packet={')) {
+    return null;
+  }
+
+  const lat = extractNumber(line, /'latitude'\s*:\s*(-?\d+(?:\.\d+)?)/);
+  const lon = extractNumber(line, /'longitude'\s*:\s*(-?\d+(?:\.\d+)?)/);
+  if (lat === null || lon === null) {
+    return null;
+  }
+
+  const payload: Record<string, unknown> = {
+    lat,
+    lon
+  };
+
+  const fromId = extractString(line, /'fromId'\s*:\s*'([^']+)'/);
+  const fromNumeric = extractNumber(line, /'from'\s*:\s*(\d+)/);
+  if (fromId) {
+    payload.from = fromId;
+  } else if (fromNumeric !== null) {
+    payload.nodeId = String(Math.trunc(fromNumeric));
+  }
+
+  const packetId = extractNumber(line, /'id'\s*:\s*(\d+)/);
+  if (packetId !== null) {
+    payload.packetId = Math.trunc(packetId);
+  }
+
+  const positionTime = extractNumber(line, /'time'\s*:\s*(\d+)/);
+  const rxTime = extractNumber(line, /'rxTime'\s*:\s*(\d+)/);
+  const timestamp = positionTime ?? rxTime;
+  if (timestamp !== null) {
+    payload.timestamp = Math.trunc(timestamp);
+  }
+
+  return payload;
+}
+
+function extractNumber(input: string, pattern: RegExp): number | null {
+  const match = pattern.exec(input);
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function extractString(input: string, pattern: RegExp): string | null {
+  const match = pattern.exec(input);
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  return match[1];
+}
+
+function isImportantStderr(line: string): boolean {
+  const lowered = line.toLowerCase();
+  if (lowered.includes('os error')) {
+    return true;
+  }
+  if (lowered.includes('could not exclusively lock port')) {
+    return true;
+  }
+  if (lowered.includes('traceback')) {
+    return true;
+  }
+  if (lowered.includes('error')) {
+    return true;
+  }
+
+  return false;
 }
