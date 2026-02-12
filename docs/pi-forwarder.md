@@ -1,18 +1,27 @@
 # Pi Forwarder
 
-`apps/pi-forwarder` is a standalone Node/TypeScript package that forwards local JSON events to backend ingest.
+`apps/pi-forwarder` is a standalone Node/TypeScript package that forwards local Meshtastic JSON events to backend ingest (`POST /api/meshtastic/event`).
 
-## Directory
+This guide reflects the real end-to-end debugging we did on this Pi, including serial naming, systemd user/env issues, and Meshtastic CLI runtime behavior.
 
-- `apps/pi-forwarder/src/index.ts`: entrypoint and source selection
-- `apps/pi-forwarder/src/env.ts`: env validation (`zod`)
-- `apps/pi-forwarder/src/logger.ts`: `pino` logger
-- `apps/pi-forwarder/src/poster.ts`: authenticated POST to backend
-- `apps/pi-forwarder/src/sources/stdin.ts`: line-based stdin source
-- `apps/pi-forwarder/src/sources/cli_listen.ts`: spawned CLI source parser/restart loop
-- `apps/pi-forwarder/systemd/loramapr-pi-forwarder.service`: systemd unit template
+## What it is / prerequisites
 
-## Quickstart
+- Raspberry Pi host with Node.js/npm installed.
+- Meshtastic CLI available locally (global install or Python venv binary).
+- Backend reachable and an `INGEST` API key ready.
+- USB-connected Meshtastic device.
+
+Meshtastic CLI can emit JSON packets while listening; the forwarder consumes those JSON objects and posts them to the backend.
+
+Project paths:
+
+- App: `apps/pi-forwarder`
+- Unit template: `apps/pi-forwarder/systemd/loramapr-pi-forwarder.service`
+- This doc: `docs/pi-forwarder.md`
+
+## Local dev quickstart (stdin)
+
+From repo root:
 
 ```bash
 cd apps/pi-forwarder
@@ -20,60 +29,128 @@ npm install
 npm run build
 ```
 
+Local pipe test:
+
 ```bash
+echo '{"from":"testNode","lat":37.77,"lon":-122.42}' | \
 API_BASE_URL=http://localhost:3000 \
 INGEST_API_KEY=your_ingest_key \
 SOURCE=stdin \
-npm run start
+node dist/index.js
 ```
 
-Send one JSON event:
+Expected result:
+
+- Forwarder starts, parses one line, posts to backend.
+- Logs include success counters/heartbeat.
+
+## CLI mode quickstart (find port + wrapper)
+
+### 1) Find the correct serial device
+
+Do not assume `/dev/ttyUSB0`. For Seeed Tracker L1 on this Pi, the stable path resolves to `/dev/ttyACM0`.
+
+Use:
 
 ```bash
-echo '{"from":"dev-1","position":{"latitude":37.77,"longitude":-122.43}}' \
-  | API_BASE_URL=http://localhost:3000 INGEST_API_KEY=your_ingest_key SOURCE=stdin npm run start
+ls -l /dev/serial/by-id/
 ```
 
-## CLI Source Mode
+Use the by-id path in config, for example:
 
-Meshtastic CLI exists and can output packet JSON while listening. Configure `SOURCE=cli` to run the CLI listener and forward each parsed packet object.
+`/dev/serial/by-id/usb-Seeed_Tracker_L1_... -> ../../ttyACM0`
+
+### 2) Create a Meshtastic wrapper script (recommended)
+
+`CLI_PATH=meshtastic` often fails in systemd when PATH differs for the service user. In this setup Meshtastic lives in a venv, so create an explicit wrapper:
+
+```bash
+mkdir -p /home/kpax/bin
+cat >/home/kpax/bin/meshtastic-wrapper <<'EOF'
+#!/usr/bin/env bash
+export MESHTASTIC_LOG_LEVEL=WARNING
+exec /home/kpax/meshtastic-venv/bin/meshtastic "$@"
+EOF
+chmod +x /home/kpax/bin/meshtastic-wrapper
+```
+
+### 3) Run in CLI mode
 
 ```bash
 API_BASE_URL=http://localhost:3000 \
 INGEST_API_KEY=your_ingest_key \
 SOURCE=cli \
-CLI_PATH=meshtastic \
-MESHTASTIC_PORT=/dev/ttyUSB0 \
-npm run start
+CLI_PATH=/home/kpax/bin/meshtastic-wrapper \
+MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Tracker_L1_... \
+node dist/index.js
 ```
 
-The forwarder starts `meshtastic --listen` (plus `--port` when configured) and restarts the source command automatically if it exits.
+## Conflict with existing logger service (port lock)
 
-## systemd
+If another service already owns the serial port (for example `meshtastic-logger.service`), forwarder CLI mode cannot connect.
 
-1. Build the package:
+Check lock holder:
+
+```bash
+lsof /dev/ttyACM0
+```
+
+If logger owns the port, stop/disable it before running pi-forwarder:
+
+```bash
+sudo systemctl stop meshtastic-logger
+sudo systemctl disable meshtastic-logger
+```
+
+## systemd install (build, copy to /opt, install deps, create env file, install unit)
+
+### 1) Build
+
 ```bash
 cd /path/to/repo/apps/pi-forwarder
 npm install
 npm run build
 ```
-2. Copy build output to `/opt/loramapr/pi-forwarder`:
+
+### 2) Copy to `/opt/loramapr/pi-forwarder`
+
 ```bash
 sudo mkdir -p /opt/loramapr/pi-forwarder
 sudo cp -R dist /opt/loramapr/pi-forwarder/
 sudo cp package.json /opt/loramapr/pi-forwarder/
-sudo cp package-lock.json /opt/loramapr/pi-forwarder/
-cd /opt/loramapr/pi-forwarder
-sudo npm install --omit=dev
+if [ -f package-lock.json ]; then sudo cp package-lock.json /opt/loramapr/pi-forwarder/; fi
 ```
-3. Create `/etc/loramapr/pi-forwarder.env` (example):
+
+Install production deps:
+
+```bash
+cd /opt/loramapr/pi-forwarder
+if [ -f package-lock.json ]; then npm ci --omit=dev --no-audit --no-fund; else npm install --omit=dev --no-audit --no-fund; fi
+```
+
+Notes:
+
+- `npm ci` requires `package-lock.json`; without lockfile, use `npm install --omit=dev`.
+- Avoid running npm as root when possible; use a writable deploy directory/user flow.
+- If npm registry is flaky (`ECONNRESET`), retry and/or tune retries:
+
+```bash
+npm config set fetch-retries 5
+npm config set fetch-retry-mintimeout 20000
+npm config set fetch-retry-maxtimeout 120000
+```
+
+### 3) Create `/etc/loramapr/pi-forwarder.env`
+
+Important: systemd loads this file via `EnvironmentFile=`. Wrong values here override what you tested manually and were the root cause in our debugging.
+
 ```bash
 API_BASE_URL=http://localhost:3000
 INGEST_API_KEY=replace_me
 DEVICE_HINT=pi-home-node
 SOURCE=cli
-CLI_PATH=meshtastic
-MESHTASTIC_PORT=/dev/ttyUSB0
+CLI_PATH=/home/kpax/bin/meshtastic-wrapper
+MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Tracker_L1_...
 MESHTASTIC_HOST=
 POLL_HEARTBEAT_SECONDS=60
 POST_TIMEOUT_MS=8000
@@ -81,13 +158,88 @@ RETRY_BASE_MS=500
 RETRY_MAX_MS=10000
 MAX_QUEUE=5000
 ```
-4. Install and start the service:
+
+### 4) Install unit and set correct runtime user
+
+The template in repo uses `User=pi`/`Group=pi`. On this box the real user is `kpax`; leaving `pi` causes `status=217/USER` and `Failed to determine user credentials`.
+
+Install base unit:
+
 ```bash
 sudo cp /path/to/repo/apps/pi-forwarder/systemd/loramapr-pi-forwarder.service /etc/systemd/system/
+```
+
+Create override for user/group:
+
+```bash
+sudo systemctl edit loramapr-pi-forwarder
+```
+
+Add:
+
+```ini
+[Service]
+User=kpax
+Group=kpax
+```
+
+Then enable/start:
+
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now loramapr-pi-forwarder
 ```
-5. Follow logs:
+
+### 5) Verify service behavior
+
 ```bash
+systemctl status loramapr-pi-forwarder
 journalctl -u loramapr-pi-forwarder -f
+```
+
+Good signs:
+
+- `systemctl status` shows Node `dist/index.js` running.
+- In CLI mode, a spawned Meshtastic Python process is visible under the same service cgroup.
+- Journal shows heartbeat with queue length and success/failure counters.
+- Journal shows successful POST activity.
+
+## Troubleshooting matrix (symptom -> cause -> fix)
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `spawn meshtastic ENOENT` | `CLI_PATH` not resolvable for service user PATH | Set absolute `CLI_PATH` to wrapper (for example `/home/kpax/bin/meshtastic-wrapper`) and ensure `chmod +x`. |
+| `File Not Found` for `/dev/ttyUSB0` | Wrong serial path for this hardware | Use `ls -l /dev/serial/by-id/` and set `MESHTASTIC_PORT` to the by-id path that resolves to `/dev/ttyACM0`. |
+| `Could not exclusively lock port` | Another process owns port (`meshtastic-logger` etc.) | `lsof /dev/ttyACM0`, stop/disable conflicting service, restart forwarder. |
+| `status=217/USER` / `Failed to determine user credentials` | Unit `User`/`Group` do not exist on host | Override unit to real user/group (`kpax` on this box). |
+| npm `ECONNRESET` while installing | Registry/network instability | Retry, set npm retry config, use `--no-audit --no-fund`, avoid root npm flow when possible. |
+
+## Minimal known-good configs
+
+### Example env file
+
+`/etc/loramapr/pi-forwarder.env`:
+
+```bash
+API_BASE_URL=http://localhost:3000
+INGEST_API_KEY=replace_me
+DEVICE_HINT=pi-home-node
+SOURCE=cli
+CLI_PATH=/home/kpax/bin/meshtastic-wrapper
+MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Tracker_L1_...
+POLL_HEARTBEAT_SECONDS=60
+POST_TIMEOUT_MS=8000
+RETRY_BASE_MS=500
+RETRY_MAX_MS=10000
+MAX_QUEUE=5000
+```
+
+### Example unit override
+
+`/etc/systemd/system/loramapr-pi-forwarder.service.d/override.conf`:
+
+```ini
+[Service]
+User=kpax
+Group=kpax
 ```
