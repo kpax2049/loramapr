@@ -40,5 +40,3 @@ export function loadConfig(input: NodeJS.ProcessEnv = process.env): ForwarderCon
   console.error(`[pi-forwarder] ${prefix}. ${details}`);
   throw new ForwarderConfigError(prefix);
 }
-
-export const config: ForwarderConfig = loadConfig();

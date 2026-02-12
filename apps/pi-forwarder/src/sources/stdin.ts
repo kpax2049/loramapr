@@ -15,6 +15,7 @@ export async function runStdinSource(options: StdinSourceOptions): Promise<void>
     crlfDelay: Infinity,
     terminal: false
   });
+  let ignoredNonJsonLines = 0;
 
   options.logger.info('Reading JSON events from stdin');
 
@@ -27,8 +28,15 @@ export async function runStdinSource(options: StdinSourceOptions): Promise<void>
     let payload: unknown;
     try {
       payload = JSON.parse(trimmed);
-    } catch (error) {
-      options.logger.warn({ err: error, line: trimmed }, 'Skipping invalid JSON line from stdin');
+    } catch {
+      ignoredNonJsonLines += 1;
+      options.logger.debug(
+        {
+          ignoredNonJsonLines,
+          sample: trimmed.slice(0, 280)
+        },
+        'Ignoring non-JSON stdin line'
+      );
       continue;
     }
 
@@ -43,4 +51,3 @@ export async function runStdinSource(options: StdinSourceOptions): Promise<void>
     });
   }
 }
-

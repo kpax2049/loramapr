@@ -13,6 +13,19 @@ type PendingQueueItem = {
   nextAttemptAt: number;
 };
 
+export type PosterMetrics = {
+  queueLength: number;
+  successfulPosts: number;
+  failedPosts: number;
+  lastSuccessAt: string | null;
+};
+
+export type PosterWorker = {
+  enqueue: EventPoster;
+  start: () => void;
+  getMetrics: () => PosterMetrics;
+};
+
 export function eventId(obj: unknown): string {
   if (isRecord(obj)) {
     const packetId = obj.packetId;
@@ -29,13 +42,21 @@ export function eventId(obj: unknown): string {
   return sha256Hex(safeStringify(obj));
 }
 
-export function createPoster(config: ForwarderConfig, logger: Logger): EventPoster {
+export function createPoster(config: ForwarderConfig, logger: Logger): PosterWorker {
   const endpoint = new URL('/api/meshtastic/event', config.API_BASE_URL).toString();
   const queue: PendingQueueItem[] = [];
   let isProcessing = false;
   let scheduledTimer: NodeJS.Timeout | null = null;
+  let workerStarted = false;
+  let successfulPosts = 0;
+  let failedPosts = 0;
+  let lastSuccessAt: Date | null = null;
 
   const enqueue: EventPoster = async (rawPayload: unknown): Promise<void> => {
+    if (!workerStarted) {
+      start();
+    }
+
     const id = eventId(rawPayload);
     const payload = buildForwarderPayload(rawPayload, id, config.DEVICE_HINT);
     queue.push({
@@ -44,11 +65,33 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
       attempts: 0,
       nextAttemptAt: Date.now()
     });
-    dropOverflow(queue, config.MAX_QUEUE, logger);
+    const droppedCount = dropOverflow(queue, config.MAX_QUEUE, logger);
+    if (droppedCount > 0) {
+      failedPosts += droppedCount;
+    }
     scheduleProcess(0);
   };
 
+  const start = (): void => {
+    if (workerStarted) {
+      return;
+    }
+    workerStarted = true;
+    logger.info({ endpoint }, 'Poster worker started');
+    scheduleProcess(0);
+  };
+
+  const getMetrics = (): PosterMetrics => ({
+    queueLength: queue.length,
+    successfulPosts,
+    failedPosts,
+    lastSuccessAt: lastSuccessAt ? lastSuccessAt.toISOString() : null
+  });
+
   const scheduleProcess = (delayMs: number): void => {
+    if (!workerStarted) {
+      return;
+    }
     if (scheduledTimer) {
       return;
     }
@@ -125,6 +168,8 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
       const responseText = (await response.text()).slice(0, 2000);
 
       if (response.ok) {
+        successfulPosts += 1;
+        lastSuccessAt = new Date();
         logger.debug(
           { endpoint, eventId: item.id, status: response.status, attempts: item.attempts },
           'Forwarded event'
@@ -133,6 +178,7 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
       }
 
       if (response.status === 400 || response.status === 401 || response.status === 403) {
+        failedPosts += 1;
         logger.warn(
           {
             endpoint,
@@ -147,6 +193,7 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
       }
 
       if (response.status >= 500) {
+        failedPosts += 1;
         logger.warn(
           {
             endpoint,
@@ -161,6 +208,7 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
       }
 
       if (!response.ok) {
+        failedPosts += 1;
         logger.warn(
           {
             status: response.status,
@@ -174,6 +222,7 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
         return 'drop';
       }
     } catch (error) {
+      failedPosts += 1;
       logger.error(
         { err: error, endpoint, eventId: item.id },
         'Network or timeout failure; retrying event'
@@ -186,7 +235,11 @@ export function createPoster(config: ForwarderConfig, logger: Logger): EventPost
     return 'drop';
   };
 
-  return enqueue;
+  return {
+    enqueue,
+    start,
+    getMetrics
+  };
 }
 
 function buildForwarderPayload(
@@ -205,9 +258,9 @@ function buildForwarderPayload(
   };
 }
 
-function dropOverflow(queue: PendingQueueItem[], maxQueue: number, logger: Logger): void {
+function dropOverflow(queue: PendingQueueItem[], maxQueue: number, logger: Logger): number {
   if (queue.length <= maxQueue) {
-    return;
+    return 0;
   }
 
   const dropCount = queue.length - maxQueue;
@@ -219,6 +272,7 @@ function dropOverflow(queue: PendingQueueItem[], maxQueue: number, logger: Logge
     },
     'Queue exceeded MAX_QUEUE; dropped oldest pending events'
   );
+  return dropCount;
 }
 
 function computeRetryDelayMs(attempts: number, retryBaseMs: number, retryMaxMs: number): number {

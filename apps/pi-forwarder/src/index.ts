@@ -1,12 +1,14 @@
-import { ForwarderConfigError, config } from './env';
+import { ForwarderConfigError, loadConfig } from './env';
 import { createLogger } from './logger';
 import { createPoster } from './poster';
 import { runCliListenSource } from './sources/cli_listen';
 import { runStdinSource } from './sources/stdin';
 
 async function main(): Promise<void> {
+  const config = loadConfig();
   const logger = createLogger(config);
-  const postEvent = createPoster(config, logger);
+  const poster = createPoster(config, logger);
+  poster.start();
 
   logger.info(
     {
@@ -21,10 +23,15 @@ async function main(): Promise<void> {
   );
 
   setInterval(() => {
+    const metrics = poster.getMetrics();
     logger.info(
       {
         source: config.SOURCE,
-        heartbeatSeconds: config.POLL_HEARTBEAT_SECONDS
+        heartbeatSeconds: config.POLL_HEARTBEAT_SECONDS,
+        queueLength: metrics.queueLength,
+        successfulPosts: metrics.successfulPosts,
+        failedPosts: metrics.failedPosts,
+        lastSuccessAt: metrics.lastSuccessAt
       },
       'pi-forwarder heartbeat'
     );
@@ -33,7 +40,7 @@ async function main(): Promise<void> {
   if (config.SOURCE === 'stdin') {
     await runStdinSource({
       logger,
-      onEvent: postEvent,
+      onEvent: poster.enqueue,
       exitOnEof: true
     });
     return;
@@ -48,7 +55,7 @@ async function main(): Promise<void> {
 
   await runCliListenSource({
     logger,
-    onEvent: postEvent,
+    onEvent: poster.enqueue,
     cliPath: config.CLI_PATH,
     meshtasticPort: config.MESHTASTIC_PORT
   });
