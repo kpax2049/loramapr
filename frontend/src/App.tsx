@@ -1249,6 +1249,10 @@ function App() {
   useEffect(() => {
     setUserInteractedWithMap(false);
     hasAutoFitRef.current = false;
+    // Clear map bounds when the scope changes so the first fetch is not clipped to
+    // the previous viewport (e.g. switching from SF to a Germany session).
+    setBbox(null);
+    setDebouncedBbox(null);
   }, [deviceId, selectedSessionId]);
 
   useEffect(() => {
