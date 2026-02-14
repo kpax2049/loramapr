@@ -32,6 +32,8 @@ const LORAWAN_DIAG_WINDOW_MINUTES = 10;
 const SIDEBAR_TAB_KEY = 'sidebarTab';
 const ZEN_MODE_KEY = 'zenMode';
 const THEME_MODE_KEY = 'themeMode';
+const APP_NAME = __APP_NAME__;
+const APP_VERSION = __APP_VERSION__;
 
 type SidebarTab = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -1641,7 +1643,9 @@ function App() {
     </>
   );
 
-  const sidebarFooter = <span className="layout__sidebar-footer-meta">{sidebarTab}</span>;
+  const sidebarFooter = (
+    <span className="layout__sidebar-footer-meta">{`${APP_NAME} v${APP_VERSION}`}</span>
+  );
   const zenToggleButton = (
     <button
       type="button"

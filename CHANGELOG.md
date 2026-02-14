@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.5 - 2026-02-14
+
+### Added
+- App name and version are now shown directly in the UI sidebar footer (`LoRaMapr v0.9.5`).
+
+### Changed
+- Added consistent pointer/hover polish across actionable controls and tab interactions to make click targets clearer.
+- Improved `Fit to Data` behavior to deterministically fit the currently visible dataset (playback window, coverage bins, or points scope).
+
+### Notes
+- No breaking changes.
+
 ## v0.9.3 - 2026-02-11
 
 ### Added
