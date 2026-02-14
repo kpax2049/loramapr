@@ -1,4 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  type MutableRefObject,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import {
   CircleMarker,
   MapContainer,
@@ -61,7 +69,8 @@ type TrackPoint = {
 };
 
 export type MapViewHandle = {
-  fitBounds: (bounds: L.LatLngBoundsExpression) => void;
+  fitBounds: (bounds: L.LatLngBoundsExpression, options?: L.FitBoundsOptions) => void;
+  focusPoint: (point: [number, number], fallbackZoom?: number) => void;
 };
 
 function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] {
@@ -169,6 +178,21 @@ function MapResizeSync() {
       resizeObserver?.disconnect();
     };
   }, [map]);
+
+  return null;
+}
+
+function MapInstanceSync({ mapRef }: { mapRef: MutableRefObject<L.Map | null> }) {
+  const map = useMap();
+
+  useEffect(() => {
+    mapRef.current = map;
+    return () => {
+      if (mapRef.current === map) {
+        mapRef.current = null;
+      }
+    };
+  }, [map, mapRef]);
 
   return null;
 }
@@ -297,10 +321,20 @@ ref
   }, []);
 
   useImperativeHandle(ref, () => ({
-    fitBounds: (bounds) => {
+    fitBounds: (bounds, options) => {
       if (mapRef.current) {
-        mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+        mapRef.current.fitBounds(bounds, options ?? { padding: [20, 20] });
       }
+    },
+    focusPoint: (point, fallbackZoom = 16) => {
+      if (!mapRef.current) {
+        return;
+      }
+      const currentZoom = mapRef.current.getZoom();
+      const targetZoom = Number.isFinite(currentZoom)
+        ? Math.max(currentZoom, fallbackZoom)
+        : fallbackZoom;
+      mapRef.current.setView(point, targetZoom);
     }
   }));
 
@@ -411,10 +445,8 @@ ref
       zoom={zoom}
       preferCanvas={true}
       style={{ height: '100%', width: '100%' }}
-      whenCreated={(mapInstance) => {
-        mapRef.current = mapInstance;
-      }}
     >
+      <MapInstanceSync mapRef={mapRef} />
       <MapResizeSync />
       <BoundsListener
         onChange={onBoundsChange}

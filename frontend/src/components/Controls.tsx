@@ -60,6 +60,7 @@ type ControlsProps = {
   onShowPointsChange: (value: boolean) => void;
   onShowTrackChange: (value: boolean) => void;
   playbackControls?: ReactNode;
+  fitFeedback?: string | null;
 };
 
 export default function Controls({
@@ -103,7 +104,8 @@ export default function Controls({
   showTrack,
   onShowPointsChange,
   onShowTrackChange,
-  playbackControls
+  playbackControls,
+  fitFeedback
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = devicesData?.items ?? [];
@@ -710,9 +712,20 @@ export default function Controls({
       {showCoverageTab && (
         <div className="controls__group">
           <span className="controls__label">Map</span>
-          <button type="button" className="controls__button" onClick={onFitToData}>
+          <button
+            type="button"
+            className="controls__button"
+            onClick={onFitToData}
+            title="Recenter map to visible data"
+            aria-label="Recenter map to visible data"
+          >
             Fit to data
           </button>
+          {fitFeedback ? (
+            <div className="controls__fit-feedback" role="status" aria-live="polite">
+              {fitFeedback}
+            </div>
+          ) : null}
         </div>
       )}
 

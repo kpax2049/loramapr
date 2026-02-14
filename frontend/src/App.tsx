@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
-import type { Measurement, SessionWindowPoint } from './api/types';
+import type { CoverageBin, Measurement, SessionWindowPoint } from './api/types';
 import Controls from './components/Controls';
 import Layout from './components/Layout';
 import MapView, { type MapViewHandle } from './components/MapView';
@@ -258,6 +258,111 @@ function formatDeviceLabel(name: string | null | undefined, deviceUid: string): 
   return `${trimmedName} (${deviceUid})`;
 }
 
+type LatLonPoint = [number, number];
+type LatLonBounds = [[number, number], [number, number]];
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function toLatLonPoint(lat: unknown, lon: unknown): LatLonPoint | null {
+  const safeLat = toFiniteNumber(lat);
+  const safeLon = toFiniteNumber(lon);
+  if (safeLat === null || safeLon === null) {
+    return null;
+  }
+  return [safeLat, safeLon];
+}
+
+function isFiniteCoordinate(lat: unknown, lon: unknown): boolean {
+  return toLatLonPoint(lat, lon) !== null;
+}
+
+function buildBoundsFromPoints(points: LatLonPoint[]): LatLonBounds | null {
+  if (points.length === 0) {
+    return null;
+  }
+
+  let minLat = points[0][0];
+  let maxLat = points[0][0];
+  let minLon = points[0][1];
+  let maxLon = points[0][1];
+
+  for (const [lat, lon] of points) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+  }
+
+  return [
+    [minLat, minLon],
+    [maxLat, maxLon]
+  ];
+}
+
+function buildCoverageFitTarget(
+  bins: CoverageBin[] | undefined,
+  binSizeDeg: number | null | undefined
+): { points: LatLonPoint[]; bounds: LatLonBounds | null } {
+  if (!bins || bins.length === 0) {
+    return { points: [], bounds: null };
+  }
+
+  if (typeof binSizeDeg === 'number' && Number.isFinite(binSizeDeg) && binSizeDeg > 0) {
+    const points: LatLonPoint[] = [];
+    let minLat = Number.POSITIVE_INFINITY;
+    let maxLat = Number.NEGATIVE_INFINITY;
+    let minLon = Number.POSITIVE_INFINITY;
+    let maxLon = Number.NEGATIVE_INFINITY;
+
+    for (const bin of bins) {
+      const binMinLat = bin.latBin * binSizeDeg;
+      const binMinLon = bin.lonBin * binSizeDeg;
+      const binMaxLat = binMinLat + binSizeDeg;
+      const binMaxLon = binMinLon + binSizeDeg;
+      const centerLat = binMinLat + binSizeDeg / 2;
+      const centerLon = binMinLon + binSizeDeg / 2;
+
+      if (!isFiniteCoordinate(centerLat, centerLon)) {
+        continue;
+      }
+
+      points.push([centerLat, centerLon]);
+      if (binMinLat < minLat) minLat = binMinLat;
+      if (binMaxLat > maxLat) maxLat = binMaxLat;
+      if (binMinLon < minLon) minLon = binMinLon;
+      if (binMaxLon > maxLon) maxLon = binMaxLon;
+    }
+
+    if (points.length === 0) {
+      return { points: [], bounds: null };
+    }
+
+    const bounds =
+      Number.isFinite(minLat) &&
+      Number.isFinite(maxLat) &&
+      Number.isFinite(minLon) &&
+      Number.isFinite(maxLon)
+        ? ([[minLat, minLon], [maxLat, maxLon]] as LatLonBounds)
+        : buildBoundsFromPoints(points);
+
+    return { points, bounds };
+  }
+
+  const points: LatLonPoint[] = bins
+    .map((bin) => [bin.latBin, bin.lonBin] as LatLonPoint)
+    .filter(([lat, lon]) => isFiniteCoordinate(lat, lon));
+  return { points, bounds: buildBoundsFromPoints(points) };
+}
+
 function readInitialQueryState(): InitialQueryState {
   if (typeof window === 'undefined') {
     return {
@@ -362,6 +467,7 @@ function App() {
   const [selectedGatewayId, setSelectedGatewayId] = useState<string | null>(null);
   const [compareGatewayId, setCompareGatewayId] = useState<string | null>(null);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
+  const [fitFeedback, setFitFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     playbackCursorRef.current = playbackCursorMs;
@@ -429,6 +535,16 @@ function App() {
     }
     document.documentElement.dataset.theme = effectiveTheme;
   }, [effectiveTheme]);
+
+  useEffect(() => {
+    if (!fitFeedback) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setFitFeedback(null);
+    }, 2200);
+    return () => window.clearTimeout(handle);
+  }, [fitFeedback]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1303,10 +1419,50 @@ function App() {
   }, [measurementBounds, userInteractedWithMap, activeMeasurementsQuery.isFetching]);
 
   const handleFitToData = () => {
-    if (!measurementBounds) {
+    const playbackPoints: LatLonPoint[] =
+      viewMode === 'playback'
+        ? playbackWindowPoints
+            .map((point) => toLatLonPoint(point.lat, point.lon))
+            .filter((point): point is LatLonPoint => point !== null)
+        : [];
+
+    const coverageTarget =
+      mapLayerMode === 'coverage'
+        ? buildCoverageFitTarget(coverageQuery.data?.items, coverageQuery.data?.binSizeDeg)
+        : { points: [] as LatLonPoint[], bounds: null as LatLonBounds | null };
+
+    const measurementPoints: LatLonPoint[] = [
+      ...activeMeasurements
+        .map((point) => toLatLonPoint(point.lat, point.lon))
+        .filter((point): point is LatLonPoint => point !== null),
+      ...activeCompareMeasurements
+        .map((point) => toLatLonPoint(point.lat, point.lon))
+        .filter((point): point is LatLonPoint => point !== null)
+    ];
+    const activeScopeTrackPoints: LatLonPoint[] = activeTrack
+      .map((point) => toLatLonPoint(point.lat, point.lon))
+      .filter((point): point is LatLonPoint => point !== null);
+    const activeScopePoints =
+      activeScopeTrackPoints.length > 0 ? activeScopeTrackPoints : measurementPoints;
+
+    const target =
+      playbackPoints.length > 0
+        ? { points: playbackPoints, bounds: buildBoundsFromPoints(playbackPoints) }
+        : mapLayerMode === 'coverage' && coverageTarget.points.length > 0
+          ? coverageTarget
+          : { points: activeScopePoints, bounds: buildBoundsFromPoints(activeScopePoints) };
+
+    if (target.points.length === 0) {
+      setFitFeedback('No data to fit');
       return;
     }
-    mapRef.current?.fitBounds(measurementBounds);
+
+    setFitFeedback(null);
+    if (target.points.length < 2 || !target.bounds) {
+      mapRef.current?.focusPoint(target.points[0], 16);
+    } else {
+      mapRef.current?.fitBounds(target.bounds, { padding: [24, 24], maxZoom: 17 });
+    }
     setUserInteractedWithMap(true);
     hasAutoFitRef.current = true;
   };
@@ -1448,6 +1604,7 @@ function App() {
       <SelectedDeviceHeader
         device={selectedDevice}
         onFitToData={handleFitToData}
+        fitFeedback={fitFeedback}
       />
       <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs">
         {SIDEBAR_TABS.map((tab) => (
@@ -1578,6 +1735,7 @@ function App() {
       onShowPointsChange={setShowPoints}
       onShowTrackChange={setShowTrack}
       playbackControls={playbackControls}
+      fitFeedback={fitFeedback}
     />
   );
 

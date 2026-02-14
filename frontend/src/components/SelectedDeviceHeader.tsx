@@ -5,6 +5,7 @@ import { useSessions } from '../query/sessions';
 type SelectedDeviceHeaderProps = {
   device: Device | null;
   onFitToData?: () => void;
+  fitFeedback?: string | null;
 };
 
 function truncateDeviceUid(deviceUid: string, maxLength = 20): string {
@@ -43,7 +44,8 @@ function copyDeviceUid(deviceUid: string) {
 
 export default function SelectedDeviceHeader({
   device,
-  onFitToData
+  onFitToData,
+  fitFeedback
 }: SelectedDeviceHeaderProps) {
   const deviceId = device?.id ?? undefined;
   const sessionsQuery = useSessions(deviceId, { enabled: Boolean(deviceId) });
@@ -89,11 +91,18 @@ export default function SelectedDeviceHeader({
             className="selected-device-header__button"
             disabled={!deviceUid}
             onClick={onFitToData}
+            title="Recenter map to visible data"
+            aria-label="Recenter map to visible data"
           >
             Fit to data
           </button>
         ) : null}
       </div>
+      {fitFeedback ? (
+        <div className="selected-device-header__feedback" role="status" aria-live="polite">
+          {fitFeedback}
+        </div>
+      ) : null}
     </div>
   );
 }
