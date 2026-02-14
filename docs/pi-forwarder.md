@@ -286,3 +286,22 @@ MAX_QUEUE=5000
 User=kpax
 Group=kpax
 ```
+
+## Post-reboot sanity checks
+
+After reboots or maintenance, verify the forwarder is still active:
+
+```bash
+systemctl is-enabled loramapr-pi-forwarder
+systemctl is-active loramapr-pi-forwarder
+systemctl status loramapr-pi-forwarder --no-pager -l
+journalctl -u loramapr-pi-forwarder -n 120 --no-pager
+```
+
+If home auto-session agent also runs on this Pi, validate both services together:
+
+```bash
+systemctl is-enabled loramapr-home-session-agent
+systemctl is-active loramapr-home-session-agent
+systemctl status loramapr-home-session-agent --no-pager -l
+```
