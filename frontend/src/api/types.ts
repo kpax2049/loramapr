@@ -82,6 +82,20 @@ export type Session = {
   isArchived: boolean;
 };
 
+export type SessionDetail = {
+  id: string;
+  deviceId: string;
+  ownerId: string | null;
+  name: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  notes: string | null;
+  isArchived: boolean;
+  archivedAt: string | null;
+  updatedAt: string;
+  measurementCount: number;
+};
+
 export type SessionTimeline = {
   sessionId: string;
   deviceId: string;

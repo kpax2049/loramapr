@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 import {
   deleteSession,
+  getSessionById,
   getSessionTimeline,
   getSessionWindow,
   listSessions,
@@ -9,7 +10,13 @@ import {
   stopSession,
   updateSession
 } from '../api/endpoints';
-import type { ListResponse, Session, SessionTimeline, SessionWindowResponse } from '../api/types';
+import type {
+  ListResponse,
+  Session,
+  SessionDetail,
+  SessionTimeline,
+  SessionWindowResponse
+} from '../api/types';
 import type { SessionWindowParams } from '../api/endpoints';
 import type { QueryKey } from '@tanstack/react-query';
 
@@ -41,6 +48,20 @@ export function useSessionTimeline(
   return useQuery<SessionTimeline>({
     queryKey: ['sessionTimeline', sessionId ?? null],
     queryFn: ({ signal }) => getSessionTimeline(sessionId as string, { signal }),
+    ...options,
+    enabled: enabled && Boolean(sessionId)
+  });
+}
+
+export function useSessionById(
+  sessionId?: string | null,
+  options?: QueryOptions<SessionDetail>
+) {
+  const enabled = options?.enabled ?? Boolean(sessionId);
+
+  return useQuery<SessionDetail>({
+    queryKey: ['session', sessionId ?? null],
+    queryFn: ({ signal }) => getSessionById(sessionId as string, { signal }),
     ...options,
     enabled: enabled && Boolean(sessionId)
   });

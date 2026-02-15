@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   useDeleteSession,
+  useSessionById,
   useSessions,
   useStartSession,
   useStopSession,
@@ -74,6 +75,7 @@ export default function SessionsPanel({
   const [renameError, setRenameError] = useState<string | null>(null);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [deleteTargetSession, setDeleteTargetSession] = useState<Session | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [sessionActionError, setSessionActionError] = useState<string | null>(null);
 
   const { data: sessionsResponse, isLoading, error } = useSessions(deviceId ?? undefined, {
@@ -84,6 +86,9 @@ export default function SessionsPanel({
   const stopMutation = useStopSession();
   const updateSessionMutation = useUpdateSession();
   const deleteSessionMutation = useDeleteSession();
+  const deleteSessionDetailsQuery = useSessionById(deleteTargetSession?.id ?? null, {
+    enabled: Boolean(deleteTargetSession?.id)
+  });
 
   const activeSession = useMemo(
     () => sessions.find((session) => !session.endedAt) ?? null,
@@ -107,6 +112,7 @@ export default function SessionsPanel({
     setRenameError(null);
     setOpenMenuSessionId(null);
     setDeleteTargetSession(null);
+    setDeleteConfirmText('');
     setSessionActionError(null);
   }, [deviceId]);
 
@@ -202,9 +208,7 @@ export default function SessionsPanel({
       },
       {
         onSuccess: () => {
-          if (!showArchived && !session.isArchived && selectedSessionId === session.id) {
-            onSelectSessionId(null);
-          }
+          // Selection clearing and user messaging are handled centrally in App state.
         },
         onError: (mutationError) => {
           const status = getErrorStatus(mutationError);
@@ -225,10 +229,15 @@ export default function SessionsPanel({
     setOpenMenuSessionId(null);
     setSessionActionError(null);
     setDeleteTargetSession(session);
+    setDeleteConfirmText('');
   };
 
   const handleDeleteConfirm = () => {
-    if (!deleteTargetSession || deleteSessionMutation.isPending) {
+    if (
+      !deleteTargetSession ||
+      deleteSessionMutation.isPending ||
+      deleteConfirmText.trim() !== 'DELETE'
+    ) {
       return;
     }
     setSessionActionError(null);
@@ -239,10 +248,8 @@ export default function SessionsPanel({
       },
       {
         onSuccess: () => {
-          if (selectedSessionId === deleteTargetSession.id) {
-            onSelectSessionId(null);
-          }
           setDeleteTargetSession(null);
+          setDeleteConfirmText('');
         },
         onError: (mutationError) => {
           const status = getErrorStatus(mutationError);
@@ -250,6 +257,40 @@ export default function SessionsPanel({
             status === 401 || status === 403
               ? 'Session actions require QUERY key'
               : 'Could not delete session'
+          );
+        }
+      }
+    );
+  };
+
+  const handleArchiveFromModal = () => {
+    if (!deleteTargetSession || updateSessionMutation.isPending) {
+      return;
+    }
+    if (deleteTargetSession.isArchived) {
+      setDeleteTargetSession(null);
+      setDeleteConfirmText('');
+      return;
+    }
+
+    setSessionActionError(null);
+    updateSessionMutation.mutate(
+      {
+        id: deleteTargetSession.id,
+        deviceId: deleteTargetSession.deviceId,
+        input: { isArchived: true }
+      },
+      {
+        onSuccess: () => {
+          setDeleteTargetSession(null);
+          setDeleteConfirmText('');
+        },
+        onError: (mutationError) => {
+          const status = getErrorStatus(mutationError);
+          setSessionActionError(
+            status === 401 || status === 403
+              ? 'Session actions require QUERY key'
+              : 'Could not archive session'
           );
         }
       }
@@ -466,7 +507,10 @@ export default function SessionsPanel({
         <div
           className="sessions-panel__modal-backdrop"
           role="presentation"
-          onClick={() => setDeleteTargetSession(null)}
+          onClick={() => {
+            setDeleteTargetSession(null);
+            setDeleteConfirmText('');
+          }}
         >
           <div
             className="sessions-panel__modal"
@@ -476,26 +520,70 @@ export default function SessionsPanel({
             onClick={(event) => event.stopPropagation()}
           >
             <h4 id="sessions-delete-title">Delete session?</h4>
+            <div className="sessions-panel__modal-session-name">
+              {deleteTargetSession.name?.trim() || `Session ${deleteTargetSession.id.slice(0, 8)}`}
+            </div>
+            <div className="sessions-panel__modal-meta">
+              Measurements:{' '}
+              {deleteSessionDetailsQuery.isLoading
+                ? 'Loading...'
+                : deleteSessionDetailsQuery.data?.measurementCount ?? '—'}
+            </div>
             <p>
-              This will permanently delete the session record and detach measurements from it.
-              This cannot be undone.
+              Choose how to proceed:
             </p>
+            <ul className="sessions-panel__modal-list">
+              <li>Archive hides session but keeps attachments.</li>
+              <li>Delete removes session and DETACHES measurements (keeps data).</li>
+            </ul>
+            <label className="sessions-panel__modal-confirm">
+              <span>Type DELETE to enable delete</span>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(event) => setDeleteConfirmText(event.target.value)}
+                placeholder="DELETE"
+                aria-label="Type DELETE to confirm deleting session"
+                disabled={deleteSessionMutation.isPending}
+              />
+            </label>
             <div className="sessions-panel__modal-actions">
               <button
                 type="button"
                 className="sessions-panel__modal-cancel"
-                onClick={() => setDeleteTargetSession(null)}
-                disabled={deleteSessionMutation.isPending}
+                onClick={() => {
+                  setDeleteTargetSession(null);
+                  setDeleteConfirmText('');
+                }}
+                disabled={deleteSessionMutation.isPending || updateSessionMutation.isPending}
               >
                 Cancel
               </button>
               <button
                 type="button"
+                className="sessions-panel__modal-archive"
+                onClick={handleArchiveFromModal}
+                disabled={
+                  deleteSessionMutation.isPending ||
+                  updateSessionMutation.isPending ||
+                  deleteTargetSession.isArchived
+                }
+              >
+                {deleteTargetSession.isArchived
+                  ? 'Already archived'
+                  : updateSessionMutation.isPending
+                    ? 'Archiving…'
+                    : 'Archive session'}
+              </button>
+              <button
+                type="button"
                 className="sessions-panel__modal-delete"
                 onClick={handleDeleteConfirm}
-                disabled={deleteSessionMutation.isPending}
+                disabled={deleteSessionMutation.isPending || deleteConfirmText.trim() !== 'DELETE'}
               >
-                {deleteSessionMutation.isPending ? 'Deleting…' : 'Delete'}
+                {deleteSessionMutation.isPending
+                  ? 'Deleting…'
+                  : 'Delete session (detach measurements)'}
               </button>
             </div>
           </div>

@@ -19,6 +19,7 @@ import type {
   MeshtasticEventDetail,
   SessionWindowResponse,
   SessionTimeline,
+  SessionDetail,
   Session,
   TrackPoint
 } from './types';
@@ -443,6 +444,13 @@ export async function getSessionTimeline(
   options?: RequestOptions
 ): Promise<SessionTimeline> {
   return getJson<SessionTimeline>(`/api/sessions/${sessionId}/timeline`, options);
+}
+
+export async function getSessionById(
+  sessionId: string,
+  options?: RequestOptions
+): Promise<SessionDetail> {
+  return getJson<SessionDetail>(`/api/sessions/${sessionId}`, options);
 }
 
 export async function getSessionWindow(

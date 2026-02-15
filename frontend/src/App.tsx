@@ -21,7 +21,7 @@ import {
   useTrack
 } from './query/hooks';
 import { useLorawanEvents } from './query/lorawan';
-import { useSessionTimeline, useSessionWindow } from './query/sessions';
+import { useSessionTimeline, useSessions, useSessionWindow } from './query/sessions';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -442,6 +442,8 @@ function App() {
   const playbackStartCursorRef = useRef(0);
   const playbackStepRef = useRef(0);
   const playbackCursorRef = useRef(0);
+  const selectedSessionChangedAtRef = useRef(0);
+  const playbackSessionChangedAtRef = useRef(0);
 
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
@@ -486,6 +488,7 @@ function App() {
   const [compareGatewayId, setCompareGatewayId] = useState<string | null>(null);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
   const [fitFeedback, setFitFeedback] = useState<string | null>(null);
+  const [sessionSelectionNotice, setSessionSelectionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     playbackCursorRef.current = playbackCursorMs;
@@ -563,6 +566,16 @@ function App() {
     }, 2200);
     return () => window.clearTimeout(handle);
   }, [fitFeedback]);
+
+  useEffect(() => {
+    if (!sessionSelectionNotice) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setSessionSelectionNotice(null);
+    }, 3200);
+    return () => window.clearTimeout(handle);
+  }, [sessionSelectionNotice]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -709,6 +722,11 @@ function App() {
   const playbackTimelineQuery = useSessionTimeline(playbackSessionId ?? undefined, {
     enabled: Boolean(playbackSessionId)
   });
+  const sessionPickerQuery = useSessions(deviceId ?? undefined, { enabled: Boolean(deviceId) });
+  const nonArchivedSessionIds = useMemo(
+    () => new Set((sessionPickerQuery.data?.items ?? []).map((session) => session.id)),
+    [sessionPickerQuery.data?.items]
+  );
   const playbackMinMs = useMemo(() => {
     if (!playbackTimelineQuery.data?.minCapturedAt) {
       return null;
@@ -1409,8 +1427,69 @@ function App() {
   }, [selectedMeasurement, selectedPointId]);
 
   useEffect(() => {
+    selectedSessionChangedAtRef.current = Date.now();
+  }, [selectedSessionId]);
+
+  useEffect(() => {
+    playbackSessionChangedAtRef.current = Date.now();
+  }, [playbackSessionId]);
+
+  useEffect(() => {
     setSelectedSessionId(null);
   }, [deviceId]);
+
+  useEffect(() => {
+    if (
+      !deviceId ||
+      !selectedSessionId ||
+      !sessionPickerQuery.isFetched ||
+      sessionPickerQuery.isFetching ||
+      sessionPickerQuery.dataUpdatedAt < selectedSessionChangedAtRef.current
+    ) {
+      return;
+    }
+    if (nonArchivedSessionIds.has(selectedSessionId)) {
+      return;
+    }
+    setSelectedSessionId(null);
+    if (filterMode === 'session') {
+      setFilterMode('time');
+    }
+    setSessionSelectionNotice('Selected session was archived or deleted, selection was cleared.');
+  }, [
+    deviceId,
+    selectedSessionId,
+    sessionPickerQuery.isFetched,
+    sessionPickerQuery.isFetching,
+    sessionPickerQuery.dataUpdatedAt,
+    nonArchivedSessionIds,
+    filterMode
+  ]);
+
+  useEffect(() => {
+    if (
+      !deviceId ||
+      !playbackSessionId ||
+      !sessionPickerQuery.isFetched ||
+      sessionPickerQuery.isFetching ||
+      sessionPickerQuery.dataUpdatedAt < playbackSessionChangedAtRef.current
+    ) {
+      return;
+    }
+    if (nonArchivedSessionIds.has(playbackSessionId)) {
+      return;
+    }
+    setPlaybackSessionId(null);
+    setPlaybackIsPlaying(false);
+    setSessionSelectionNotice('Playback session was archived or deleted, selection was cleared.');
+  }, [
+    deviceId,
+    playbackSessionId,
+    sessionPickerQuery.isFetched,
+    sessionPickerQuery.isFetching,
+    sessionPickerQuery.dataUpdatedAt,
+    nonArchivedSessionIds
+  ]);
 
   useEffect(() => {
     setUserInteractedWithMap(false);
@@ -1796,6 +1875,7 @@ function App() {
       onShowTrackChange={setShowTrack}
       playbackControls={playbackControls}
       fitFeedback={fitFeedback}
+      sessionSelectionNotice={sessionSelectionNotice}
     />
   );
 

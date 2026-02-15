@@ -74,6 +74,7 @@ type ControlsProps = {
   onShowTrackChange: (value: boolean) => void;
   playbackControls?: ReactNode;
   fitFeedback?: string | null;
+  sessionSelectionNotice?: string | null;
 };
 
 export default function Controls({
@@ -119,7 +120,8 @@ export default function Controls({
   onShowPointsChange,
   onShowTrackChange,
   playbackControls,
-  fitFeedback
+  fitFeedback,
+  sessionSelectionNotice
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = devicesData?.items ?? [];
@@ -514,6 +516,11 @@ export default function Controls({
 
   return (
     <section className="controls" aria-label="Map controls">
+      {sessionSelectionNotice && (showSessionsTab || showPlaybackTab) ? (
+        <div className="controls__session-notice" role="status" aria-live="polite">
+          {sessionSelectionNotice}
+        </div>
+      ) : null}
       {showDeviceTab && (
         <div className="controls__group">
           <label className="controls__label">Device</label>
