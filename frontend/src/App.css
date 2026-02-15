@@ -2636,6 +2636,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  position: relative;
 }
 
 .sessions-panel__badge {
@@ -2675,6 +2676,55 @@
   cursor: not-allowed;
 }
 
+.sessions-panel__menu-wrap {
+  position: relative;
+}
+
+.sessions-panel__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  min-width: 9rem;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.3rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+  z-index: 20;
+}
+
+.sessions-panel__menu-item {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--panel-text);
+  border-radius: 6px;
+  padding: 0.35rem 0.42rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sessions-panel__menu-item:not(:disabled):hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.sessions-panel__menu-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sessions-panel__menu-item--danger {
+  color: var(--danger-fg);
+}
+
 .sessions-panel__rename-input {
   width: 100%;
   min-width: 0;
@@ -2690,6 +2740,87 @@
   color: var(--danger-fg);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
+}
+
+.sessions-panel__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: var(--overlay-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.sessions-panel__modal {
+  width: min(420px, 100%);
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  box-shadow: var(--panel-shadow);
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.sessions-panel__modal h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.sessions-panel__modal p {
+  margin: 0;
+  color: var(--panel-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.sessions-panel__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.sessions-panel__modal-cancel,
+.sessions-panel__modal-delete {
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  padding: 0.42rem 0.62rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sessions-panel__modal-delete {
+  border-color: var(--danger-border);
+  background: var(--danger-bg-soft);
+  color: var(--danger-fg);
+}
+
+.sessions-panel__modal-cancel:not(:disabled):hover,
+.sessions-panel__modal-delete:not(:disabled):hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.sessions-panel__modal-delete:not(:disabled):hover {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.sessions-panel__modal-cancel:disabled,
+.sessions-panel__modal-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .sessions-panel__item.is-selected {

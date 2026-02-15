@@ -1,6 +1,20 @@
-import { IconCheck, IconPencil, IconX } from '@tabler/icons-react';
+import {
+  IconArchive,
+  IconArchiveOff,
+  IconCheck,
+  IconDotsVertical,
+  IconPencil,
+  IconTrash,
+  IconX
+} from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useSessions, useStartSession, useStopSession, useUpdateSession } from '../query/sessions';
+import {
+  useDeleteSession,
+  useSessions,
+  useStartSession,
+  useStopSession,
+  useUpdateSession
+} from '../query/sessions';
 import type { Session } from '../api/types';
 
 type SessionsPanelProps = {
@@ -58,6 +72,9 @@ export default function SessionsPanel({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
+  const [deleteTargetSession, setDeleteTargetSession] = useState<Session | null>(null);
+  const [sessionActionError, setSessionActionError] = useState<string | null>(null);
 
   const { data: sessionsResponse, isLoading, error } = useSessions(deviceId ?? undefined, {
     includeArchived: showArchived
@@ -66,6 +83,7 @@ export default function SessionsPanel({
   const startMutation = useStartSession();
   const stopMutation = useStopSession();
   const updateSessionMutation = useUpdateSession();
+  const deleteSessionMutation = useDeleteSession();
 
   const activeSession = useMemo(
     () => sessions.find((session) => !session.endedAt) ?? null,
@@ -87,6 +105,9 @@ export default function SessionsPanel({
     setEditingSessionId(null);
     setRenameDraft('');
     setRenameError(null);
+    setOpenMenuSessionId(null);
+    setDeleteTargetSession(null);
+    setSessionActionError(null);
   }, [deviceId]);
 
   const handleStart = () => {
@@ -117,6 +138,7 @@ export default function SessionsPanel({
     if (!hasQueryApiKey) {
       return;
     }
+    setOpenMenuSessionId(null);
     setEditingSessionId(session.id);
     setRenameDraft(session.name?.trim() ?? '');
     setRenameError(null);
@@ -162,9 +184,87 @@ export default function SessionsPanel({
     );
   };
 
+  const toggleActionsMenu = (sessionId: string) => {
+    setOpenMenuSessionId((current) => (current === sessionId ? null : sessionId));
+  };
+
+  const handleArchiveToggle = (session: Session) => {
+    if (!hasQueryApiKey || updateSessionMutation.isPending) {
+      return;
+    }
+    setSessionActionError(null);
+    setOpenMenuSessionId(null);
+    updateSessionMutation.mutate(
+      {
+        id: session.id,
+        deviceId: session.deviceId,
+        input: { isArchived: !session.isArchived }
+      },
+      {
+        onSuccess: () => {
+          if (!showArchived && !session.isArchived && selectedSessionId === session.id) {
+            onSelectSessionId(null);
+          }
+        },
+        onError: (mutationError) => {
+          const status = getErrorStatus(mutationError);
+          setSessionActionError(
+            status === 401 || status === 403
+              ? 'Session actions require QUERY key'
+              : 'Could not update session archive state'
+          );
+        }
+      }
+    );
+  };
+
+  const handleDeleteRequest = (session: Session) => {
+    if (!hasQueryApiKey) {
+      return;
+    }
+    setOpenMenuSessionId(null);
+    setSessionActionError(null);
+    setDeleteTargetSession(session);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTargetSession || deleteSessionMutation.isPending) {
+      return;
+    }
+    setSessionActionError(null);
+    deleteSessionMutation.mutate(
+      {
+        id: deleteTargetSession.id,
+        deviceId: deleteTargetSession.deviceId
+      },
+      {
+        onSuccess: () => {
+          if (selectedSessionId === deleteTargetSession.id) {
+            onSelectSessionId(null);
+          }
+          setDeleteTargetSession(null);
+        },
+        onError: (mutationError) => {
+          const status = getErrorStatus(mutationError);
+          setSessionActionError(
+            status === 401 || status === 403
+              ? 'Session actions require QUERY key'
+              : 'Could not delete session'
+          );
+        }
+      }
+    );
+  };
+
   const renderSessionRow = (session: Session, isActive = false) => {
     const isSelected = selectedSessionId === session.id;
     const isEditing = editingSessionId === session.id;
+    const isMenuOpen = openMenuSessionId === session.id;
+    const isRowUpdating =
+      updateSessionMutation.isPending && updateSessionMutation.variables?.id === session.id;
+    const isRowDeleting =
+      deleteSessionMutation.isPending && deleteSessionMutation.variables?.id === session.id;
+    const disableRowActions = isRowUpdating || isRowDeleting;
     const title = isActive ? activeSessionLabel(session) : sessionLabel(session);
 
     return (
@@ -213,7 +313,7 @@ export default function SessionsPanel({
                     type="button"
                     className="sessions-panel__icon-button"
                     onClick={() => saveRename(session)}
-                    disabled={updateSessionMutation.isPending}
+                    disabled={disableRowActions}
                     aria-label="Save session name"
                   >
                     <IconCheck size={14} aria-hidden="true" />
@@ -222,7 +322,7 @@ export default function SessionsPanel({
                     type="button"
                     className="sessions-panel__icon-button"
                     onClick={cancelRename}
-                    disabled={updateSessionMutation.isPending}
+                    disabled={disableRowActions}
                     aria-label="Cancel rename"
                   >
                     <IconX size={14} aria-hidden="true" />
@@ -235,10 +335,53 @@ export default function SessionsPanel({
                   onClick={() => beginRename(session)}
                   aria-label={`Rename ${title}`}
                   title="Rename session"
+                  disabled={disableRowActions}
                 >
                   <IconPencil size={14} aria-hidden="true" />
                 </button>
               )
+            ) : null}
+            {hasQueryApiKey ? (
+              <div className="sessions-panel__menu-wrap">
+                <button
+                  type="button"
+                  className="sessions-panel__icon-button sessions-panel__menu-trigger"
+                  onClick={() => toggleActionsMenu(session.id)}
+                  aria-label={`Open actions for ${title}`}
+                  aria-expanded={isMenuOpen}
+                  disabled={disableRowActions}
+                >
+                  <IconDotsVertical size={14} aria-hidden="true" />
+                </button>
+                {isMenuOpen ? (
+                  <div className="sessions-panel__menu" role="menu" aria-label={`Actions for ${title}`}>
+                    <button
+                      type="button"
+                      className="sessions-panel__menu-item"
+                      role="menuitem"
+                      onClick={() => handleArchiveToggle(session)}
+                      disabled={disableRowActions}
+                    >
+                      {session.isArchived ? (
+                        <IconArchiveOff size={13} aria-hidden="true" />
+                      ) : (
+                        <IconArchive size={13} aria-hidden="true" />
+                      )}
+                      <span>{session.isArchived ? 'Unarchive' : 'Archive'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="sessions-panel__menu-item sessions-panel__menu-item--danger"
+                      role="menuitem"
+                      onClick={() => handleDeleteRequest(session)}
+                      disabled={disableRowActions}
+                    >
+                      <IconTrash size={13} aria-hidden="true" />
+                      <span>Delete…</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>
@@ -314,6 +457,50 @@ export default function SessionsPanel({
         )}
         {pastSessions.map((session) => renderSessionRow(session))}
       </div>
+      {sessionActionError ? (
+        <div className="sessions-panel__error" role="status">
+          {sessionActionError}
+        </div>
+      ) : null}
+      {deleteTargetSession ? (
+        <div
+          className="sessions-panel__modal-backdrop"
+          role="presentation"
+          onClick={() => setDeleteTargetSession(null)}
+        >
+          <div
+            className="sessions-panel__modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sessions-delete-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h4 id="sessions-delete-title">Delete session?</h4>
+            <p>
+              This will permanently delete the session record and detach measurements from it.
+              This cannot be undone.
+            </p>
+            <div className="sessions-panel__modal-actions">
+              <button
+                type="button"
+                className="sessions-panel__modal-cancel"
+                onClick={() => setDeleteTargetSession(null)}
+                disabled={deleteSessionMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="sessions-panel__modal-delete"
+                onClick={handleDeleteConfirm}
+                disabled={deleteSessionMutation.isPending}
+              >
+                {deleteSessionMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

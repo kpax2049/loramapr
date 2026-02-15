@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 import {
+  deleteSession,
   getSessionTimeline,
   getSessionWindow,
   listSessions,
@@ -116,7 +117,10 @@ export function useStopSession(options?: MutationOptions<Session, { sessionId: s
 }
 
 export function useUpdateSession(
-  options?: MutationOptions<Session, { id: string; deviceId: string; input: { name?: string; notes?: string } }>
+  options?: MutationOptions<
+    Session,
+    { id: string; deviceId: string; input: { name?: string; notes?: string; isArchived?: boolean } }
+  >
 ) {
   const queryClient = useQueryClient();
   const { onError, onSettled, onSuccess, ...mutationOptions } = options ?? {};
@@ -124,7 +128,7 @@ export function useUpdateSession(
   return useMutation<
     Session,
     Error,
-    { id: string; deviceId: string; input: { name?: string; notes?: string } },
+    { id: string; deviceId: string; input: { name?: string; notes?: string; isArchived?: boolean } },
     { previousEntries: Array<[QueryKey, ListResponse<Session> | undefined]> }
   >({
     ...mutationOptions,
@@ -148,7 +152,10 @@ export function useUpdateSession(
                 ? {
                     ...session,
                     ...(variables.input.name !== undefined ? { name: variables.input.name } : {}),
-                    ...(variables.input.notes !== undefined ? { notes: variables.input.notes } : {})
+                    ...(variables.input.notes !== undefined ? { notes: variables.input.notes } : {}),
+                    ...(variables.input.isArchived !== undefined
+                      ? { isArchived: variables.input.isArchived }
+                      : {})
                   }
                 : session
             )
@@ -177,6 +184,32 @@ export function useUpdateSession(
         queryClient.invalidateQueries({ queryKey: ['sessions', variables.deviceId] });
       }
       onSettled?.(...args);
+    }
+  });
+}
+
+export function useDeleteSession(
+  options?: MutationOptions<
+    { mode: 'delete'; deleted: true; detachedMeasurementsCount: number },
+    { id: string; deviceId: string }
+  >
+) {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...mutationOptions } = options ?? {};
+
+  return useMutation<
+    { mode: 'delete'; deleted: true; detachedMeasurementsCount: number },
+    Error,
+    { id: string; deviceId: string }
+  >({
+    ...mutationOptions,
+    mutationFn: ({ id }) => deleteSession(id),
+    onSuccess: (...args) => {
+      const [, variables] = args;
+      if (variables?.deviceId) {
+        queryClient.invalidateQueries({ queryKey: ['sessions', variables.deviceId] });
+      }
+      onSuccess?.(...args);
     }
   });
 }

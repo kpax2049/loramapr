@@ -412,13 +412,30 @@ export async function stopSession(input: { sessionId: string }): Promise<Session
 
 export async function updateSession(
   id: string,
-  input: { name?: string; notes?: string }
+  input: { name?: string; notes?: string; isArchived?: boolean }
 ): Promise<Session> {
   return requestJson<Session>(`/api/sessions/${id}`, {
     method: 'PATCH',
     json: input,
     ...withQueryApiKey()
   });
+}
+
+export async function deleteSession(
+  id: string
+): Promise<{ mode: 'delete'; deleted: true; detachedMeasurementsCount: number }> {
+  const scoped = withQueryApiKey();
+  return requestJson<{ mode: 'delete'; deleted: true; detachedMeasurementsCount: number }>(
+    `/api/sessions/${id}?mode=delete`,
+    {
+      method: 'DELETE',
+      ...scoped,
+      headers: {
+        ...(scoped?.headers ?? {}),
+        'X-Confirm-Delete': 'DELETE'
+      }
+    }
+  );
 }
 
 export async function getSessionTimeline(
