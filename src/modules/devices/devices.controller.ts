@@ -20,6 +20,7 @@ import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
 import {
+  DeviceDetail,
   DeviceAgentDecision,
   DeviceLatestStatus,
   DeviceListItem,
@@ -114,6 +115,20 @@ export class DevicesController {
       throw new NotFoundException('Device not found');
     }
     return formatLatestResponse(latest);
+  }
+
+  @Get(':id')
+  @UseGuards(OwnerGuard)
+  async getById(
+    @Req() request: OwnerContextRequest,
+    @Param('id') id: string
+  ): Promise<DeviceDetailResponse> {
+    const ownerId = getOwnerIdFromRequest(request);
+    const device = await this.devicesService.getById(id, ownerId);
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+    return formatDeviceDetail(device);
   }
 
   @Get('by-uid/:deviceUid')
@@ -230,6 +245,25 @@ type DeviceMutableResponse = {
   notes: string | null;
   isArchived: boolean;
   lastSeenAt: string | null;
+};
+
+type DeviceDetailResponse = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  notes: string | null;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string | null;
+  latestMeasurement: {
+    capturedAt: string;
+    lat: number;
+    lon: number;
+    rssi: number | null;
+    snr: number | null;
+    gatewayId: string | null;
+  } | null;
 };
 
 const DEFAULT_RADIUS_METERS = 20;
@@ -422,5 +456,28 @@ function formatMutableDevice(device: DeviceMutableSummary): DeviceMutableRespons
     notes: device.notes,
     isArchived: device.isArchived,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null
+  };
+}
+
+function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
+  return {
+    id: device.id,
+    deviceUid: device.deviceUid,
+    name: device.name,
+    notes: device.notes,
+    isArchived: device.isArchived,
+    createdAt: device.createdAt.toISOString(),
+    updatedAt: device.updatedAt.toISOString(),
+    lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    latestMeasurement: device.latestMeasurement
+      ? {
+          capturedAt: device.latestMeasurement.capturedAt.toISOString(),
+          lat: device.latestMeasurement.lat,
+          lon: device.latestMeasurement.lon,
+          rssi: device.latestMeasurement.rssi,
+          snr: device.latestMeasurement.snr,
+          gatewayId: device.latestMeasurement.gatewayId
+        }
+      : null
   };
 }

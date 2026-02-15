@@ -24,6 +24,25 @@ export type DeviceSummary = {
   lastSeenAt: Date | null;
 };
 
+export type DeviceDetail = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  notes: string | null;
+  isArchived: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastSeenAt: Date | null;
+  latestMeasurement: {
+    capturedAt: Date;
+    lat: number;
+    lon: number;
+    rssi: number | null;
+    snr: number | null;
+    gatewayId: string | null;
+  } | null;
+};
+
 export type DeviceMutableSummary = {
   id: string;
   deviceUid: string;
@@ -164,6 +183,46 @@ export class DevicesService {
         lastSeenAt: true
       }
     });
+  }
+
+  async getById(deviceId: string, ownerId?: string): Promise<DeviceDetail | null> {
+    // TODO: enforce owner scoping once auth context is available.
+    const device = await this.prisma.device.findFirst({
+      where: ownerId ? { id: deviceId, ownerId } : { id: deviceId },
+      select: {
+        id: true,
+        deviceUid: true,
+        name: true,
+        notes: true,
+        isArchived: true,
+        createdAt: true,
+        updatedAt: true,
+        lastSeenAt: true
+      }
+    });
+    if (!device) {
+      return null;
+    }
+
+    // lat/lon are required in the current schema, so latest by capturedAt already satisfies
+    // "latest measurement with lat/lon not null".
+    const latestMeasurement = await this.prisma.measurement.findFirst({
+      where: { deviceId: device.id },
+      orderBy: { capturedAt: 'desc' },
+      select: {
+        capturedAt: true,
+        lat: true,
+        lon: true,
+        rssi: true,
+        snr: true,
+        gatewayId: true
+      }
+    });
+
+    return {
+      ...device,
+      latestMeasurement
+    };
   }
 
   async updateMutableFields(
