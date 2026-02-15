@@ -23,6 +23,7 @@ model Device {
   deviceUid  String    @unique
   name       String?
   notes      String?
+  isArchived Boolean   @default(false)
   ownerId    String?   @db.Uuid
   createdAt  DateTime  @default(now())
   lastSeenAt DateTime?

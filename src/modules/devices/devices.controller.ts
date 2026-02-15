@@ -1,10 +1,32 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Patch,
+  Put,
+  Query,
+  Req,
+  UseGuards
+} from '@nestjs/common';
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { OwnerGuard } from '../../common/guards/owner.guard';
 import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-context';
-import { DeviceAgentDecision, DeviceLatestStatus, DeviceListItem, DeviceSummary, DevicesService } from './devices.service';
+import {
+  DeviceAgentDecision,
+  DeviceLatestStatus,
+  DeviceListItem,
+  DeviceMutableSummary,
+  DeviceSummary,
+  DevicesService
+} from './devices.service';
 
 @Controller('api/devices')
 export class DevicesController {
@@ -13,11 +35,66 @@ export class DevicesController {
   @Get()
   @UseGuards(OwnerGuard)
   async list(
-    @Req() request: OwnerContextRequest
+    @Req() request: OwnerContextRequest,
+    @Query('includeArchived') includeArchivedParam?: string
   ): Promise<{ items: DeviceListItem[]; count: number }> {
     const ownerId = getOwnerIdFromRequest(request);
-    const items = await this.devicesService.list(ownerId);
+    const includeArchived = parseBooleanQuery(includeArchivedParam, false, 'includeArchived');
+    const items = await this.devicesService.list(ownerId, includeArchived);
     return { items, count: items.length };
+  }
+
+  @Patch(':id')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  async patchDevice(
+    @Param('id') id: string,
+    @Body() body: DevicePatchBody
+  ): Promise<DeviceMutableResponse> {
+    const payload = parsePatchBody(body);
+    const device = await this.devicesService.updateMutableFields(id, payload);
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+    return formatMutableDevice(device);
+  }
+
+  @Delete(':id')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  @HttpCode(200)
+  async deleteDevice(
+    @Param('id') id: string,
+    @Query('mode') modeParam?: string,
+    @Headers('x-confirm-delete') confirmDelete?: string
+  ): Promise<{ mode: 'archive' | 'delete'; device?: DeviceMutableResponse; deleted?: boolean }> {
+    const mode = parseDeleteMode(modeParam);
+    if (mode === 'archive') {
+      const device = await this.devicesService.archiveDevice(id);
+      if (!device) {
+        throw new NotFoundException('Device not found');
+      }
+      return {
+        mode,
+        device: formatMutableDevice(device)
+      };
+    }
+
+    if (confirmDelete !== DELETE_CONFIRMATION_VALUE) {
+      throw new BadRequestException(
+        `Missing or invalid X-Confirm-Delete header. Set X-Confirm-Delete: ${DELETE_CONFIRMATION_VALUE}`
+      );
+    }
+
+    const deleted = await this.devicesService.deleteDeviceWithCascade(id);
+    if (!deleted) {
+      throw new NotFoundException('Device not found');
+    }
+
+    return {
+      mode,
+      deleted: true
+    };
   }
 
   @Get(':id/latest')
@@ -139,11 +216,30 @@ type AgentDecisionResponse = {
   createdAt: string;
 };
 
+type DevicePatchBody = {
+  deviceUid?: unknown;
+  name?: unknown;
+  notes?: unknown;
+  isArchived?: unknown;
+};
+
+type DeviceMutableResponse = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  notes: string | null;
+  isArchived: boolean;
+  lastSeenAt: string | null;
+};
+
 const DEFAULT_RADIUS_METERS = 20;
 const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
 const DEFAULT_AGENT_DECISIONS_LIMIT = 200;
 const MAX_AGENT_DECISIONS_LIMIT = 1000;
+const MAX_DEVICE_NAME_LENGTH = 64;
+const MAX_DEVICE_NOTES_LENGTH = 2000;
+const DELETE_CONFIRMATION_VALUE = 'DELETE';
 
 function parseAutoSessionBody(body: AutoSessionConfigBody) {
   if (typeof body?.enabled !== 'boolean') {
@@ -203,6 +299,85 @@ function parseLimit(value?: string): number {
   return Math.min(parsed, MAX_AGENT_DECISIONS_LIMIT);
 }
 
+function parsePatchBody(body: DevicePatchBody): {
+  name?: string;
+  notes?: string;
+  isArchived?: boolean;
+} {
+  const input = body ?? {};
+
+  if (Object.prototype.hasOwnProperty.call(input, 'deviceUid')) {
+    throw new BadRequestException('deviceUid is immutable');
+  }
+
+  const update: {
+    name?: string;
+    notes?: string;
+    isArchived?: boolean;
+  } = {};
+
+  if (input.name !== undefined) {
+    if (typeof input.name !== 'string') {
+      throw new BadRequestException('name must be a string');
+    }
+    if (input.name.length > MAX_DEVICE_NAME_LENGTH) {
+      throw new BadRequestException(`name must be at most ${MAX_DEVICE_NAME_LENGTH} characters`);
+    }
+    update.name = input.name;
+  }
+
+  if (input.notes !== undefined) {
+    if (typeof input.notes !== 'string') {
+      throw new BadRequestException('notes must be a string');
+    }
+    if (input.notes.length > MAX_DEVICE_NOTES_LENGTH) {
+      throw new BadRequestException(`notes must be at most ${MAX_DEVICE_NOTES_LENGTH} characters`);
+    }
+    update.notes = input.notes;
+  }
+
+  if (input.isArchived !== undefined) {
+    if (typeof input.isArchived !== 'boolean') {
+      throw new BadRequestException('isArchived must be a boolean');
+    }
+    update.isArchived = input.isArchived;
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new BadRequestException('At least one field must be provided: name, notes, isArchived');
+  }
+
+  return update;
+}
+
+function parseBooleanQuery(
+  value: string | undefined,
+  defaultValue: boolean,
+  name: string
+): boolean {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+  throw new BadRequestException(`${name} must be a boolean`);
+}
+
+function parseDeleteMode(value?: string): 'archive' | 'delete' {
+  if (value === undefined || value === 'archive') {
+    return 'archive';
+  }
+  if (value === 'delete') {
+    return 'delete';
+  }
+  throw new BadRequestException('mode must be one of: archive, delete');
+}
+
 function formatAutoSessionConfig(config: {
   deviceId: string;
   enabled: boolean;
@@ -236,5 +411,16 @@ function formatAgentDecision(decision: DeviceAgentDecision): AgentDecisionRespon
     distanceM: decision.distanceM,
     capturedAt: decision.capturedAt ? decision.capturedAt.toISOString() : null,
     createdAt: decision.createdAt.toISOString()
+  };
+}
+
+function formatMutableDevice(device: DeviceMutableSummary): DeviceMutableResponse {
+  return {
+    id: device.id,
+    deviceUid: device.deviceUid,
+    name: device.name,
+    notes: device.notes,
+    isArchived: device.isArchived,
+    lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null
   };
 }

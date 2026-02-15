@@ -1,0 +1,2 @@
+ALTER TABLE "Device"
+ADD COLUMN "isArchived" BOOLEAN NOT NULL DEFAULT false;

@@ -5,6 +5,7 @@ export type DeviceListItem = {
   id: string;
   deviceUid: string;
   name: string | null;
+  isArchived: boolean;
   lastSeenAt: Date | null;
   latestMeasurementAt: Date | null;
 };
@@ -20,6 +21,15 @@ export type DeviceSummary = {
   id: string;
   deviceUid: string;
   name: string | null;
+  lastSeenAt: Date | null;
+};
+
+export type DeviceMutableSummary = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  notes: string | null;
+  isArchived: boolean;
   lastSeenAt: Date | null;
 };
 
@@ -72,9 +82,12 @@ const DEFAULT_MIN_INSIDE_SECONDS = 120;
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(ownerId?: string): Promise<DeviceListItem[]> {
+  async list(ownerId?: string, includeArchived = false): Promise<DeviceListItem[]> {
     // TODO: enforce owner scoping once auth context is available.
-    const where = ownerId ? { ownerId } : undefined;
+    const where = {
+      ...(ownerId ? { ownerId } : {}),
+      ...(includeArchived ? {} : { isArchived: false })
+    };
 
     const devices = await this.prisma.device.findMany({
       where,
@@ -82,6 +95,7 @@ export class DevicesService {
         id: true,
         deviceUid: true,
         name: true,
+        isArchived: true,
         lastSeenAt: true,
         measurements: {
           select: { capturedAt: true },
@@ -101,6 +115,7 @@ export class DevicesService {
       id: device.id,
       deviceUid: device.deviceUid,
       name: device.name,
+      isArchived: device.isArchived,
       lastSeenAt: device.lastSeenAt,
       latestMeasurementAt: device.measurements[0]?.capturedAt ?? null
     }));
@@ -149,6 +164,61 @@ export class DevicesService {
         lastSeenAt: true
       }
     });
+  }
+
+  async updateMutableFields(
+    deviceId: string,
+    data: {
+      name?: string;
+      notes?: string;
+      isArchived?: boolean;
+    }
+  ): Promise<DeviceMutableSummary | null> {
+    const existing = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true }
+    });
+    if (!existing) {
+      return null;
+    }
+
+    return this.prisma.device.update({
+      where: { id: deviceId },
+      data,
+      select: {
+        id: true,
+        deviceUid: true,
+        name: true,
+        notes: true,
+        isArchived: true,
+        lastSeenAt: true
+      }
+    });
+  }
+
+  async archiveDevice(deviceId: string): Promise<DeviceMutableSummary | null> {
+    return this.updateMutableFields(deviceId, { isArchived: true });
+  }
+
+  async deleteDeviceWithCascade(deviceId: string): Promise<boolean> {
+    const existing = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      select: { id: true }
+    });
+    if (!existing) {
+      return false;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.coverageBin.deleteMany({ where: { deviceId } }),
+      this.prisma.measurement.deleteMany({ where: { deviceId } }),
+      this.prisma.session.deleteMany({ where: { deviceId } }),
+      this.prisma.agentDecision.deleteMany({ where: { deviceId } }),
+      this.prisma.deviceAutoSessionConfig.deleteMany({ where: { deviceId } }),
+      this.prisma.device.delete({ where: { id: deviceId } })
+    ]);
+
+    return true;
   }
 
   async getAutoSessionConfig(deviceId: string): Promise<DeviceAutoSessionConfigResult | null> {
