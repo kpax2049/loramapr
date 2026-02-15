@@ -146,6 +146,47 @@ export class SessionsService {
     });
   }
 
+  async getById(id: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        deviceId: true,
+        ownerId: true,
+        name: true,
+        startedAt: true,
+        endedAt: true,
+        notes: true,
+        isArchived: true,
+        archivedAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            measurements: true
+          }
+        }
+      }
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    return {
+      id: session.id,
+      deviceId: session.deviceId,
+      ownerId: session.ownerId,
+      name: session.name,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      notes: session.notes,
+      isArchived: session.isArchived,
+      archivedAt: session.archivedAt,
+      updatedAt: session.updatedAt,
+      measurementCount: session._count.measurements
+    };
+  }
+
   async getTimeline(id: string) {
     const session = await this.prisma.session.findUnique({
       where: { id },

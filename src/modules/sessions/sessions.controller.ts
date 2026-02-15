@@ -56,6 +56,15 @@ export class SessionsController {
     return { items, count: items.length };
   }
 
+  @Get(':id')
+  async getById(@Param('id') id: string) {
+    const session = await this.sessionsService.getById(id);
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+    return session;
+  }
+
   @Post('start')
   async start(@Body() dto: StartSessionDto) {
     return this.sessionsService.start(dto);
