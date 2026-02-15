@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.7 - 2026-02-15
+
+### Added
+- Device icon system now supports auto-resolution with manual overrides, with icons rendered consistently across devices list, selected-device header, map overlays/tooltips, and status strip.
+
+### Changed
+- Known devices auto-render deterministic icons from metadata without manual steps.
+- Unknown devices now prompt icon selection only when a QUERY key is present, and selected overrides persist across refreshes and views.
+- Clearing an icon override correctly reverts the device back to auto icon resolution.
+
+### Notes
+- Icon picker controls are hidden when QUERY key access is unavailable (401/403).
+- No breaking changes.
+
 ## v0.9.6 - 2026-02-15
 
 ### Added
