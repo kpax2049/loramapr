@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
 import type { CoverageBin, Measurement, SessionWindowPoint } from './api/types';
 import Controls from './components/Controls';
+import { buildDeviceIdentityLabel } from './components/DeviceIcon';
 import Layout from './components/Layout';
 import MapView, { type MapViewHandle } from './components/MapView';
 import PlaybackPanel from './components/PlaybackPanel';
@@ -35,6 +36,23 @@ const ZEN_MODE_KEY = 'zenMode';
 const THEME_MODE_KEY = 'themeMode';
 const APP_NAME = __APP_NAME__;
 const APP_VERSION = __APP_VERSION__;
+const DEVICE_ICON_GALLERY_ROUTE = '/dev/device-icons';
+
+function normalizePathname(pathname: string): string {
+  if (!pathname) {
+    return '/';
+  }
+  const normalized = pathname.replace(/\/+/g, '/');
+  return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
+}
+
+const SHOW_DEVICE_ICON_GALLERY =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  normalizePathname(window.location.pathname) === DEVICE_ICON_GALLERY_ROUTE;
+const DevDeviceIconGallery = import.meta.env.DEV
+  ? lazy(() => import('./components/dev/DeviceIconGallery'))
+  : null;
 
 type SidebarTab = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -250,17 +268,6 @@ function formatRelativeTime(value: string): string {
   return `${days}d ago`;
 }
 
-function formatDeviceLabel(name: string | null | undefined, deviceUid: string): string {
-  const trimmedName = name?.trim();
-  if (!trimmedName) {
-    return deviceUid;
-  }
-  if (trimmedName.toLowerCase() === deviceUid.toLowerCase()) {
-    return deviceUid;
-  }
-  return `${trimmedName} (${deviceUid})`;
-}
-
 type LatLonPoint = [number, number];
 type LatLonBounds = [[number, number], [number, number]];
 
@@ -417,6 +424,14 @@ function readInitialQueryState(): InitialQueryState {
 }
 
 function App() {
+  if (SHOW_DEVICE_ICON_GALLERY && DevDeviceIconGallery) {
+    return (
+      <Suspense fallback={<div className="device-icon-gallery">Loading icon gallery...</div>}>
+        <DevDeviceIconGallery />
+      </Suspense>
+    );
+  }
+
   const initial = useMemo(() => readInitialQueryState(), []);
 
   const queryClient = useQueryClient();
@@ -1322,6 +1337,10 @@ function App() {
     return {
       deviceName: selectedDevice.name,
       deviceUid: selectedDevice.deviceUid,
+      longName: selectedDevice.longName,
+      hwModel: selectedDevice.hwModel,
+      role: deviceDetailQuery.data?.role ?? null,
+      shortName: deviceDetailQuery.data?.shortName ?? null,
       capturedAt: latestMeasurement.capturedAt,
       lat: latestMeasurement.lat,
       lon: latestMeasurement.lon,
@@ -1329,7 +1348,12 @@ function App() {
       snr: latestMeasurement.snr,
       gatewayId: latestMeasurement.gatewayId
     };
-  }, [selectedDevice, deviceDetailQuery.data?.latestMeasurement]);
+  }, [
+    selectedDevice,
+    deviceDetailQuery.data?.latestMeasurement,
+    deviceDetailQuery.data?.role,
+    deviceDetailQuery.data?.shortName
+  ]);
 
   useEffect(() => {
     setReceiverSourceOverridden(false);
@@ -1628,7 +1652,7 @@ function App() {
     isMissingGps &&
     (latestMeasurementAt === null || noMeasurementsReturned);
   const statusDeviceLabel = selectedDevice
-    ? formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)
+    ? buildDeviceIdentityLabel(selectedDevice)
     : 'No device';
   const statusSessionId = playbackSessionId ?? selectedSessionId;
 
@@ -1835,6 +1859,7 @@ function App() {
           </div>
         )}
         <StatusStrip
+          device={selectedDevice ?? null}
           deviceLabel={statusDeviceLabel}
           latestMeasurementAt={latestMeasurementAt}
           latestWebhookSource={latestDeviceQuery.data?.latestWebhookSource ?? null}

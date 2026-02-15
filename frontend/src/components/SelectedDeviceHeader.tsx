@@ -1,6 +1,7 @@
 import type { Device } from '../api/types';
 import { useAutoSession } from '../query/hooks';
 import { useSessions } from '../query/sessions';
+import DeviceIcon, { getDevicePrimaryLabel } from './DeviceIcon';
 
 type SelectedDeviceHeaderProps = {
   device: Device | null;
@@ -55,19 +56,27 @@ export default function SelectedDeviceHeader({
   const showAutoSessionBadge =
     autoSessionStatus !== 401 && autoSessionStatus !== 403 && autoSessionQuery.data?.enabled === true;
 
-  const deviceName = device?.name?.trim() ? device.name.trim() : device?.deviceUid ?? 'No device';
+  const deviceName = getDevicePrimaryLabel(device ?? {});
   const deviceUid = device?.deviceUid ?? null;
 
   return (
     <div className="selected-device-header">
       <div className="selected-device-header__row">
-        <div className="selected-device-header__identity">
-          <strong>{deviceName}</strong>
-          {deviceUid ? (
-            <span title={deviceUid}>{truncateDeviceUid(deviceUid)}</span>
-          ) : (
-            <span>select a device</span>
-          )}
+        <div className="selected-device-header__identity-wrap">
+          <DeviceIcon
+            device={device ?? {}}
+            className="selected-device-header__icon"
+            size={17}
+            showBadge={Boolean(device)}
+          />
+          <div className="selected-device-header__identity">
+            <strong>{deviceName}</strong>
+            {deviceUid ? (
+              <span title={deviceUid}>{truncateDeviceUid(deviceUid)}</span>
+            ) : (
+              <span>select a device</span>
+            )}
+          </div>
         </div>
         <div className="selected-device-header__badges">
           {activeSession ? <span className="selected-device-header__badge">Active session</span> : null}

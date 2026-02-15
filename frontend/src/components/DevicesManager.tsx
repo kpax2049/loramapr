@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Device } from '../api/types';
 import { ApiError } from '../api/http';
 import { useArchiveDevice, useDeleteDevice, useDevices, useUpdateDevice } from '../query/hooks';
+import DeviceIcon, {
+  buildDeviceIdentityLabel,
+  getDevicePrimaryLabel,
+  getDeviceSecondaryLabel
+} from './DeviceIcon';
 import LocationPinIcon from './LocationPinIcon';
 import HoverTooltip from './HoverTooltip';
 
@@ -59,30 +64,6 @@ function formatRelativeTime(value: string | null): string {
 function normalizeDeviceName(device: Device): string {
   const trimmed = device.name?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : '';
-}
-
-function getDevicePrimaryLabel(device: Device): string {
-  const longName = device.longName?.trim();
-  if (longName) {
-    return longName;
-  }
-  const name = device.name?.trim();
-  if (name) {
-    return name;
-  }
-  return device.deviceUid;
-}
-
-function getDeviceSecondaryLabel(device: Device, primaryLabel: string): string | null {
-  const secondaryParts: string[] = [];
-  if (primaryLabel.toLowerCase() !== device.deviceUid.toLowerCase()) {
-    secondaryParts.push(device.deviceUid);
-  }
-  const hwModel = device.hwModel?.trim();
-  if (hwModel) {
-    secondaryParts.push(hwModel);
-  }
-  return secondaryParts.length > 0 ? secondaryParts.join(' · ') : null;
 }
 
 function getErrorStatus(error: unknown): number | null {
@@ -364,6 +345,7 @@ export default function DevicesManager({
           const isPending = pendingDeviceId === device.id;
           const identityPrimary = getDevicePrimaryLabel(device);
           const identitySecondary = getDeviceSecondaryLabel(device, identityPrimary);
+          const identityLabel = buildDeviceIdentityLabel(device);
           return (
             <div
               key={device.id}
@@ -421,10 +403,15 @@ export default function DevicesManager({
                     : identityPrimary
                 }
               >
-                <span className="devices-manager__identity-primary">{identityPrimary}</span>
-                {identitySecondary ? (
-                  <span className="devices-manager__identity-secondary">{identitySecondary}</span>
-                ) : null}
+                <div className="devices-manager__identity">
+                  <DeviceIcon device={device} className="devices-manager__device-icon" size={15} />
+                  <div className="devices-manager__identity-text">
+                    <span className="devices-manager__identity-primary">{identityPrimary}</span>
+                    {identitySecondary ? (
+                      <span className="devices-manager__identity-secondary">{identitySecondary}</span>
+                    ) : null}
+                  </div>
+                </div>
               </div>
               <div className="devices-manager__cell" title={device.lastSeenAt ?? ''}>
                 {formatRelativeTime(device.lastSeenAt)}
@@ -437,6 +424,7 @@ export default function DevicesManager({
                   type="button"
                   className="devices-manager__menu-toggle"
                   aria-label={`Open actions for ${device.deviceUid}`}
+                  title={identityLabel}
                   onClick={(event) => {
                     event.stopPropagation();
                     setActionMenuDeviceId((prev) => (prev === device.id ? null : device.id));

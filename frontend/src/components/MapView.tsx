@@ -20,6 +20,7 @@ import {
 import L from 'leaflet';
 import simplify from 'simplify-js';
 import type { CoverageBin } from '../api/types';
+import DeviceIcon, { buildDeviceIdentityLabel } from './DeviceIcon';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -73,6 +74,10 @@ type TrackPoint = {
 type LatestLocationMarker = {
   deviceName: string | null;
   deviceUid: string;
+  longName?: string | null;
+  shortName?: string | null;
+  hwModel?: string | null;
+  role?: string | null;
   capturedAt: string | null;
   lat: number;
   lon: number;
@@ -622,7 +627,29 @@ ref
                 <div className="map-latest-tooltip__title">Latest device location</div>
                 <div className="map-latest-tooltip__row">
                   <span>Device</span>
-                  <strong>{formatDeviceTitle(latestLocationMarker.deviceName, latestLocationMarker.deviceUid)}</strong>
+                  <strong className="map-latest-tooltip__device">
+                    <DeviceIcon
+                      device={{
+                        name: latestLocationMarker.deviceName,
+                        longName: latestLocationMarker.longName,
+                        shortName: latestLocationMarker.shortName,
+                        deviceUid: latestLocationMarker.deviceUid,
+                        hwModel: latestLocationMarker.hwModel,
+                        role: latestLocationMarker.role
+                      }}
+                      className="map-latest-tooltip__device-icon"
+                      size={13}
+                    />
+                    <span>
+                      {buildDeviceIdentityLabel({
+                        name: latestLocationMarker.deviceName,
+                        longName: latestLocationMarker.longName,
+                        shortName: latestLocationMarker.shortName,
+                        deviceUid: latestLocationMarker.deviceUid,
+                        hwModel: latestLocationMarker.hwModel
+                      })}
+                    </span>
+                  </strong>
                 </div>
                 <div className="map-latest-tooltip__row">
                   <span>capturedAt</span>
@@ -679,15 +706,4 @@ function formatCoordinate(value: number): string {
     return String(value);
   }
   return value.toFixed(6);
-}
-
-function formatDeviceTitle(name: string | null | undefined, deviceUid: string): string {
-  const trimmedName = name?.trim();
-  if (!trimmedName) {
-    return deviceUid;
-  }
-  if (trimmedName.toLowerCase() === deviceUid.toLowerCase()) {
-    return deviceUid;
-  }
-  return `${trimmedName} (${deviceUid})`;
 }

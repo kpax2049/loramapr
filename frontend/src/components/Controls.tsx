@@ -17,6 +17,10 @@ import LorawanEventsPanel from './LorawanEventsPanel';
 import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
+import DeviceIcon, {
+  buildDeviceIdentityLabel,
+  formatDeviceOptionLabel
+} from './DeviceIcon';
 import DevicesManager from './DevicesManager';
 
 const LOCATION_INDICATOR_OPTION_ICON = '📍';
@@ -430,12 +434,7 @@ export default function Controls({
             </option>
             {devices.map((device) => {
               const hasLatestLocation = Boolean(device.latestMeasurementAt);
-              const optionLabel = formatDeviceLabel({
-                name: device.name,
-                longName: device.longName,
-                deviceUid: device.deviceUid,
-                hwModel: device.hwModel
-              });
+              const optionLabel = formatDeviceOptionLabel(device);
               return (
                 <option
                   key={device.id}
@@ -495,7 +494,10 @@ export default function Controls({
                   </div>
                   <div className="device-details__row">
                     <span>deviceUid</span>
-                    <strong title={deviceDetail.deviceUid}>{deviceDetail.deviceUid}</strong>
+                    <strong title={buildDeviceIdentityLabel(deviceDetail)} className="device-details__identity">
+                      <DeviceIcon device={deviceDetail} size={15} className="device-details__identity-icon" />
+                      <span>{deviceDetail.deviceUid}</span>
+                    </strong>
                   </div>
                   <div className="device-details__row">
                     <span>Last seen</span>
@@ -1279,32 +1281,6 @@ function formatRelativeTime(value: string): string {
   }
   const days = Math.round(hours / 24);
   return `${days}d ago`;
-}
-
-function formatDeviceLabel(device: {
-  name: string | null | undefined;
-  longName: string | null | undefined;
-  deviceUid: string;
-  hwModel: string | null | undefined;
-}): string {
-  const primaryLabel =
-    normalizeOptionalText(device.longName) ??
-    normalizeOptionalText(device.name) ??
-    device.deviceUid;
-  const secondaryParts: string[] = [];
-
-  if (primaryLabel.toLowerCase() !== device.deviceUid.toLowerCase()) {
-    secondaryParts.push(device.deviceUid);
-  }
-
-  const hwModel = normalizeOptionalText(device.hwModel);
-  if (hwModel) {
-    secondaryParts.push(hwModel);
-  }
-
-  return secondaryParts.length > 0
-    ? `${primaryLabel} (${secondaryParts.join(' · ')})`
-    : primaryLabel;
 }
 
 type CoverageLegendItem = {

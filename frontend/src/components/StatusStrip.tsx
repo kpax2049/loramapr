@@ -1,4 +1,7 @@
+import DeviceIcon, { type DeviceIdentityInput } from './DeviceIcon';
+
 type StatusStripProps = {
+  device?: DeviceIdentityInput | null;
   deviceLabel: string;
   latestMeasurementAt: string | null;
   latestWebhookSource: string | null;
@@ -18,6 +21,7 @@ function shortenId(value: string): string {
 }
 
 export default function StatusStrip({
+  device = null,
   deviceLabel,
   latestMeasurementAt,
   latestWebhookSource,
@@ -32,7 +36,12 @@ export default function StatusStrip({
     <div className="status-strip" aria-live="polite">
       <span className="status-strip__item">
         <span className="status-strip__label">Device</span>
-        <span className="status-strip__value">{deviceLabel}</span>
+        <span className="status-strip__value status-strip__value--device">
+          {device ? (
+            <DeviceIcon device={device} className="status-strip__device-icon" showBadge={false} size={13} />
+          ) : null}
+          <span>{deviceLabel}</span>
+        </span>
       </span>
       {latestMeasurementAt ? (
         <span className="status-strip__item">

@@ -1,0 +1,13 @@
+LoRaMapr Third-Party Notices
+============================
+
+This project includes third-party components distributed under permissive open-source licenses.
+
+1) Tabler Icons React
+   - Project: @tabler/icons-react
+   - Website: https://tabler-icons.io/
+   - License: MIT
+   - Copyright: (c) 2020-2025 Pawel Kuna
+   - License text: third_party/licenses/tabler-icons-react-MIT.txt
+
+No Meshtastic device thumbnails or other Meshtastic-distributed image assets are bundled in this repository.
