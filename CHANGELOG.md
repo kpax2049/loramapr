@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.9.6 - 2026-02-15
+
+### Added
+- Device management UI with searchable list, archived toggle, and CRUD actions (rename/edit notes, archive/unarchive).
+- Selected-device Details section with compact metadata, timestamps, status, latest location snapshot, and `Center on latest`.
+- Distinct latest-location marker for the selected device on the map (with popup metadata), plus safer destructive delete flow requiring explicit confirmation + `X-Confirm-Delete: DELETE`.
+- Meshtastic node metadata surfaced on devices when available: hardware model (device type), long/short name, firmware/app version, and role.
+
+### Changed
+- Devices API now supports `includeArchived` while excluding archived devices by default.
+- Device read endpoints now include latest location snapshot fields (`capturedAt`, `lat`, `lon`, optional radio summary).
+- Meshtastic worker now handles node-info style packets to keep device metadata current even when no GPS fix is present.
+
+### Notes
+- Deleting a device is destructive and intended for rare cleanup; archiving is the normal workflow.
+- Meshtastic device-type metadata appears after node-info packets have been ingested.
+
 ## v0.9.5 - 2026-02-14
 
 ### Added
