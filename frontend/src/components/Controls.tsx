@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { AutoSessionConfig, DeviceLatest } from '../api/types';
 import {
   useAgentDecisions,
@@ -18,14 +18,15 @@ import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
 import DeviceIcon, {
+  DEVICE_ICON_CATALOG,
+  type DeviceIconKey,
   buildDeviceIdentityLabel,
   getDeviceIconDefinition,
   getEffectiveIconKey
 } from './DeviceIcon';
 import DevicesManager from './DevicesManager';
 
-const LOCATION_INDICATOR_OPTION_ICON = '📍';
-const LOCATION_INDICATOR_TOOLTIP = 'Has known last location';
+const DEVICE_ICON_PICKER_OPTIONS = DEVICE_ICON_CATALOG;
 
 type ControlsProps = {
   activeTab: 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
@@ -140,6 +141,10 @@ export default function Controls({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
+  const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const devicePickerRef = useRef<HTMLDivElement | null>(null);
+  const iconPickerRef = useRef<HTMLDivElement | null>(null);
   const autoSessionQuery = useAutoSession(deviceId, { enabled: Boolean(deviceId) });
   const updateAutoSessionMutation = useUpdateAutoSession(deviceId);
   const updateDeviceMutation = useUpdateDevice();
@@ -195,7 +200,30 @@ export default function Controls({
     setAutoSessionError(null);
     setDetailsError(null);
     setNotesModalOpen(false);
+    setDevicePickerOpen(false);
+    setIconPickerOpen(false);
   }, [deviceId]);
+
+  useEffect(() => {
+    if (!iconPickerOpen && !devicePickerOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (iconPickerRef.current && target && !iconPickerRef.current.contains(target)) {
+        setIconPickerOpen(false);
+      }
+      if (devicePickerRef.current && target && !devicePickerRef.current.contains(target)) {
+        setDevicePickerOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [iconPickerOpen, devicePickerOpen]);
 
   useEffect(() => {
     setDetailsNameDraft(deviceDetail?.name ?? '');
@@ -208,6 +236,7 @@ export default function Controls({
     }
     setAutoSessionForm(autoSessionDefaults);
   }, [autoSessionConfig, autoSessionDefaults, autoSessionDirty]);
+
   const gatewayScope =
     filterMode === 'session'
       ? {
@@ -341,8 +370,27 @@ export default function Controls({
   const meshtasticAppVersion = normalizeOptionalText(deviceDetail?.appVersion);
   const meshtasticRole = normalizeOptionalText(deviceDetail?.role);
   const meshtasticLastNodeInfoAt = deviceDetail?.lastNodeInfoAt ?? null;
-  const detailIconKey = deviceDetail ? getEffectiveIconKey(deviceDetail) : 'unknown';
+  const detailIconInput = useMemo(
+    () => ({
+      deviceUid: deviceDetail?.deviceUid ?? selectedDevice?.deviceUid ?? null,
+      name: deviceDetail?.name ?? selectedDevice?.name ?? null,
+      longName: deviceDetail?.longName ?? selectedDevice?.longName ?? null,
+      shortName: deviceDetail?.shortName ?? null,
+      hwModel: deviceDetail?.hwModel ?? selectedDevice?.hwModel ?? null,
+      role: deviceDetail?.role ?? null,
+      iconKey: deviceDetail?.iconKey ?? selectedDevice?.iconKey ?? null,
+      iconOverride: deviceDetail?.iconOverride ?? selectedDevice?.iconOverride ?? false
+    }),
+    [deviceDetail, selectedDevice]
+  );
+  const detailIconKey = getEffectiveIconKey(detailIconInput);
   const detailIcon = getDeviceIconDefinition(detailIconKey);
+  const iconOverrideKey = typeof detailIconInput.iconKey === 'string' ? detailIconInput.iconKey.trim() : '';
+  const iconOverrideActive = detailIconInput.iconOverride === true && iconOverrideKey.length > 0;
+  const currentIconPickerValue: DeviceIconKey =
+    iconOverrideActive && isDeviceIconPickerValue(iconOverrideKey) ? iconOverrideKey : 'auto';
+  const iconControlsEnabled = Boolean(deviceDetail && hasQueryApiKey);
+  const iconCanEdit = iconControlsEnabled && !updateDeviceMutation.isPending;
   const hasMeshtasticSection = Boolean(
     meshtasticLongName ||
       meshtasticShortName ||
@@ -410,6 +458,49 @@ export default function Controls({
     );
   };
 
+  const handleOpenIconPicker = () => {
+    if (!iconCanEdit) {
+      return;
+    }
+    setIconPickerOpen((value) => !value);
+  };
+
+  const handleSelectIcon = (valueRaw: string) => {
+    if (!deviceDetail || !hasQueryApiKey) {
+      return;
+    }
+    const selectedValue = sanitizeIconPickerValue(valueRaw, currentIconPickerValue);
+    setIconPickerOpen(false);
+
+    if (selectedValue === currentIconPickerValue) {
+      return;
+    }
+
+    setDetailsError(null);
+    updateDeviceMutation.mutate(
+      {
+        deviceId: deviceDetail.id,
+        data:
+          selectedValue === 'auto'
+            ? { iconOverride: false, iconKey: null }
+            : { iconOverride: true, iconKey: selectedValue }
+      },
+      {
+        onSuccess: () => {
+          setDetailsError(null);
+        },
+        onError: (error) => {
+          const status = getErrorStatus(error);
+          setDetailsError(
+            status === 401 || status === 403
+              ? 'Editing device details requires QUERY key'
+              : 'Could not update device icon'
+          );
+        }
+      }
+    );
+  };
+
   const handleOpenAutoSessionShortcut = () => {
     if (typeof window === 'undefined') {
       return;
@@ -425,33 +516,71 @@ export default function Controls({
     <section className="controls" aria-label="Map controls">
       {showDeviceTab && (
         <div className="controls__group">
-          <label htmlFor="device-select">Device</label>
-          <select
-            id="device-select"
-            value={deviceId ?? ''}
-            onChange={(event) => onDeviceChange(event.target.value || null)}
-            disabled={isLoading || devices.length === 0}
-          >
-            <option value="">
-              {isLoading ? 'Loading devices...' : 'Select a device'}
-            </option>
-            {devices.map((device) => {
-              const hasLatestLocation = Boolean(device.latestMeasurementAt);
-              const iconKey = getEffectiveIconKey(device);
-              const iconDefinition = getDeviceIconDefinition(iconKey);
-              const badgePrefix = iconDefinition.badgeText ? `[${iconDefinition.badgeText}] ` : '';
-              const optionLabel = `${badgePrefix}${buildDeviceIdentityLabel(device)}`;
-              return (
-                <option
-                  key={device.id}
-                  value={device.id}
-                  title={hasLatestLocation ? LOCATION_INDICATOR_TOOLTIP : undefined}
-                >
-                  {hasLatestLocation ? `${optionLabel} ${LOCATION_INDICATOR_OPTION_ICON}` : optionLabel}
-                </option>
-              );
-            })}
-          </select>
+          <label className="controls__label">Device</label>
+          <div className="controls__device-picker" ref={devicePickerRef}>
+            <button
+              type="button"
+              className="controls__device-picker-trigger"
+              onClick={() => setDevicePickerOpen((value) => !value)}
+              disabled={isLoading || devices.length === 0}
+              aria-haspopup="listbox"
+              aria-expanded={devicePickerOpen}
+              aria-label="Select device"
+            >
+              {selectedDevice ? (
+                <>
+                  <DeviceIcon
+                    device={selectedDevice}
+                    iconKey={getEffectiveIconKey(selectedDevice)}
+                    size={14}
+                    showBadge={false}
+                    className="controls__device-picker-icon"
+                    title={getDeviceIconDefinition(getEffectiveIconKey(selectedDevice)).label}
+                  />
+                  <span className="controls__device-picker-label">
+                    {buildDeviceIdentityLabel(selectedDevice)}
+                  </span>
+                </>
+              ) : (
+                <span className="controls__device-picker-placeholder">
+                  {isLoading ? 'Loading devices...' : 'Select a device'}
+                </span>
+              )}
+            </button>
+            {devicePickerOpen && devices.length > 0 ? (
+              <div className="controls__device-picker-list" role="listbox" aria-label="Device options">
+                {devices.map((device) => {
+                  const optionIconKey = getEffectiveIconKey(device);
+                  const optionIcon = getDeviceIconDefinition(optionIconKey);
+                  return (
+                    <button
+                      key={device.id}
+                      type="button"
+                      role="option"
+                      aria-selected={device.id === deviceId}
+                      className={`controls__device-picker-option ${
+                        device.id === deviceId ? 'is-active' : ''
+                      }`}
+                      onClick={() => {
+                        onDeviceChange(device.id);
+                        setDevicePickerOpen(false);
+                      }}
+                    >
+                      <DeviceIcon
+                        device={device}
+                        iconKey={optionIconKey}
+                        size={14}
+                        showBadge={false}
+                        className="controls__device-picker-icon"
+                        title={optionIcon.label}
+                      />
+                      <span className="controls__device-picker-label">{buildDeviceIdentityLabel(device)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -505,11 +634,78 @@ export default function Controls({
                         device={deviceDetail}
                         iconKey={detailIconKey}
                         size={15}
+                        showBadge={false}
                         className="device-details__identity-icon"
                         title={detailIcon.label}
                       />
                       <span>{deviceDetail.deviceUid}</span>
                     </strong>
+                  </div>
+                  <div className="device-details__row">
+                    <span>Icon</span>
+                    <div className="device-details__icon">
+                      {iconPickerOpen && iconCanEdit ? (
+                        <div
+                          ref={iconPickerRef}
+                          className="device-details__icon-picker"
+                          role="listbox"
+                          aria-label="Select device icon"
+                        >
+                          {DEVICE_ICON_PICKER_OPTIONS.map((icon) => (
+                            <button
+                              key={icon.key}
+                              type="button"
+                              role="option"
+                              aria-selected={icon.key === currentIconPickerValue}
+                              className={`device-details__icon-option ${
+                                icon.key === currentIconPickerValue ? 'is-active' : ''
+                              }`}
+                              onClick={() => handleSelectIcon(icon.key)}
+                            >
+                              <DeviceIcon
+                                device={detailIconInput}
+                                iconKey={icon.key}
+                                size={14}
+                                showBadge={false}
+                                className="device-details__identity-icon"
+                                title={icon.label}
+                              />
+                              <span>{icon.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : iconCanEdit ? (
+                        <button
+                          type="button"
+                          className="device-details__icon-display device-details__icon-display--editable"
+                          onClick={handleOpenIconPicker}
+                          aria-label="Edit device icon"
+                          title="Click to change icon"
+                        >
+                          <DeviceIcon
+                            device={detailIconInput}
+                            iconKey={detailIconKey}
+                            size={15}
+                            showBadge={false}
+                            className="device-details__identity-icon"
+                            title={detailIcon.label}
+                          />
+                          <span>{detailIcon.label}</span>
+                        </button>
+                      ) : (
+                        <strong className="device-details__identity" title={detailIcon.label}>
+                          <DeviceIcon
+                            device={detailIconInput}
+                            iconKey={detailIconKey}
+                            size={15}
+                            showBadge={false}
+                            className="device-details__identity-icon"
+                            title={detailIcon.label}
+                          />
+                          <span>{detailIcon.label}</span>
+                        </strong>
+                      )}
+                    </div>
                   </div>
                   <div className="device-details__row">
                     <span>Last seen</span>
@@ -1212,6 +1408,17 @@ export default function Controls({
 function getApiBaseUrl(): string {
   const raw = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
   return raw;
+}
+
+function isDeviceIconPickerValue(value: string): value is DeviceIconKey {
+  return DEVICE_ICON_PICKER_OPTIONS.some((icon) => icon.key === value);
+}
+
+function sanitizeIconPickerValue(
+  value: string,
+  fallback: DeviceIconKey
+): DeviceIconKey {
+  return isDeviceIconPickerValue(value) ? value : fallback;
 }
 
 async function handleExport(

@@ -64,6 +64,7 @@ export default function SelectedDeviceHeader({
   const deviceUid = device?.deviceUid ?? null;
   const iconKey = getEffectiveIconKey(device ?? {});
   const iconDefinition = getDeviceIconDefinition(iconKey);
+  const sessionStatus = device ? (activeSession ? 'active' : 'idle') : null;
 
   return (
     <div className="selected-device-header">
@@ -87,7 +88,14 @@ export default function SelectedDeviceHeader({
           </div>
         </div>
         <div className="selected-device-header__badges">
-          {activeSession ? <span className="selected-device-header__badge">Active session</span> : null}
+          {sessionStatus ? (
+            <span
+              className={`selected-device-header__badge selected-device-header__badge--session selected-device-header__badge--session-${sessionStatus}`}
+              aria-live="polite"
+            >
+              {sessionStatus === 'active' ? 'Session active' : 'Session idle'}
+            </span>
+          ) : null}
           {showAutoSessionBadge ? (
             <span className="selected-device-header__badge">Auto-session enabled</span>
           ) : null}

@@ -7,6 +7,8 @@ export type DeviceListItem = {
   name: string | null;
   longName: string | null;
   hwModel: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   lastSeenAt: Date | null;
   latestMeasurementAt: Date | null;
@@ -31,6 +33,8 @@ export type DeviceDetail = {
   deviceUid: string;
   name: string | null;
   notes: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -127,6 +131,8 @@ export class DevicesService {
         name: true,
         longName: true,
         hwModel: true,
+        iconKey: true,
+        iconOverride: true,
         isArchived: true,
         lastSeenAt: true,
         measurements: {
@@ -149,6 +155,8 @@ export class DevicesService {
       name: device.name,
       longName: device.longName,
       hwModel: device.hwModel,
+      iconKey: device.iconKey,
+      iconOverride: device.iconOverride,
       isArchived: device.isArchived,
       lastSeenAt: device.lastSeenAt,
       latestMeasurementAt: device.measurements[0]?.capturedAt ?? null
@@ -209,6 +217,8 @@ export class DevicesService {
         deviceUid: true,
         name: true,
         notes: true,
+        iconKey: true,
+        iconOverride: true,
         isArchived: true,
         createdAt: true,
         updatedAt: true,

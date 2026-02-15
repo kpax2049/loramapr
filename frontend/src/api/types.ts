@@ -4,6 +4,8 @@ export type Device = {
   name: string | null;
   longName: string | null;
   hwModel: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   notes?: string | null;
   isArchived: boolean;
   lastSeenAt: string | null;
@@ -15,6 +17,8 @@ export type DeviceMutable = {
   deviceUid: string;
   name: string | null;
   notes: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   lastSeenAt: string | null;
 };
@@ -24,6 +28,8 @@ export type DeviceDetail = {
   deviceUid: string;
   name: string | null;
   notes: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;

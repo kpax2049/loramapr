@@ -52,6 +52,13 @@
   --map-point-cursor: var(--panel-accent);
   --map-point-latest: #22d3ee;
   --map-point-latest-halo: rgba(34, 211, 238, 0.3);
+  --session-badge-active-fg: #4ade80;
+  --session-badge-active-border: rgba(74, 222, 128, 0.45);
+  --session-badge-active-bg: rgba(34, 197, 94, 0.16);
+  --session-badge-active-pulse: rgba(74, 222, 128, 0.5);
+  --session-badge-idle-fg: #38bdf8;
+  --session-badge-idle-border: rgba(56, 189, 248, 0.45);
+  --session-badge-idle-bg: rgba(14, 165, 233, 0.14);
   --map-controls-clearance-x: 4.75rem;
 }
 
@@ -144,4 +151,11 @@
   --accent-bg-strong: rgba(217, 119, 6, 0.22);
   --map-point-latest: #0284c7;
   --map-point-latest-halo: rgba(2, 132, 199, 0.28);
+  --session-badge-active-fg: #166534;
+  --session-badge-active-border: rgba(22, 101, 52, 0.35);
+  --session-badge-active-bg: rgba(34, 197, 94, 0.14);
+  --session-badge-active-pulse: rgba(34, 197, 94, 0.4);
+  --session-badge-idle-fg: #0369a1;
+  --session-badge-idle-border: rgba(3, 105, 161, 0.35);
+  --session-badge-idle-bg: rgba(14, 165, 233, 0.12);
 }

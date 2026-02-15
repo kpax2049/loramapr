@@ -230,6 +230,8 @@ function buildReceiversQuery(params: ReceiversQueryParams): string {
 export type UpdateDeviceInput = {
   name?: string;
   notes?: string;
+  iconKey?: string | null;
+  iconOverride?: boolean | null;
   isArchived?: boolean;
 };
 

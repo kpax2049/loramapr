@@ -256,6 +256,8 @@ type DeviceDetailResponse = {
   deviceUid: string;
   name: string | null;
   notes: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -531,6 +533,8 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
     deviceUid: device.deviceUid,
     name: device.name,
     notes: device.notes,
+    iconKey: device.iconKey,
+    iconOverride: device.iconOverride,
     isArchived: device.isArchived,
     createdAt: device.createdAt.toISOString(),
     updatedAt: device.updatedAt.toISOString(),
