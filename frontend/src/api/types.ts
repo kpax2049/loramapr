@@ -2,6 +2,8 @@ export type Device = {
   id: string;
   deviceUid: string;
   name: string | null;
+  longName: string | null;
+  hwModel: string | null;
   notes?: string | null;
   isArchived: boolean;
   lastSeenAt: string | null;
@@ -26,6 +28,13 @@ export type DeviceDetail = {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string | null;
+  longName: string | null;
+  shortName: string | null;
+  hwModel: string | null;
+  firmwareVersion: string | null;
+  appVersion: string | null;
+  role: string | null;
+  lastNodeInfoAt: string | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;

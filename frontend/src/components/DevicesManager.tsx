@@ -61,6 +61,30 @@ function normalizeDeviceName(device: Device): string {
   return trimmed && trimmed.length > 0 ? trimmed : '';
 }
 
+function getDevicePrimaryLabel(device: Device): string {
+  const longName = device.longName?.trim();
+  if (longName) {
+    return longName;
+  }
+  const name = device.name?.trim();
+  if (name) {
+    return name;
+  }
+  return device.deviceUid;
+}
+
+function getDeviceSecondaryLabel(device: Device, primaryLabel: string): string | null {
+  const secondaryParts: string[] = [];
+  if (primaryLabel.toLowerCase() !== device.deviceUid.toLowerCase()) {
+    secondaryParts.push(device.deviceUid);
+  }
+  const hwModel = device.hwModel?.trim();
+  if (hwModel) {
+    secondaryParts.push(hwModel);
+  }
+  return secondaryParts.length > 0 ? secondaryParts.join(' · ') : null;
+}
+
 function getErrorStatus(error: unknown): number | null {
   if (error instanceof ApiError) {
     return error.status;
@@ -103,7 +127,14 @@ export default function DevicesManager({
     return devices.filter((device) => {
       const name = normalizeDeviceName(device).toLowerCase();
       const uid = device.deviceUid.toLowerCase();
-      return name.includes(normalizedSearch) || uid.includes(normalizedSearch);
+      const longName = device.longName?.toLowerCase() ?? '';
+      const hwModel = device.hwModel?.toLowerCase() ?? '';
+      return (
+        name.includes(normalizedSearch) ||
+        uid.includes(normalizedSearch) ||
+        longName.includes(normalizedSearch) ||
+        hwModel.includes(normalizedSearch)
+      );
     });
   }, [devices, search]);
 
@@ -313,7 +344,7 @@ export default function DevicesManager({
 
       <div className="devices-manager__header">
         <span>Name</span>
-        <span>deviceUid</span>
+        <span>Identity</span>
         <span>Last seen</span>
         <span>Latest measurement</span>
         <span>Actions</span>
@@ -331,6 +362,8 @@ export default function DevicesManager({
           const isDirty = inlineName.trim() !== normalizeDeviceName(device);
           const isSelected = selectedDeviceId === device.id;
           const isPending = pendingDeviceId === device.id;
+          const identityPrimary = getDevicePrimaryLabel(device);
+          const identitySecondary = getDeviceSecondaryLabel(device, identityPrimary);
           return (
             <div
               key={device.id}
@@ -380,8 +413,18 @@ export default function DevicesManager({
                   </HoverTooltip>
                 ) : null}
               </div>
-              <div className="devices-manager__cell devices-manager__cell--uid" title={device.deviceUid}>
-                {device.deviceUid}
+              <div
+                className="devices-manager__cell devices-manager__cell--uid"
+                title={
+                  identitySecondary
+                    ? `${identityPrimary} (${identitySecondary})`
+                    : identityPrimary
+                }
+              >
+                <span className="devices-manager__identity-primary">{identityPrimary}</span>
+                {identitySecondary ? (
+                  <span className="devices-manager__identity-secondary">{identitySecondary}</span>
+                ) : null}
               </div>
               <div className="devices-manager__cell" title={device.lastSeenAt ?? ''}>
                 {formatRelativeTime(device.lastSeenAt)}

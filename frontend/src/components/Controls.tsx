@@ -18,8 +18,6 @@ import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
 import DevicesManager from './DevicesManager';
-import LocationPinIcon from './LocationPinIcon';
-import HoverTooltip from './HoverTooltip';
 
 const LOCATION_INDICATOR_OPTION_ICON = '📍';
 const LOCATION_INDICATOR_TOOLTIP = 'Has known last location';
@@ -331,6 +329,22 @@ export default function Controls({
   const canCenterOnLatest = Boolean(
     latestLocation && Number.isFinite(latestLocation.lat) && Number.isFinite(latestLocation.lon)
   );
+  const meshtasticLongName = normalizeOptionalText(deviceDetail?.longName);
+  const meshtasticShortName = normalizeOptionalText(deviceDetail?.shortName);
+  const meshtasticHwModel = normalizeOptionalText(deviceDetail?.hwModel);
+  const meshtasticFirmwareVersion = normalizeOptionalText(deviceDetail?.firmwareVersion);
+  const meshtasticAppVersion = normalizeOptionalText(deviceDetail?.appVersion);
+  const meshtasticRole = normalizeOptionalText(deviceDetail?.role);
+  const meshtasticLastNodeInfoAt = deviceDetail?.lastNodeInfoAt ?? null;
+  const hasMeshtasticSection = Boolean(
+    meshtasticLongName ||
+      meshtasticShortName ||
+      meshtasticHwModel ||
+      meshtasticFirmwareVersion ||
+      meshtasticAppVersion ||
+      meshtasticRole ||
+      meshtasticLastNodeInfoAt
+  );
   const detailsNameDirty = (detailsNameDraft ?? '').trim() !== (deviceDetail?.name ?? '').trim();
   const notesPreviewRaw = deviceDetail?.notes ?? '';
   const notesPreview =
@@ -416,36 +430,23 @@ export default function Controls({
             </option>
             {devices.map((device) => {
               const hasLatestLocation = Boolean(device.latestMeasurementAt);
+              const optionLabel = formatDeviceLabel({
+                name: device.name,
+                longName: device.longName,
+                deviceUid: device.deviceUid,
+                hwModel: device.hwModel
+              });
               return (
                 <option
                   key={device.id}
                   value={device.id}
                   title={hasLatestLocation ? LOCATION_INDICATOR_TOOLTIP : undefined}
                 >
-                  {hasLatestLocation
-                    ? `${formatDeviceLabel(device.name, device.deviceUid)} ${LOCATION_INDICATOR_OPTION_ICON}`
-                    : formatDeviceLabel(device.name, device.deviceUid)}
+                  {hasLatestLocation ? `${optionLabel} ${LOCATION_INDICATOR_OPTION_ICON}` : optionLabel}
                 </option>
               );
             })}
           </select>
-          {selectedDevice ? (
-            <div className="controls__device-meta">
-              <span className="controls__device-meta-label">
-                {formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}
-              </span>
-              {selectedDevice.latestMeasurementAt ? (
-                <HoverTooltip label={LOCATION_INDICATOR_TOOLTIP}>
-                  <span
-                    className="controls__location-indicator"
-                    aria-label={LOCATION_INDICATOR_TOOLTIP}
-                  >
-                    <LocationPinIcon className="controls__location-indicator-icon" />
-                  </span>
-                </HoverTooltip>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       )}
 
@@ -523,6 +524,54 @@ export default function Controls({
                       ) : null}
                     </div>
                   </div>
+
+                  {hasMeshtasticSection ? (
+                    <>
+                      <div className="device-details__section-title">Meshtastic</div>
+                      {meshtasticHwModel ? (
+                        <div className="device-details__model">
+                          <span>Device type</span>
+                          <strong>{meshtasticHwModel}</strong>
+                        </div>
+                      ) : null}
+                      {meshtasticLongName ? (
+                        <div className="device-details__row">
+                          <span>longName</span>
+                          <strong>{meshtasticLongName}</strong>
+                        </div>
+                      ) : null}
+                      {meshtasticShortName ? (
+                        <div className="device-details__row">
+                          <span>shortName</span>
+                          <strong>{meshtasticShortName}</strong>
+                        </div>
+                      ) : null}
+                      {meshtasticFirmwareVersion ? (
+                        <div className="device-details__row">
+                          <span>firmwareVersion</span>
+                          <strong>{meshtasticFirmwareVersion}</strong>
+                        </div>
+                      ) : null}
+                      {meshtasticAppVersion ? (
+                        <div className="device-details__row">
+                          <span>appVersion</span>
+                          <strong>{meshtasticAppVersion}</strong>
+                        </div>
+                      ) : null}
+                      {meshtasticRole ? (
+                        <div className="device-details__row">
+                          <span>role</span>
+                          <strong>{meshtasticRole}</strong>
+                        </div>
+                      ) : null}
+                      {meshtasticLastNodeInfoAt ? (
+                        <div className="device-details__row">
+                          <span>lastNodeInfoAt</span>
+                          <strong>{formatRelativeTime(meshtasticLastNodeInfoAt)}</strong>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
 
                   <div className="device-details__section-title">Latest location</div>
                   <div className="device-details__row">
@@ -1232,18 +1281,30 @@ function formatRelativeTime(value: string): string {
   return `${days}d ago`;
 }
 
-function formatDeviceLabel(
-  name: string | null | undefined,
-  deviceUid: string
-): string {
-  const trimmedName = name?.trim();
-  if (!trimmedName) {
-    return deviceUid;
+function formatDeviceLabel(device: {
+  name: string | null | undefined;
+  longName: string | null | undefined;
+  deviceUid: string;
+  hwModel: string | null | undefined;
+}): string {
+  const primaryLabel =
+    normalizeOptionalText(device.longName) ??
+    normalizeOptionalText(device.name) ??
+    device.deviceUid;
+  const secondaryParts: string[] = [];
+
+  if (primaryLabel.toLowerCase() !== device.deviceUid.toLowerCase()) {
+    secondaryParts.push(device.deviceUid);
   }
-  if (trimmedName.toLowerCase() === deviceUid.toLowerCase()) {
-    return deviceUid;
+
+  const hwModel = normalizeOptionalText(device.hwModel);
+  if (hwModel) {
+    secondaryParts.push(hwModel);
   }
-  return `${trimmedName} (${deviceUid})`;
+
+  return secondaryParts.length > 0
+    ? `${primaryLabel} (${secondaryParts.join(' · ')})`
+    : primaryLabel;
 }
 
 type CoverageLegendItem = {
@@ -1289,4 +1350,12 @@ function getErrorStatus(error: unknown): number | null {
     return typeof status === 'number' ? status : null;
   }
   return null;
+}
+
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

@@ -256,6 +256,13 @@ type DeviceDetailResponse = {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string | null;
+  longName: string | null;
+  shortName: string | null;
+  hwModel: string | null;
+  firmwareVersion: string | null;
+  appVersion: string | null;
+  role: string | null;
+  lastNodeInfoAt: string | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;
@@ -469,6 +476,13 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
     createdAt: device.createdAt.toISOString(),
     updatedAt: device.updatedAt.toISOString(),
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    longName: device.longName ?? null,
+    shortName: device.shortName ?? null,
+    hwModel: device.hwModel ?? null,
+    firmwareVersion: device.firmwareVersion ?? null,
+    appVersion: device.appVersion ?? null,
+    role: device.role ?? null,
+    lastNodeInfoAt: device.lastNodeInfoAt ? device.lastNodeInfoAt.toISOString() : null,
     latestMeasurement: device.latestMeasurement
       ? {
           capturedAt: device.latestMeasurement.capturedAt.toISOString(),

@@ -1039,6 +1039,30 @@
   font-family: var(--font-mono);
 }
 
+.device-details__model {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-bg);
+}
+
+.device-details__model span {
+  color: var(--panel-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.device-details__model strong {
+  color: var(--panel-text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .device-details__error,
 .device-details__empty {
   font-size: 0.7rem;
@@ -1498,8 +1522,31 @@
 }
 
 .devices-manager__cell--uid {
+  display: grid;
+  gap: 0.12rem;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.devices-manager__identity-primary,
+.devices-manager__identity-secondary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.devices-manager__identity-primary {
+  color: var(--panel-text);
+}
+
+.devices-manager__identity-secondary {
+  color: var(--panel-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .devices-manager__cell--actions {

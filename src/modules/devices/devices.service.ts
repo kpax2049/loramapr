@@ -5,6 +5,8 @@ export type DeviceListItem = {
   id: string;
   deviceUid: string;
   name: string | null;
+  longName: string | null;
+  hwModel: string | null;
   isArchived: boolean;
   lastSeenAt: Date | null;
   latestMeasurementAt: Date | null;
@@ -33,6 +35,13 @@ export type DeviceDetail = {
   createdAt: Date;
   updatedAt: Date;
   lastSeenAt: Date | null;
+  longName: string | null;
+  shortName: string | null;
+  hwModel: string | null;
+  firmwareVersion: string | null;
+  appVersion: string | null;
+  role: string | null;
+  lastNodeInfoAt: Date | null;
   latestMeasurement: {
     capturedAt: Date;
     lat: number;
@@ -114,6 +123,8 @@ export class DevicesService {
         id: true,
         deviceUid: true,
         name: true,
+        longName: true,
+        hwModel: true,
         isArchived: true,
         lastSeenAt: true,
         measurements: {
@@ -134,6 +145,8 @@ export class DevicesService {
       id: device.id,
       deviceUid: device.deviceUid,
       name: device.name,
+      longName: device.longName,
+      hwModel: device.hwModel,
       isArchived: device.isArchived,
       lastSeenAt: device.lastSeenAt,
       latestMeasurementAt: device.measurements[0]?.capturedAt ?? null
@@ -197,7 +210,14 @@ export class DevicesService {
         isArchived: true,
         createdAt: true,
         updatedAt: true,
-        lastSeenAt: true
+        lastSeenAt: true,
+        longName: true,
+        shortName: true,
+        hwModel: true,
+        firmwareVersion: true,
+        appVersion: true,
+        role: true,
+        lastNodeInfoAt: true
       }
     });
     if (!device) {
