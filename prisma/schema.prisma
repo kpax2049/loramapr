@@ -23,6 +23,13 @@ model Device {
   deviceUid  String    @unique
   name       String?
   notes      String?
+  hwModel    String?
+  firmwareVersion String?
+  appVersion String?
+  longName   String?
+  shortName  String?
+  role       String?
+  lastNodeInfoAt DateTime?
   isArchived Boolean   @default(false)
   ownerId    String?   @db.Uuid
   createdAt  DateTime  @default(now())

@@ -338,8 +338,9 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
     receivedAt: Date,
     processedAt: Date
   ): Promise<void> {
+    const nodeInfo = extractMeshtasticNodeInfo(payload);
     const normalized = normalizeMeshtasticPayload(payload, receivedAt);
-    if (!normalized) {
+    if (!normalized && !nodeInfo.found) {
       await this.prisma.webhookEvent.update({
         where: { id },
         data: {
@@ -350,19 +351,26 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const effectiveDeviceUid = deviceUid ?? normalized.deviceUid;
-    await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
-      {
-        capturedAt: normalized.capturedAt,
-        lat: normalized.lat,
-        lon: normalized.lon,
-        rssi: normalized.rssi,
-        snr: normalized.snr,
-        gatewayId: normalized.gatewayId ?? undefined,
-        rxMetadata: normalized.rxMetadata,
-        payloadRaw: normalized.payloadRaw
-      }
-    ]);
+    const effectiveDeviceUid = deviceUid ?? normalized?.deviceUid ?? nodeInfo.deviceUid;
+
+    if (nodeInfo.found) {
+      await this.upsertMeshtasticNodeInfo(effectiveDeviceUid, nodeInfo.fields, processedAt);
+    }
+
+    if (normalized) {
+      await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
+        {
+          capturedAt: normalized.capturedAt,
+          lat: normalized.lat,
+          lon: normalized.lon,
+          rssi: normalized.rssi,
+          snr: normalized.snr,
+          gatewayId: normalized.gatewayId ?? undefined,
+          rxMetadata: normalized.rxMetadata,
+          payloadRaw: normalized.payloadRaw
+        }
+      ]);
+    }
 
     await this.prisma.webhookEvent.update({
       where: { id },
@@ -370,6 +378,53 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
         processedAt,
         processingError: null
       }
+    });
+  }
+
+  private async upsertMeshtasticNodeInfo(
+    deviceUid: string,
+    fields: MeshtasticNodeInfoFields,
+    timestamp: Date
+  ): Promise<void> {
+    const updateData: Prisma.DeviceUpdateInput = {
+      lastSeenAt: timestamp,
+      lastNodeInfoAt: timestamp
+    };
+    const createData: Prisma.DeviceCreateInput = {
+      deviceUid,
+      lastSeenAt: timestamp,
+      lastNodeInfoAt: timestamp
+    };
+
+    if (fields.hwModel !== undefined) {
+      updateData.hwModel = fields.hwModel;
+      createData.hwModel = fields.hwModel;
+    }
+    if (fields.firmwareVersion !== undefined) {
+      updateData.firmwareVersion = fields.firmwareVersion;
+      createData.firmwareVersion = fields.firmwareVersion;
+    }
+    if (fields.appVersion !== undefined) {
+      updateData.appVersion = fields.appVersion;
+      createData.appVersion = fields.appVersion;
+    }
+    if (fields.longName !== undefined) {
+      updateData.longName = fields.longName;
+      createData.longName = fields.longName;
+    }
+    if (fields.shortName !== undefined) {
+      updateData.shortName = fields.shortName;
+      createData.shortName = fields.shortName;
+    }
+    if (fields.role !== undefined) {
+      updateData.role = fields.role;
+      createData.role = fields.role;
+    }
+
+    await this.prisma.device.upsert({
+      where: { deviceUid },
+      update: updateData,
+      create: createData
     });
   }
 }
@@ -390,6 +445,39 @@ type MeshtasticNormalized = {
   }>;
   payloadRaw: Record<string, unknown>;
 };
+
+type MeshtasticNodeInfoFields = {
+  hwModel?: string;
+  firmwareVersion?: string;
+  appVersion?: string;
+  longName?: string;
+  shortName?: string;
+  role?: string;
+};
+
+type MeshtasticNodeInfoDetected = {
+  found: boolean;
+  deviceUid: string;
+  fields: MeshtasticNodeInfoFields;
+};
+
+const MESH_NODE_INFO_CONTAINER_KEYS = new Set([
+  'devicemetrics',
+  'telemetry',
+  'nodeinfo',
+  'user',
+  'mynodeinfo',
+  'metadata'
+]);
+
+const MESH_NODE_INFO_HINT_KEYS = new Set([
+  'longname',
+  'shortname',
+  'hwmodel',
+  'hardwaremodel',
+  'firmwareversion',
+  'role'
+]);
 
 function normalizeMeshtasticPayload(
   payload: Prisma.JsonValue,
@@ -430,6 +518,168 @@ function normalizeMeshtasticPayload(
     rxMetadata,
     payloadRaw: record
   };
+}
+
+function extractMeshtasticNodeInfo(payload: Prisma.JsonValue): MeshtasticNodeInfoDetected {
+  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+  if (!record) {
+    return {
+      found: false,
+      deviceUid: 'unknown',
+      fields: {}
+    };
+  }
+
+  const { candidates, foundHint } = collectNodeInfoCandidates(record);
+  const fields: MeshtasticNodeInfoFields = {};
+
+  const hwModel = findFirstString(candidates, ['hwmodel', 'hardwaremodel']);
+  if (hwModel !== undefined) {
+    fields.hwModel = hwModel;
+  }
+
+  const firmwareVersion = findFirstString(candidates, [
+    'firmwareversion',
+    'firmware',
+    'fwversion',
+    'fwver'
+  ]);
+  if (firmwareVersion !== undefined) {
+    fields.firmwareVersion = firmwareVersion;
+  }
+
+  const appVersion = findFirstString(candidates, ['appversion', 'appver']);
+  if (appVersion !== undefined) {
+    fields.appVersion = appVersion;
+  }
+
+  const longName = findFirstString(candidates, ['longname']);
+  if (longName !== undefined) {
+    fields.longName = longName;
+  }
+
+  const shortName = findFirstString(candidates, ['shortname']);
+  if (shortName !== undefined) {
+    fields.shortName = shortName;
+  }
+
+  const role = findFirstString(candidates, ['role']);
+  if (role !== undefined) {
+    fields.role = role;
+  }
+
+  return {
+    found: foundHint || Object.keys(fields).length > 0,
+    deviceUid: getMeshtasticDeviceUid(record),
+    fields
+  };
+}
+
+function collectNodeInfoCandidates(root: Record<string, unknown>): {
+  candidates: Array<Record<string, unknown>>;
+  foundHint: boolean;
+} {
+  const preferred: Array<Record<string, unknown>> = [];
+  const allRecords: Array<Record<string, unknown>> = [];
+  const seen = new Set<Record<string, unknown>>();
+  const stack: unknown[] = [root];
+  let foundHint = false;
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+
+    if (Array.isArray(current)) {
+      for (const entry of current) {
+        stack.push(entry);
+      }
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    if (seen.has(record)) {
+      continue;
+    }
+    seen.add(record);
+    allRecords.push(record);
+
+    for (const [key, value] of Object.entries(record)) {
+      const normalizedKey = normalizeLookupKey(key);
+      if (MESH_NODE_INFO_CONTAINER_KEYS.has(normalizedKey)) {
+        foundHint = true;
+        if (value && typeof value === 'object') {
+          if (Array.isArray(value)) {
+            for (const entry of value) {
+              if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+                preferred.push(entry as Record<string, unknown>);
+              }
+            }
+          } else {
+            preferred.push(value as Record<string, unknown>);
+          }
+        }
+      }
+
+      if (MESH_NODE_INFO_HINT_KEYS.has(normalizedKey)) {
+        foundHint = true;
+      }
+
+      if (value && typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+  }
+
+  const ordered: Array<Record<string, unknown>> = [];
+  const orderedSeen = new Set<Record<string, unknown>>();
+  for (const record of [...preferred, ...allRecords]) {
+    if (orderedSeen.has(record)) {
+      continue;
+    }
+    orderedSeen.add(record);
+    ordered.push(record);
+  }
+
+  return {
+    candidates: ordered,
+    foundHint
+  };
+}
+
+function findFirstString(
+  records: Array<Record<string, unknown>>,
+  aliases: string[]
+): string | undefined {
+  const aliasSet = new Set(aliases.map((key) => normalizeLookupKey(key)));
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      if (!aliasSet.has(normalizeLookupKey(key))) {
+        continue;
+      }
+      const normalized = toNonEmptyString(value);
+      if (normalized !== null) {
+        return normalized;
+      }
+    }
+  }
+  return undefined;
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
+function normalizeLookupKey(key: string): string {
+  return key.toLowerCase().replace(/[_\-\s]/g, '');
 }
 
 function extractPosition(record: Record<string, unknown>): { lat: number; lon: number } | null {
