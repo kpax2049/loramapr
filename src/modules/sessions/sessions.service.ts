@@ -89,6 +89,52 @@ export class SessionsService {
     });
   }
 
+  async archive(id: string): Promise<boolean> {
+    const existing = await this.prisma.session.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+    if (!existing) {
+      return false;
+    }
+
+    await this.prisma.session.update({
+      where: { id },
+      data: {
+        isArchived: true,
+        archivedAt: new Date()
+      }
+    });
+    return true;
+  }
+
+  async deleteWithDetachedMeasurements(
+    id: string
+  ): Promise<{ detachedMeasurementsCount: number } | null> {
+    const existing = await this.prisma.session.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+    if (!existing) {
+      return null;
+    }
+
+    const detachedMeasurementsCount = await this.prisma.$transaction(async (tx) => {
+      const detached = await tx.measurement.updateMany({
+        where: { sessionId: id },
+        data: { sessionId: null }
+      });
+
+      await tx.session.delete({
+        where: { id }
+      });
+
+      return detached.count;
+    });
+
+    return { detachedMeasurementsCount };
+  }
+
   async list(deviceId?: string, includeArchived = false) {
     const where = {
       ...(deviceId ? { deviceId } : {}),

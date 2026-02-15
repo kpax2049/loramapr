@@ -1,4 +1,18 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards
+} from '@nestjs/common';
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
@@ -12,6 +26,10 @@ type SessionsQuery = {
   includeArchived?: string | string[];
 };
 
+type SessionDeleteQuery = {
+  mode?: string | string[];
+};
+
 type SessionWindowQuery = {
   cursor?: string | string[];
   windowMs?: string | string[];
@@ -23,6 +41,7 @@ const DEFAULT_WINDOW_LIMIT = 2000;
 const MAX_WINDOW_LIMIT = 5000;
 const MIN_WINDOW_MS = 1000;
 const MAX_WINDOW_MS = 3_600_000;
+const DELETE_CONFIRMATION_VALUE = 'DELETE';
 
 @Controller('api/sessions')
 export class SessionsController {
@@ -52,6 +71,45 @@ export class SessionsController {
   @RequireApiKeyScope(ApiKeyScope.QUERY)
   async update(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
     return this.sessionsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
+  @HttpCode(200)
+  async remove(
+    @Param('id') id: string,
+    @Query() query: SessionDeleteQuery,
+    @Headers('x-confirm-delete') confirmDelete?: string
+  ): Promise<
+    | { mode: 'archive'; archived: true }
+    | { mode: 'delete'; deleted: true; detachedMeasurementsCount: number }
+  > {
+    const modeRaw = getSingleValue(query.mode, 'mode');
+    const mode = parseDeleteMode(modeRaw);
+    if (mode === 'archive') {
+      const archived = await this.sessionsService.archive(id);
+      if (!archived) {
+        throw new NotFoundException('Session not found');
+      }
+      return { mode: 'archive', archived: true };
+    }
+
+    if (confirmDelete !== DELETE_CONFIRMATION_VALUE) {
+      throw new BadRequestException(
+        `Missing or invalid X-Confirm-Delete header. Set X-Confirm-Delete: ${DELETE_CONFIRMATION_VALUE}`
+      );
+    }
+
+    const removed = await this.sessionsService.deleteWithDetachedMeasurements(id);
+    if (!removed) {
+      throw new NotFoundException('Session not found');
+    }
+    return {
+      mode: 'delete',
+      deleted: true,
+      detachedMeasurementsCount: removed.detachedMeasurementsCount
+    };
   }
 
   @Get(':id/timeline')
@@ -163,4 +221,14 @@ function parseOptionalBoolean(value: string | undefined, name: string): boolean 
     return false;
   }
   throw new BadRequestException(`${name} must be true or false`);
+}
+
+function parseDeleteMode(value?: string): 'archive' | 'delete' {
+  if (!value || value === 'archive') {
+    return 'archive';
+  }
+  if (value === 'delete') {
+    return 'delete';
+  }
+  throw new BadRequestException('mode must be one of: archive, delete');
 }
