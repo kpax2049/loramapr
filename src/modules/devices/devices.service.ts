@@ -57,6 +57,8 @@ export type DeviceMutableSummary = {
   deviceUid: string;
   name: string | null;
   notes: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   lastSeenAt: Date | null;
 };
@@ -250,6 +252,8 @@ export class DevicesService {
     data: {
       name?: string;
       notes?: string;
+      iconKey?: string | null;
+      iconOverride?: boolean;
       isArchived?: boolean;
     }
   ): Promise<DeviceMutableSummary | null> {
@@ -269,6 +273,8 @@ export class DevicesService {
         deviceUid: true,
         name: true,
         notes: true,
+        iconKey: true,
+        iconOverride: true,
         isArchived: true,
         lastSeenAt: true
       }

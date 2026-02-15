@@ -30,6 +30,8 @@ model Device {
   shortName  String?
   role       String?
   lastNodeInfoAt DateTime?
+  iconKey    String?
+  iconOverride Boolean @default(false)
   isArchived Boolean   @default(false)
   ownerId    String?   @db.Uuid
   createdAt  DateTime  @default(now())

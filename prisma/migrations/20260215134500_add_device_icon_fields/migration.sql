@@ -1,0 +1,3 @@
+ALTER TABLE "Device"
+ADD COLUMN "iconKey" TEXT,
+ADD COLUMN "iconOverride" BOOLEAN NOT NULL DEFAULT false;

@@ -235,6 +235,8 @@ type DevicePatchBody = {
   deviceUid?: unknown;
   name?: unknown;
   notes?: unknown;
+  iconKey?: unknown;
+  iconOverride?: unknown;
   isArchived?: unknown;
 };
 
@@ -243,6 +245,8 @@ type DeviceMutableResponse = {
   deviceUid: string;
   name: string | null;
   notes: string | null;
+  iconKey: string | null;
+  iconOverride: boolean;
   isArchived: boolean;
   lastSeenAt: string | null;
 };
@@ -343,6 +347,8 @@ function parseLimit(value?: string): number {
 function parsePatchBody(body: DevicePatchBody): {
   name?: string;
   notes?: string;
+  iconKey?: string | null;
+  iconOverride?: boolean;
   isArchived?: boolean;
 } {
   const input = body ?? {};
@@ -354,6 +360,8 @@ function parsePatchBody(body: DevicePatchBody): {
   const update: {
     name?: string;
     notes?: string;
+    iconKey?: string | null;
+    iconOverride?: boolean;
     isArchived?: boolean;
   } = {};
 
@@ -384,11 +392,60 @@ function parsePatchBody(body: DevicePatchBody): {
     update.isArchived = input.isArchived;
   }
 
+  const parsedIconKey = parseIconKey(input.iconKey);
+  const parsedIconOverride = parseIconOverride(input.iconOverride);
+
+  if (parsedIconOverride === true) {
+    if (parsedIconKey === undefined || parsedIconKey === null) {
+      throw new BadRequestException('iconOverride=true requires iconKey to be a non-empty string');
+    }
+    update.iconOverride = true;
+    update.iconKey = parsedIconKey;
+  } else if (parsedIconOverride === false) {
+    update.iconOverride = false;
+    // Explicitly clear key when override is disabled.
+    update.iconKey = null;
+  } else if (parsedIconKey !== undefined) {
+    update.iconKey = parsedIconKey;
+  }
+
   if (Object.keys(update).length === 0) {
-    throw new BadRequestException('At least one field must be provided: name, notes, isArchived');
+    throw new BadRequestException(
+      'At least one field must be provided: name, notes, iconKey, iconOverride, isArchived'
+    );
   }
 
   return update;
+}
+
+function parseIconKey(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new BadRequestException('iconKey must be a string or null');
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new BadRequestException('iconKey must be a non-empty string when provided');
+  }
+  return trimmed;
+}
+
+function parseIconOverride(value: unknown): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return false;
+  }
+  if (typeof value !== 'boolean') {
+    throw new BadRequestException('iconOverride must be a boolean or null');
+  }
+  return value;
 }
 
 function parseBooleanQuery(
@@ -461,6 +518,8 @@ function formatMutableDevice(device: DeviceMutableSummary): DeviceMutableRespons
     deviceUid: device.deviceUid,
     name: device.name,
     notes: device.notes,
+    iconKey: device.iconKey,
+    iconOverride: device.iconOverride,
     isArchived: device.isArchived,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null
   };
