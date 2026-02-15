@@ -2,8 +2,19 @@ export type Device = {
   id: string;
   deviceUid: string;
   name: string | null;
+  notes?: string | null;
+  isArchived: boolean;
   lastSeenAt: string | null;
   latestMeasurementAt: string | null;
+};
+
+export type DeviceMutable = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  notes: string | null;
+  isArchived: boolean;
+  lastSeenAt: string | null;
 };
 
 export type ListResponse<T> = {

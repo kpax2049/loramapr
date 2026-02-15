@@ -15,6 +15,7 @@ import LorawanEventsPanel from './LorawanEventsPanel';
 import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
+import DevicesManager from './DevicesManager';
 
 type ControlsProps = {
   activeTab: 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
@@ -301,6 +302,17 @@ export default function Controls({
     receiverErrorStatus === 401 ||
     receiverErrorStatus === 403;
 
+  const handleOpenAutoSessionShortcut = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const target = document.getElementById('auto-session-section');
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <section className="controls" aria-label="Map controls">
       {showDeviceTab && (
@@ -330,7 +342,7 @@ export default function Controls({
       )}
 
       {showDeviceTab && deviceId && (
-        <div className="controls__group">
+        <div className="controls__group" id="auto-session-section">
           <span className="controls__label">Auto Session (Home Geofence)</span>
           <label className="controls__toggle">
             <input
@@ -408,6 +420,14 @@ export default function Controls({
             <div className="controls__gateway-error">{autoSessionError}</div>
           ) : null}
         </div>
+      )}
+
+      {showDeviceTab && (
+        <DevicesManager
+          selectedDeviceId={deviceId}
+          onSelectDevice={onDeviceChange}
+          onOpenAutoSession={handleOpenAutoSessionShortcut}
+        />
       )}
 
       {showSessionsTab && !isPlaybackMode && (

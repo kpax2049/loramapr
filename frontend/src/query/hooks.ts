@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import {
+  archiveDevice,
+  deleteDevice,
   getAutoSession,
   getAgentDecisions,
   getCoverageBins,
@@ -11,10 +13,12 @@ import {
   getMeasurements,
   getStats,
   getTrack,
+  updateDevice,
   updateAutoSession,
   listReceivers,
   listGateways,
-  listDevices
+  listDevices,
+  type UpdateDeviceInput
 } from '../api/endpoints';
 import { ApiError } from '../api/http';
 import type {
@@ -150,10 +154,10 @@ function normalizeReceiversParams(
   };
 }
 
-export function useDevices() {
+export function useDevices(includeArchived = false) {
   return useQuery<ListResponse<Device>>({
-    queryKey: ['devices'],
-    queryFn: ({ signal }) => listDevices({ signal })
+    queryKey: ['devices', includeArchived ? 'with-archived' : 'active-only'],
+    queryFn: ({ signal }) => listDevices({ includeArchived }, { signal })
   });
 }
 
@@ -213,6 +217,37 @@ export function useUpdateAutoSession(deviceId?: string | null) {
       if (deviceId) {
         queryClient.invalidateQueries({ queryKey: ['auto-session', deviceId] });
       }
+    }
+  });
+}
+
+export function useUpdateDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { deviceId: string; data: UpdateDeviceInput }) =>
+      updateDevice(input.deviceId, input.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    }
+  });
+}
+
+export function useArchiveDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceId: string) => archiveDevice(deviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    }
+  });
+}
+
+export function useDeleteDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceId: string) => deleteDevice(deviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
     }
   });
 }

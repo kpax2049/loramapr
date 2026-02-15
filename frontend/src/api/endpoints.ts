@@ -1,6 +1,7 @@
 import { getJson, requestJson } from './http';
 import type {
   Device,
+  DeviceMutable,
   DeviceLatest,
   CoverageBinsResponse,
   GatewayStats,
@@ -95,6 +96,7 @@ export type ReceiversQueryParams = {
 
 type RequestOptions = {
   signal?: AbortSignal;
+  headers?: HeadersInit;
 };
 
 function toIso(value: string | Date): string {
@@ -224,8 +226,63 @@ function buildReceiversQuery(params: ReceiversQueryParams): string {
   return searchParams.toString();
 }
 
-export async function listDevices(options?: RequestOptions): Promise<ListResponse<Device>> {
-  return getJson<ListResponse<Device>>('/api/devices', options);
+export type UpdateDeviceInput = {
+  name?: string;
+  notes?: string;
+  isArchived?: boolean;
+};
+
+export async function listDevices(
+  params?: { includeArchived?: boolean },
+  options?: RequestOptions
+): Promise<ListResponse<Device>> {
+  const query = new URLSearchParams();
+  if (params?.includeArchived) {
+    query.set('includeArchived', 'true');
+  }
+  const suffix = query.toString();
+  const path = suffix ? `/api/devices?${suffix}` : '/api/devices';
+  return getJson<ListResponse<Device>>(path, options);
+}
+
+export async function updateDevice(
+  deviceId: string,
+  input: UpdateDeviceInput,
+  options?: RequestOptions
+): Promise<DeviceMutable> {
+  return requestJson<DeviceMutable>(`/api/devices/${deviceId}`, {
+    method: 'PATCH',
+    json: input,
+    ...withQueryApiKey(options)
+  });
+}
+
+export async function archiveDevice(
+  deviceId: string,
+  options?: RequestOptions
+): Promise<{ mode: 'archive'; device: DeviceMutable }> {
+  return requestJson<{ mode: 'archive'; device: DeviceMutable }>(
+    `/api/devices/${deviceId}?mode=archive`,
+    {
+      method: 'DELETE',
+      ...withQueryApiKey(options)
+    }
+  );
+}
+
+export async function deleteDevice(
+  deviceId: string,
+  options?: RequestOptions
+): Promise<{ mode: 'delete'; deleted: true }> {
+  const scoped = withQueryApiKey(options);
+  return requestJson<{ mode: 'delete'; deleted: true }>(`/api/devices/${deviceId}?mode=delete`, {
+    method: 'DELETE',
+    ...scoped,
+    headers: {
+      ...(scoped?.headers ?? {}),
+      'X-Confirm-Delete': 'DELETE'
+    }
+  });
 }
 
 export async function getDeviceLatest(deviceId: string, options?: RequestOptions): Promise<DeviceLatest> {
