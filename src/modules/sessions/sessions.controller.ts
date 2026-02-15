@@ -6,6 +6,7 @@ import { SessionsService } from './sessions.service';
 
 type SessionsQuery = {
   deviceId?: string | string[];
+  includeArchived?: string | string[];
 };
 
 type SessionWindowQuery = {
@@ -27,7 +28,9 @@ export class SessionsController {
   @Get()
   async list(@Query() query: SessionsQuery) {
     const deviceId = getSingleValue(query.deviceId, 'deviceId');
-    const items = await this.sessionsService.list(deviceId ?? undefined);
+    const includeArchivedRaw = getSingleValue(query.includeArchived, 'includeArchived');
+    const includeArchived = parseOptionalBoolean(includeArchivedRaw, 'includeArchived') ?? false;
+    const items = await this.sessionsService.list(deviceId ?? undefined, includeArchived);
     return { items, count: items.length };
   }
 
@@ -142,4 +145,17 @@ function parseOverviewSample(value: string | undefined): number {
     throw new BadRequestException('sample must be a positive integer');
   }
   return Math.min(parsed, 5000);
+}
+
+function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+  throw new BadRequestException(`${name} must be true or false`);
 }

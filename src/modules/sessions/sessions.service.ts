@@ -64,8 +64,11 @@ export class SessionsService {
     }
   }
 
-  async list(deviceId?: string) {
-    const where = deviceId ? { deviceId } : undefined;
+  async list(deviceId?: string, includeArchived = false) {
+    const where = {
+      ...(deviceId ? { deviceId } : {}),
+      ...(includeArchived ? {} : { isArchived: false })
+    };
     return this.prisma.session.findMany({
       where,
       orderBy: { startedAt: 'desc' }
