@@ -1,6 +1,7 @@
 import { getJson, requestJson } from './http';
 import type {
   Device,
+  DeviceDetail,
   DeviceMutable,
   DeviceLatest,
   CoverageBinsResponse,
@@ -287,6 +288,13 @@ export async function deleteDevice(
 
 export async function getDeviceLatest(deviceId: string, options?: RequestOptions): Promise<DeviceLatest> {
   return getJson<DeviceLatest>(`/api/devices/${deviceId}/latest`, options);
+}
+
+export async function getDeviceById(
+  deviceId: string,
+  options?: RequestOptions
+): Promise<DeviceDetail> {
+  return getJson<DeviceDetail>(`/api/devices/${deviceId}`, options);
 }
 
 const queryApiKey = (import.meta.env.VITE_QUERY_API_KEY ?? '').trim();

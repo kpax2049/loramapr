@@ -45,6 +45,8 @@ type MapViewProps = {
   showPoints?: boolean;
   showTrack?: boolean;
   playbackCursorPosition?: [number, number] | null;
+  latestLocationMarker?: LatestLocationMarker | null;
+  showLatestLocationMarker?: boolean;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
   onZoomChange?: (zoom: number) => void;
   selectedPointId?: string | null;
@@ -66,6 +68,17 @@ type TrackPoint = {
   lat: number;
   lon: number;
   capturedAt: string;
+};
+
+type LatestLocationMarker = {
+  deviceName: string | null;
+  deviceUid: string;
+  capturedAt: string | null;
+  lat: number;
+  lon: number;
+  rssi: number | null;
+  snr: number | null;
+  gatewayId: string | null;
 };
 
 export type MapViewHandle = {
@@ -303,6 +316,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   showPoints = true,
   showTrack = true,
   playbackCursorPosition = null,
+  latestLocationMarker = null,
+  showLatestLocationMarker = true,
   onBoundsChange,
   onZoomChange,
   selectedPointId = null,
@@ -581,6 +596,67 @@ ref
           interactive={false}
         />
       )}
+      {showLatestLocationMarker && latestLocationMarker ? (
+        <>
+          <CircleMarker
+            center={[latestLocationMarker.lat, latestLocationMarker.lon]}
+            radius={11}
+            pathOptions={{
+              className: 'map-point map-point--latest-halo',
+              weight: 2,
+              fillOpacity: 0.2
+            }}
+            interactive={false}
+          />
+          <CircleMarker
+            center={[latestLocationMarker.lat, latestLocationMarker.lon]}
+            radius={7}
+            pathOptions={{
+              className: 'map-point map-point--latest',
+              weight: 3,
+              fillOpacity: 0.95
+            }}
+          >
+            <Tooltip className="map-latest-tooltip" direction="top" offset={[0, -8]} opacity={0.95}>
+              <div>
+                <div className="map-latest-tooltip__title">Latest device location</div>
+                <div className="map-latest-tooltip__row">
+                  <span>Device</span>
+                  <strong>{formatDeviceTitle(latestLocationMarker.deviceName, latestLocationMarker.deviceUid)}</strong>
+                </div>
+                <div className="map-latest-tooltip__row">
+                  <span>capturedAt</span>
+                  <strong>{formatTimestamp(latestLocationMarker.capturedAt ?? undefined)}</strong>
+                </div>
+                <div className="map-latest-tooltip__row">
+                  <span>lat/lon</span>
+                  <strong>
+                    {formatCoordinate(latestLocationMarker.lat)}, {formatCoordinate(latestLocationMarker.lon)}
+                  </strong>
+                </div>
+                {latestLocationMarker.rssi !== null && latestLocationMarker.rssi !== undefined ? (
+                  <div className="map-latest-tooltip__row">
+                    <span>rssi</span>
+                    <strong>{latestLocationMarker.rssi}</strong>
+                  </div>
+                ) : null}
+                {latestLocationMarker.snr !== null && latestLocationMarker.snr !== undefined ? (
+                  <div className="map-latest-tooltip__row">
+                    <span>snr</span>
+                    <strong>{latestLocationMarker.snr}</strong>
+                  </div>
+                ) : null}
+                {latestLocationMarker.gatewayId ? (
+                  <div className="map-latest-tooltip__row">
+                    <span>gatewayId</span>
+                    <strong>{latestLocationMarker.gatewayId}</strong>
+                  </div>
+                ) : null}
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        </>
+      ) : null}
     </MapContainer>
   );
 });
@@ -596,4 +672,22 @@ function formatTimestamp(value?: string): string {
     return value;
   }
   return parsed.toLocaleString();
+}
+
+function formatCoordinate(value: number): string {
+  if (!Number.isFinite(value)) {
+    return String(value);
+  }
+  return value.toFixed(6);
+}
+
+function formatDeviceTitle(name: string | null | undefined, deviceUid: string): string {
+  const trimmedName = name?.trim();
+  if (!trimmedName) {
+    return deviceUid;
+  }
+  if (trimmedName.toLowerCase() === deviceUid.toLowerCase()) {
+    return deviceUid;
+  }
+  return `${trimmedName} (${deviceUid})`;
 }

@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Device } from '../api/types';
 import { ApiError } from '../api/http';
 import { useArchiveDevice, useDeleteDevice, useDevices, useUpdateDevice } from '../query/hooks';
+import LocationPinIcon from './LocationPinIcon';
+import HoverTooltip from './HoverTooltip';
 
 type DevicesManagerProps = {
   selectedDeviceId: string | null;
   onSelectDevice: (deviceId: string | null) => void;
   onOpenAutoSession?: () => void;
 };
+
+const LOCATION_INDICATOR_TOOLTIP = 'Has known last location';
 
 function formatRelativeTime(value: string | null): string {
   if (!value) {
@@ -365,6 +369,16 @@ export default function DevicesManager({
                   </button>
                 ) : null}
                 {device.isArchived ? <span className="devices-manager__badge">Archived</span> : null}
+                {device.latestMeasurementAt ? (
+                  <HoverTooltip label={LOCATION_INDICATOR_TOOLTIP}>
+                    <span
+                      className="devices-manager__badge devices-manager__badge--location"
+                      aria-label={LOCATION_INDICATOR_TOOLTIP}
+                    >
+                      <LocationPinIcon className="devices-manager__location-icon" />
+                    </span>
+                  </HoverTooltip>
+                ) : null}
               </div>
               <div className="devices-manager__cell devices-manager__cell--uid" title={device.deviceUid}>
                 {device.deviceUid}

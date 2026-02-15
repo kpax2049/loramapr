@@ -3,10 +3,12 @@ import type { AutoSessionConfig, DeviceLatest } from '../api/types';
 import {
   useAgentDecisions,
   useAutoSession,
+  useDeviceDetail,
   useDevices,
   useGateways,
   useReceivers,
-  useUpdateAutoSession
+  useUpdateAutoSession,
+  useUpdateDevice
 } from '../query/hooks';
 import { useLorawanEvents } from '../query/lorawan';
 import { useMeshtasticEvents } from '../query/meshtastic';
@@ -16,6 +18,11 @@ import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
 import DevicesManager from './DevicesManager';
+import LocationPinIcon from './LocationPinIcon';
+import HoverTooltip from './HoverTooltip';
+
+const LOCATION_INDICATOR_OPTION_ICON = '📍';
+const LOCATION_INDICATOR_TOOLTIP = 'Has known last location';
 
 type ControlsProps = {
   activeTab: 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
@@ -46,6 +53,7 @@ type ControlsProps = {
   onSelectCompareGatewayId: (gatewayId: string | null) => void;
   latest?: DeviceLatest;
   onFitToData: () => void;
+  onCenterOnLatestLocation: (point: [number, number]) => void;
   mapLayerMode: 'points' | 'coverage';
   onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
@@ -91,6 +99,7 @@ export default function Controls({
   onSelectCompareGatewayId,
   latest,
   onFitToData,
+  onCenterOnLatestLocation,
   mapLayerMode,
   onMapLayerModeChange,
   coverageMetric,
@@ -123,8 +132,17 @@ export default function Controls({
   });
   const [autoSessionDirty, setAutoSessionDirty] = useState(false);
   const [autoSessionError, setAutoSessionError] = useState<string | null>(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(true);
+  const [detailsNameDraft, setDetailsNameDraft] = useState('');
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
   const autoSessionQuery = useAutoSession(deviceId, { enabled: Boolean(deviceId) });
   const updateAutoSessionMutation = useUpdateAutoSession(deviceId);
+  const updateDeviceMutation = useUpdateDevice();
+  const deviceDetailQuery = useDeviceDetail(deviceId, { enabled: Boolean(deviceId) });
+  const deviceDetail = deviceDetailQuery.data;
+  const deviceDetailErrorStatus = getErrorStatus(deviceDetailQuery.error);
   const autoSessionStatus = getErrorStatus(autoSessionQuery.error);
   const autoSessionMutationStatus = getErrorStatus(updateAutoSessionMutation.error);
   const autoSessionAuthError =
@@ -132,6 +150,7 @@ export default function Controls({
     autoSessionStatus === 403 ||
     autoSessionMutationStatus === 401 ||
     autoSessionMutationStatus === 403;
+  const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
 
   const agentDecisionsQuery = useAgentDecisions(deviceId, 1, { enabled: Boolean(deviceId) });
   const agentDecisionStatus = getErrorStatus(agentDecisionsQuery.error);
@@ -171,7 +190,14 @@ export default function Controls({
   useEffect(() => {
     setAutoSessionDirty(false);
     setAutoSessionError(null);
+    setDetailsError(null);
+    setNotesModalOpen(false);
   }, [deviceId]);
+
+  useEffect(() => {
+    setDetailsNameDraft(deviceDetail?.name ?? '');
+    setNotesDraft(deviceDetail?.notes ?? '');
+  }, [deviceDetail?.id, deviceDetail?.name, deviceDetail?.notes]);
 
   useEffect(() => {
     if (!autoSessionConfig || autoSessionDirty) {
@@ -285,7 +311,6 @@ export default function Controls({
   const isPlaybackMode = viewMode === 'playback';
   const selectedReceiver =
     receiverOptions.find((receiver) => receiver.id === selectedReceiverId) ?? null;
-  const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
   const debugProbeEnabled = showDebugTab && hasQueryApiKey;
   const lorawanDebugProbe = useLorawanEvents(selectedDevice?.deviceUid, 1, debugProbeEnabled);
   const meshtasticDebugProbe = useMeshtasticEvents(selectedDevice?.deviceUid, 1, debugProbeEnabled);
@@ -301,6 +326,68 @@ export default function Controls({
     gatewayErrorStatus === 403 ||
     receiverErrorStatus === 401 ||
     receiverErrorStatus === 403;
+
+  const latestLocation = deviceDetail?.latestMeasurement ?? null;
+  const canCenterOnLatest = Boolean(
+    latestLocation && Number.isFinite(latestLocation.lat) && Number.isFinite(latestLocation.lon)
+  );
+  const detailsNameDirty = (detailsNameDraft ?? '').trim() !== (deviceDetail?.name ?? '').trim();
+  const notesPreviewRaw = deviceDetail?.notes ?? '';
+  const notesPreview =
+    notesPreviewRaw.length > 120 ? `${notesPreviewRaw.slice(0, 120)}...` : notesPreviewRaw || '—';
+
+  const handleSaveDetailsName = () => {
+    if (!deviceDetail || !hasQueryApiKey || !detailsNameDirty) {
+      return;
+    }
+    setDetailsError(null);
+    updateDeviceMutation.mutate(
+      {
+        deviceId: deviceDetail.id,
+        data: { name: detailsNameDraft.trim() }
+      },
+      {
+        onSuccess: () => {
+          setDetailsError(null);
+        },
+        onError: (error) => {
+          const status = getErrorStatus(error);
+          setDetailsError(
+            status === 401 || status === 403
+              ? 'Editing device details requires QUERY key'
+              : 'Could not save device name'
+          );
+        }
+      }
+    );
+  };
+
+  const handleSaveNotes = () => {
+    if (!deviceDetail || !hasQueryApiKey) {
+      return;
+    }
+    setDetailsError(null);
+    updateDeviceMutation.mutate(
+      {
+        deviceId: deviceDetail.id,
+        data: { notes: notesDraft }
+      },
+      {
+        onSuccess: () => {
+          setDetailsError(null);
+          setNotesModalOpen(false);
+        },
+        onError: (error) => {
+          const status = getErrorStatus(error);
+          setDetailsError(
+            status === 401 || status === 403
+              ? 'Editing device details requires QUERY key'
+              : 'Could not save device notes'
+          );
+        }
+      }
+    );
+  };
 
   const handleOpenAutoSessionShortcut = () => {
     if (typeof window === 'undefined') {
@@ -327,19 +414,172 @@ export default function Controls({
             <option value="">
               {isLoading ? 'Loading devices...' : 'Select a device'}
             </option>
-            {devices.map((device) => (
-              <option key={device.id} value={device.id}>
-                {formatDeviceLabel(device.name, device.deviceUid)}
-              </option>
-            ))}
+            {devices.map((device) => {
+              const hasLatestLocation = Boolean(device.latestMeasurementAt);
+              return (
+                <option
+                  key={device.id}
+                  value={device.id}
+                  title={hasLatestLocation ? LOCATION_INDICATOR_TOOLTIP : undefined}
+                >
+                  {hasLatestLocation
+                    ? `${formatDeviceLabel(device.name, device.deviceUid)} ${LOCATION_INDICATOR_OPTION_ICON}`
+                    : formatDeviceLabel(device.name, device.deviceUid)}
+                </option>
+              );
+            })}
           </select>
           {selectedDevice ? (
             <div className="controls__device-meta">
-              <span>{formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}</span>
+              <span className="controls__device-meta-label">
+                {formatDeviceLabel(selectedDevice.name, selectedDevice.deviceUid)}
+              </span>
+              {selectedDevice.latestMeasurementAt ? (
+                <HoverTooltip label={LOCATION_INDICATOR_TOOLTIP}>
+                  <span
+                    className="controls__location-indicator"
+                    aria-label={LOCATION_INDICATOR_TOOLTIP}
+                  >
+                    <LocationPinIcon className="controls__location-indicator-icon" />
+                  </span>
+                </HoverTooltip>
+              ) : null}
             </div>
           ) : null}
         </div>
       )}
+
+      {showDeviceTab && deviceId ? (
+        <div className="controls__group device-details">
+          <button
+            type="button"
+            className="device-details__toggle"
+            onClick={() => setDetailsExpanded((value) => !value)}
+            aria-expanded={detailsExpanded}
+            aria-controls="device-details-panel"
+          >
+            <span>Details</span>
+            <span>{detailsExpanded ? '-' : '+'}</span>
+          </button>
+          {detailsExpanded ? (
+            <div id="device-details-panel" className="device-details__body">
+              {deviceDetailErrorStatus === 401 || deviceDetailErrorStatus === 403 ? (
+                <div className="device-details__empty">Device details require QUERY key.</div>
+              ) : deviceDetailQuery.isLoading ? (
+                <div className="device-details__empty">Loading details...</div>
+              ) : deviceDetail ? (
+                <>
+                  <div className="device-details__row">
+                    <span>Name</span>
+                    {hasQueryApiKey ? (
+                      <div className="device-details__name-edit">
+                        <input
+                          type="text"
+                          value={detailsNameDraft}
+                          onChange={(event) => setDetailsNameDraft(event.target.value)}
+                          aria-label="Device name"
+                          disabled={updateDeviceMutation.isPending}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveDetailsName}
+                          disabled={!detailsNameDirty || updateDeviceMutation.isPending}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <strong>{deviceDetail.name?.trim() || '—'}</strong>
+                    )}
+                  </div>
+                  <div className="device-details__row">
+                    <span>deviceUid</span>
+                    <strong title={deviceDetail.deviceUid}>{deviceDetail.deviceUid}</strong>
+                  </div>
+                  <div className="device-details__row">
+                    <span>Last seen</span>
+                    <strong>{deviceDetail.lastSeenAt ? formatRelativeTime(deviceDetail.lastSeenAt) : '—'}</strong>
+                  </div>
+                  <div className="device-details__row">
+                    <span>Created</span>
+                    <strong>{formatRelativeTime(deviceDetail.createdAt)}</strong>
+                  </div>
+                  <div className="device-details__row">
+                    <span>Archived</span>
+                    <strong>{deviceDetail.isArchived ? 'yes' : 'no'}</strong>
+                  </div>
+                  <div className="device-details__row device-details__row--notes">
+                    <span>Notes</span>
+                    <div className="device-details__notes">
+                      <strong>{notesPreview}</strong>
+                      {hasQueryApiKey ? (
+                        <button
+                          type="button"
+                          onClick={() => setNotesModalOpen(true)}
+                          aria-label="Edit notes"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="device-details__section-title">Latest location</div>
+                  <div className="device-details__row">
+                    <span>capturedAt</span>
+                    <strong>
+                      {latestLocation?.capturedAt ? formatRelativeTime(latestLocation.capturedAt) : '—'}
+                    </strong>
+                  </div>
+                  <div className="device-details__row">
+                    <span>lat/lon</span>
+                    <strong>
+                      {latestLocation
+                        ? `${latestLocation.lat.toFixed(6)}, ${latestLocation.lon.toFixed(6)}`
+                        : '—'}
+                    </strong>
+                  </div>
+                  {latestLocation?.rssi !== null && latestLocation?.rssi !== undefined ? (
+                    <div className="device-details__row">
+                      <span>rssi</span>
+                      <strong>{latestLocation.rssi}</strong>
+                    </div>
+                  ) : null}
+                  {latestLocation?.snr !== null && latestLocation?.snr !== undefined ? (
+                    <div className="device-details__row">
+                      <span>snr</span>
+                      <strong>{latestLocation.snr}</strong>
+                    </div>
+                  ) : null}
+                  {latestLocation?.gatewayId ? (
+                    <div className="device-details__row">
+                      <span>gatewayId</span>
+                      <strong>{latestLocation.gatewayId}</strong>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="controls__button"
+                    onClick={() =>
+                      latestLocation &&
+                      onCenterOnLatestLocation([latestLocation.lat, latestLocation.lon])
+                    }
+                    disabled={!canCenterOnLatest}
+                  >
+                    Center on latest
+                  </button>
+                  {detailsError ? (
+                    <div className="device-details__error">{detailsError}</div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="device-details__empty">No details found.</div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {showDeviceTab && deviceId && (
         <div className="controls__group" id="auto-session-section">
@@ -861,6 +1101,47 @@ export default function Controls({
           )}
         </>
       ) : null}
+      {notesModalOpen && deviceDetail && hasQueryApiKey ? (
+        <div
+          className="device-details__modal-backdrop"
+          role="presentation"
+          onClick={() => setNotesModalOpen(false)}
+        >
+          <div
+            className="device-details__modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="device-notes-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="device-notes-modal-title">Edit notes</h3>
+            <div className="device-details__modal-meta">{deviceDetail.deviceUid}</div>
+            <label htmlFor="device-notes-modal-input">Notes</label>
+            <textarea
+              id="device-notes-modal-input"
+              value={notesDraft}
+              onChange={(event) => setNotesDraft(event.target.value)}
+              rows={6}
+            />
+            <div className="device-details__modal-actions">
+              <button
+                type="button"
+                onClick={() => setNotesModalOpen(false)}
+                disabled={updateDeviceMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNotes}
+                disabled={updateDeviceMutation.isPending}
+              >
+                {updateDeviceMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -951,7 +1232,10 @@ function formatRelativeTime(value: string): string {
   return `${days}d ago`;
 }
 
-function formatDeviceLabel(name: string | null | undefined, deviceUid: string): string {
+function formatDeviceLabel(
+  name: string | null | undefined,
+  deviceUid: string
+): string {
   const trimmedName = name?.trim();
   if (!trimmedName) {
     return deviceUid;

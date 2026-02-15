@@ -7,6 +7,7 @@ import {
   deleteDevice,
   getAutoSession,
   getAgentDecisions,
+  getDeviceById,
   getCoverageBins,
   getDeviceLatest,
   getGatewayStats,
@@ -35,6 +36,7 @@ import type {
   AutoSessionConfig,
   AgentDecision,
   Device,
+  DeviceDetail,
   DeviceLatest,
   GatewayStats,
   GatewaySummary,
@@ -172,6 +174,17 @@ export function useDevice(deviceId?: string | null) {
   return { ...devicesQuery, device };
 }
 
+export function useDeviceDetail(deviceId?: string | null, options?: QueryOptions<DeviceDetail>) {
+  const enabled = options?.enabled ?? Boolean(deviceId);
+
+  return useQuery<DeviceDetail>({
+    queryKey: ['device-detail', deviceId ?? null],
+    queryFn: ({ signal }) => getDeviceById(deviceId as string, { signal }),
+    ...options,
+    enabled
+  });
+}
+
 export function useDeviceLatest(deviceId?: string) {
   const [unsupported, setUnsupported] = useState(false);
   const enabled = Boolean(deviceId) && !unsupported;
@@ -226,8 +239,9 @@ export function useUpdateDevice() {
   return useMutation({
     mutationFn: (input: { deviceId: string; data: UpdateDeviceInput }) =>
       updateDevice(input.deviceId, input.data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['device-detail', variables.deviceId] });
     }
   });
 }

@@ -17,6 +17,25 @@ export type DeviceMutable = {
   lastSeenAt: string | null;
 };
 
+export type DeviceDetail = {
+  id: string;
+  deviceUid: string;
+  name: string | null;
+  notes: string | null;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string | null;
+  latestMeasurement: {
+    capturedAt: string;
+    lat: number;
+    lon: number;
+    rssi: number | null;
+    snr: number | null;
+    gatewayId: string | null;
+  } | null;
+};
+
 export type ListResponse<T> = {
   items: T[];
   count: number;

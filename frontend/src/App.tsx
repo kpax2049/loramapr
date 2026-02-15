@@ -13,6 +13,7 @@ import StatsCard from './components/StatsCard';
 import {
   useCoverageBins,
   useDevice,
+  useDeviceDetail,
   useDeviceLatest,
   useMeasurements,
   useStats,
@@ -1302,10 +1303,33 @@ function App() {
     playbackRefetchIntervalMs
   ]);
   const { device: selectedDevice } = useDevice(deviceId);
+  const deviceDetailQuery = useDeviceDetail(deviceId, { enabled: Boolean(deviceId) });
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
   const latestMeasurementAt =
     latestDeviceQuery.data?.latestMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
   const selectedDeviceUid = selectedDevice?.deviceUid;
+  const latestLocationMarker = useMemo(() => {
+    if (!selectedDevice) {
+      return null;
+    }
+    const latestMeasurement = deviceDetailQuery.data?.latestMeasurement;
+    if (!latestMeasurement) {
+      return null;
+    }
+    if (!Number.isFinite(latestMeasurement.lat) || !Number.isFinite(latestMeasurement.lon)) {
+      return null;
+    }
+    return {
+      deviceName: selectedDevice.name,
+      deviceUid: selectedDevice.deviceUid,
+      capturedAt: latestMeasurement.capturedAt,
+      lat: latestMeasurement.lat,
+      lon: latestMeasurement.lon,
+      rssi: latestMeasurement.rssi,
+      snr: latestMeasurement.snr,
+      gatewayId: latestMeasurement.gatewayId
+    };
+  }, [selectedDevice, deviceDetailQuery.data?.latestMeasurement]);
 
   useEffect(() => {
     setReceiverSourceOverridden(false);
@@ -1465,6 +1489,13 @@ function App() {
     } else {
       mapRef.current?.fitBounds(target.bounds, { padding: [24, 24], maxZoom: 17 });
     }
+    setUserInteractedWithMap(true);
+    hasAutoFitRef.current = true;
+  };
+
+  const handleCenterOnLatestLocation = (point: [number, number]) => {
+    mapRef.current?.focusPoint(point, 16);
+    setFitFeedback(null);
     setUserInteractedWithMap(true);
     hasAutoFitRef.current = true;
   };
@@ -1724,6 +1755,7 @@ function App() {
       onSelectCompareGatewayId={setCompareGatewayId}
       latest={latestDeviceQuery.data}
       onFitToData={handleFitToData}
+      onCenterOnLatestLocation={handleCenterOnLatestLocation}
       mapLayerMode={mapLayerMode}
       onMapLayerModeChange={setMapLayerMode}
       coverageMetric={coverageMetric}
@@ -1767,6 +1799,8 @@ function App() {
           showPoints={showPoints}
           showTrack={showTrack}
           playbackCursorPosition={playbackCursorPosition}
+          latestLocationMarker={latestLocationMarker}
+          showLatestLocationMarker={!isPlaybackMode}
           onBoundsChange={setBbox}
           onSelectPoint={setSelectedPointId}
           onOverviewSelectTime={isPlaybackMode ? handlePlaybackCursorMsChange : undefined}

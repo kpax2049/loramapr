@@ -50,6 +50,8 @@
   --map-point-default: #38bdf8;
   --map-point-compare: #f472b6;
   --map-point-cursor: var(--panel-accent);
+  --map-point-latest: #22d3ee;
+  --map-point-latest-halo: rgba(34, 211, 238, 0.3);
   --map-controls-clearance-x: 4.75rem;
 }
 
@@ -140,4 +142,6 @@
   --accent-border: rgba(217, 119, 6, 0.5);
   --accent-bg-soft: rgba(217, 119, 6, 0.14);
   --accent-bg-strong: rgba(217, 119, 6, 0.22);
+  --map-point-latest: #0284c7;
+  --map-point-latest-halo: rgba(2, 132, 199, 0.28);
 }
