@@ -2,13 +2,14 @@ import type { ComponentType } from 'react';
 import {
   IconAccessPoint,
   IconAntennaBars5,
+  IconCircuitCapacitor,
   IconCpu,
   IconHelpCircle,
   IconHomeSignal,
   IconMapPin,
   IconMapPinBolt,
+  IconPhone,
   IconRadio,
-  IconRouter,
   IconSatellite
 } from '@tabler/icons-react';
 
@@ -19,59 +20,61 @@ export type DeviceIdentityInput = {
   shortName?: string | null;
   hwModel?: string | null;
   role?: string | null;
+  iconOverride?: boolean | null;
+  iconKey?: DeviceIconKey | string | null;
 };
 
-export type DeviceIconFamilyKey =
-  | 'home'
-  | 'gateway'
-  | 'heltec'
-  | 'tbeam'
-  | 'rak'
-  | 'lilygo'
-  | 'router'
-  | 'tracker'
-  | 'sensor'
-  | 'generic';
-
-type DeviceIconFamily = {
-  key: DeviceIconFamilyKey;
-  label: string;
-  badge: string | null;
-  Icon: ComponentType<{
-    size?: string | number;
-    stroke?: string | number;
-    className?: string;
-    'aria-hidden'?: boolean;
-  }>;
-};
-
-const DEVICE_ICON_FAMILIES: Record<DeviceIconFamilyKey, DeviceIconFamily> = {
-  home: { key: 'home', label: 'Home node', badge: 'HM', Icon: IconHomeSignal },
-  gateway: { key: 'gateway', label: 'Gateway', badge: 'GW', Icon: IconAccessPoint },
-  heltec: { key: 'heltec', label: 'Heltec', badge: 'HL', Icon: IconRadio },
-  tbeam: { key: 'tbeam', label: 'LilyGO T-Beam', badge: 'TB', Icon: IconSatellite },
-  rak: { key: 'rak', label: 'RAK/WisBlock', badge: 'RAK', Icon: IconAntennaBars5 },
-  lilygo: { key: 'lilygo', label: 'LilyGO', badge: 'T1', Icon: IconMapPinBolt },
-  router: { key: 'router', label: 'Router/Relay', badge: 'RTR', Icon: IconRouter },
-  tracker: { key: 'tracker', label: 'Tracker/Client', badge: 'TRK', Icon: IconMapPin },
-  sensor: { key: 'sensor', label: 'Sensor node', badge: 'SNS', Icon: IconCpu },
-  generic: { key: 'generic', label: 'Generic node', badge: null, Icon: IconHelpCircle }
-};
-
-const ICON_ORDER: DeviceIconFamilyKey[] = [
-  'home',
-  'gateway',
+export const DEVICE_ICON_KEYS = [
+  'auto',
+  'unknown',
   'heltec',
   'tbeam',
   'rak',
-  'lilygo',
-  'router',
+  'wio',
   'tracker',
-  'sensor',
-  'generic'
-];
+  'gateway',
+  'node',
+  'phone',
+  'home'
+] as const;
 
-export const DEVICE_ICON_CATALOG: DeviceIconFamily[] = ICON_ORDER.map((key) => DEVICE_ICON_FAMILIES[key]);
+export type DeviceIconKey = (typeof DEVICE_ICON_KEYS)[number];
+
+type DeviceIconComponent = ComponentType<{
+  size?: string | number;
+  stroke?: string | number;
+  className?: string;
+  'aria-hidden'?: boolean;
+}>;
+
+export type DeviceIconDefinition = {
+  key: DeviceIconKey;
+  IconComponent: DeviceIconComponent;
+  label: string;
+  badgeText: string | null;
+};
+
+export const DEVICE_ICON_REGISTRY: Record<DeviceIconKey, DeviceIconDefinition> = {
+  auto: { key: 'auto', label: 'Auto resolve', badgeText: null, IconComponent: IconMapPinBolt },
+  unknown: { key: 'unknown', label: 'Unknown device', badgeText: null, IconComponent: IconHelpCircle },
+  heltec: { key: 'heltec', label: 'Heltec', badgeText: 'HL', IconComponent: IconRadio },
+  tbeam: { key: 'tbeam', label: 'LilyGO T-Beam', badgeText: 'TB', IconComponent: IconSatellite },
+  rak: { key: 'rak', label: 'RAK/WisBlock', badgeText: 'RAK', IconComponent: IconAntennaBars5 },
+  wio: { key: 'wio', label: 'Wio', badgeText: 'WIO', IconComponent: IconCircuitCapacitor },
+  tracker: { key: 'tracker', label: 'Tracker/client', badgeText: 'TRK', IconComponent: IconMapPin },
+  gateway: { key: 'gateway', label: 'Gateway', badgeText: 'GW', IconComponent: IconAccessPoint },
+  node: { key: 'node', label: 'Node', badgeText: 'ND', IconComponent: IconCpu },
+  phone: { key: 'phone', label: 'Phone', badgeText: 'PH', IconComponent: IconPhone },
+  home: { key: 'home', label: 'Home node', badgeText: 'HM', IconComponent: IconHomeSignal }
+};
+
+export const DEVICE_ICON_CATALOG: DeviceIconDefinition[] = DEVICE_ICON_KEYS.map(
+  (key) => DEVICE_ICON_REGISTRY[key]
+);
+
+function isDeviceIconKey(value: string): value is DeviceIconKey {
+  return value in DEVICE_ICON_REGISTRY;
+}
 
 function normalizeValue(value: string | null | undefined): string {
   if (!value) {
@@ -98,48 +101,68 @@ function buildSearchHaystack(input: DeviceIdentityInput): string {
   );
 }
 
-export function resolveDeviceIconFamily(input: DeviceIdentityInput): DeviceIconFamily {
+export function resolveAutoIconKey(input: DeviceIdentityInput): DeviceIconKey {
   const role = normalizeValue(input.role);
   const hwModel = normalizeValue(input.hwModel);
   const haystack = buildSearchHaystack(input);
 
+  if (
+    hasAnyToken(role, ['phone']) ||
+    hasAnyToken(haystack, [' phone ', 'android', 'iphone'])
+  ) {
+    return 'phone';
+  }
+
   if (hasAnyToken(role, ['home', 'base']) || hasAnyToken(haystack, ['home node', 'base station'])) {
-    return DEVICE_ICON_FAMILIES.home;
+    return 'home';
   }
 
-  if (hasAnyToken(role, ['gateway']) || hasAnyToken(haystack, ['gateway'])) {
-    return DEVICE_ICON_FAMILIES.gateway;
-  }
-
-  if (hasAnyToken(hwModel, ['t beam', 'tbeam'])) {
-    return DEVICE_ICON_FAMILIES.tbeam;
-  }
-
-  if (hasAnyToken(hwModel, ['heltec'])) {
-    return DEVICE_ICON_FAMILIES.heltec;
-  }
-
-  if (hasAnyToken(hwModel, ['rak', 'wisblock'])) {
-    return DEVICE_ICON_FAMILIES.rak;
-  }
-
-  if (hasAnyToken(hwModel, ['lilygo', 'ttgo', 't echo', 't deck', 't lora'])) {
-    return DEVICE_ICON_FAMILIES.lilygo;
-  }
-
-  if (hasAnyToken(role, ['router', 'relay', 'repeater'])) {
-    return DEVICE_ICON_FAMILIES.router;
-  }
-
-  if (hasAnyToken(role, ['sensor'])) {
-    return DEVICE_ICON_FAMILIES.sensor;
+  if (hasAnyToken(role, ['gateway', 'router', 'relay', 'repeater']) || hasAnyToken(haystack, ['gateway'])) {
+    return 'gateway';
   }
 
   if (hasAnyToken(role, ['tracker', 'client', 'mobile'])) {
-    return DEVICE_ICON_FAMILIES.tracker;
+    return 'tracker';
   }
 
-  return DEVICE_ICON_FAMILIES.generic;
+  if (hasAnyToken(hwModel, ['t beam', 'tbeam'])) {
+    return 'tbeam';
+  }
+
+  if (hasAnyToken(hwModel, ['heltec'])) {
+    return 'heltec';
+  }
+
+  if (hasAnyToken(hwModel, ['rak', 'wisblock'])) {
+    return 'rak';
+  }
+
+  if (hasAnyToken(hwModel, ['wio', 'seeed'])) {
+    return 'wio';
+  }
+
+  if (
+    hasAnyToken(hwModel, ['lilygo', 'ttgo', 't echo', 't deck', 't lora']) ||
+    hasAnyToken(role, ['sensor', 'node'])
+  ) {
+    return 'node';
+  }
+
+  return 'unknown';
+}
+
+export function getEffectiveIconKey(input: DeviceIdentityInput): DeviceIconKey {
+  const overrideKey = typeof input.iconKey === 'string' ? input.iconKey.trim() : '';
+  if (input.iconOverride === true && overrideKey.length > 0) {
+    return isDeviceIconKey(overrideKey) ? overrideKey : 'unknown';
+  }
+
+  const autoKey = resolveAutoIconKey(input);
+  return isDeviceIconKey(autoKey) ? autoKey : 'unknown';
+}
+
+export function getDeviceIconDefinition(iconKey: DeviceIconKey): DeviceIconDefinition {
+  return DEVICE_ICON_REGISTRY[iconKey] ?? DEVICE_ICON_REGISTRY.unknown;
 }
 
 export function getDevicePrimaryLabel(input: DeviceIdentityInput): string {
@@ -185,13 +208,15 @@ export function buildDeviceIdentityLabel(input: DeviceIdentityInput): string {
 }
 
 export function formatDeviceOptionLabel(input: DeviceIdentityInput): string {
-  const family = resolveDeviceIconFamily(input);
-  const badgePrefix = family.badge ? `[${family.badge}] ` : '';
+  const resolvedKey = getEffectiveIconKey(input);
+  const icon = getDeviceIconDefinition(resolvedKey);
+  const badgePrefix = icon.badgeText ? `[${icon.badgeText}] ` : '';
   return `${badgePrefix}${buildDeviceIdentityLabel(input)}`;
 }
 
 type DeviceIconProps = {
   device: DeviceIdentityInput;
+  iconKey?: DeviceIconKey;
   size?: number;
   showBadge?: boolean;
   className?: string;
@@ -200,20 +225,27 @@ type DeviceIconProps = {
 
 export default function DeviceIcon({
   device,
+  iconKey,
   size = 16,
   showBadge = true,
   className,
   title
 }: DeviceIconProps) {
-  const family = resolveDeviceIconFamily(device);
-  const iconTitle = title ?? family.label;
+  const resolvedKey = iconKey ?? getEffectiveIconKey(device);
+  const iconDefinition = getDeviceIconDefinition(resolvedKey);
+  const iconTitle = title ?? iconDefinition.label;
   const classes = ['device-identity-icon', className].filter(Boolean).join(' ');
 
   return (
     <span className={classes} title={iconTitle} aria-hidden="true">
-      <family.Icon className="device-identity-icon__glyph" size={size} stroke={1.9} aria-hidden />
-      {showBadge && family.badge ? (
-        <span className="device-identity-icon__badge">{family.badge}</span>
+      <iconDefinition.IconComponent
+        className="device-identity-icon__glyph"
+        size={size}
+        stroke={1.9}
+        aria-hidden
+      />
+      {showBadge && iconDefinition.badgeText ? (
+        <span className="device-identity-icon__badge">{iconDefinition.badgeText}</span>
       ) : null}
     </span>
   );

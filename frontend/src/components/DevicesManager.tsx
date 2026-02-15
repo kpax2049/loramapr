@@ -4,6 +4,8 @@ import { ApiError } from '../api/http';
 import { useArchiveDevice, useDeleteDevice, useDevices, useUpdateDevice } from '../query/hooks';
 import DeviceIcon, {
   buildDeviceIdentityLabel,
+  getDeviceIconDefinition,
+  getEffectiveIconKey,
   getDevicePrimaryLabel,
   getDeviceSecondaryLabel
 } from './DeviceIcon';
@@ -346,6 +348,8 @@ export default function DevicesManager({
           const identityPrimary = getDevicePrimaryLabel(device);
           const identitySecondary = getDeviceSecondaryLabel(device, identityPrimary);
           const identityLabel = buildDeviceIdentityLabel(device);
+          const iconKey = getEffectiveIconKey(device);
+          const iconDefinition = getDeviceIconDefinition(iconKey);
           return (
             <div
               key={device.id}
@@ -404,7 +408,13 @@ export default function DevicesManager({
                 }
               >
                 <div className="devices-manager__identity">
-                  <DeviceIcon device={device} className="devices-manager__device-icon" size={15} />
+                  <DeviceIcon
+                    device={device}
+                    iconKey={iconKey}
+                    className="devices-manager__device-icon"
+                    size={15}
+                    title={iconDefinition.label}
+                  />
                   <div className="devices-manager__identity-text">
                     <span className="devices-manager__identity-primary">{identityPrimary}</span>
                     {identitySecondary ? (

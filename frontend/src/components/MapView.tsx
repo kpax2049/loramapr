@@ -20,7 +20,13 @@ import {
 import L from 'leaflet';
 import simplify from 'simplify-js';
 import type { CoverageBin } from '../api/types';
-import DeviceIcon, { buildDeviceIdentityLabel } from './DeviceIcon';
+import DeviceIcon, {
+  buildDeviceIdentityLabel,
+  getDeviceIconDefinition,
+  getEffectiveIconKey,
+  type DeviceIdentityInput,
+  type DeviceIconKey
+} from './DeviceIcon';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -78,6 +84,8 @@ type LatestLocationMarker = {
   shortName?: string | null;
   hwModel?: string | null;
   role?: string | null;
+  iconOverride?: boolean | null;
+  iconKey?: DeviceIconKey | string | null;
   capturedAt: string | null;
   lat: number;
   lon: number;
@@ -459,6 +467,25 @@ ref
     return { bins };
   }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric]);
 
+  const latestLocationIconInput = useMemo<DeviceIdentityInput | null>(() => {
+    if (!latestLocationMarker) {
+      return null;
+    }
+    return {
+      name: latestLocationMarker.deviceName,
+      longName: latestLocationMarker.longName,
+      shortName: latestLocationMarker.shortName,
+      deviceUid: latestLocationMarker.deviceUid,
+      hwModel: latestLocationMarker.hwModel,
+      role: latestLocationMarker.role,
+      iconOverride: latestLocationMarker.iconOverride,
+      iconKey: latestLocationMarker.iconKey
+    };
+  }, [latestLocationMarker]);
+
+  const latestLocationIconKey = latestLocationIconInput ? getEffectiveIconKey(latestLocationIconInput) : 'unknown';
+  const latestLocationIconDefinition = getDeviceIconDefinition(latestLocationIconKey);
+
   return (
     <MapContainer
       center={center}
@@ -629,25 +656,18 @@ ref
                   <span>Device</span>
                   <strong className="map-latest-tooltip__device">
                     <DeviceIcon
-                      device={{
-                        name: latestLocationMarker.deviceName,
-                        longName: latestLocationMarker.longName,
-                        shortName: latestLocationMarker.shortName,
-                        deviceUid: latestLocationMarker.deviceUid,
-                        hwModel: latestLocationMarker.hwModel,
-                        role: latestLocationMarker.role
-                      }}
+                      device={latestLocationIconInput ?? {}}
+                      iconKey={latestLocationIconKey}
                       className="map-latest-tooltip__device-icon"
                       size={13}
+                      title={latestLocationIconDefinition.label}
                     />
                     <span>
-                      {buildDeviceIdentityLabel({
-                        name: latestLocationMarker.deviceName,
-                        longName: latestLocationMarker.longName,
-                        shortName: latestLocationMarker.shortName,
-                        deviceUid: latestLocationMarker.deviceUid,
-                        hwModel: latestLocationMarker.hwModel
-                      })}
+                      {buildDeviceIdentityLabel(
+                        latestLocationIconInput ?? {
+                          deviceUid: latestLocationMarker.deviceUid
+                        }
+                      )}
                     </span>
                   </strong>
                 </div>

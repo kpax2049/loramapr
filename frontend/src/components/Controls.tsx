@@ -19,7 +19,8 @@ import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
 import DeviceIcon, {
   buildDeviceIdentityLabel,
-  formatDeviceOptionLabel
+  getDeviceIconDefinition,
+  getEffectiveIconKey
 } from './DeviceIcon';
 import DevicesManager from './DevicesManager';
 
@@ -340,6 +341,8 @@ export default function Controls({
   const meshtasticAppVersion = normalizeOptionalText(deviceDetail?.appVersion);
   const meshtasticRole = normalizeOptionalText(deviceDetail?.role);
   const meshtasticLastNodeInfoAt = deviceDetail?.lastNodeInfoAt ?? null;
+  const detailIconKey = deviceDetail ? getEffectiveIconKey(deviceDetail) : 'unknown';
+  const detailIcon = getDeviceIconDefinition(detailIconKey);
   const hasMeshtasticSection = Boolean(
     meshtasticLongName ||
       meshtasticShortName ||
@@ -434,7 +437,10 @@ export default function Controls({
             </option>
             {devices.map((device) => {
               const hasLatestLocation = Boolean(device.latestMeasurementAt);
-              const optionLabel = formatDeviceOptionLabel(device);
+              const iconKey = getEffectiveIconKey(device);
+              const iconDefinition = getDeviceIconDefinition(iconKey);
+              const badgePrefix = iconDefinition.badgeText ? `[${iconDefinition.badgeText}] ` : '';
+              const optionLabel = `${badgePrefix}${buildDeviceIdentityLabel(device)}`;
               return (
                 <option
                   key={device.id}
@@ -495,7 +501,13 @@ export default function Controls({
                   <div className="device-details__row">
                     <span>deviceUid</span>
                     <strong title={buildDeviceIdentityLabel(deviceDetail)} className="device-details__identity">
-                      <DeviceIcon device={deviceDetail} size={15} className="device-details__identity-icon" />
+                      <DeviceIcon
+                        device={deviceDetail}
+                        iconKey={detailIconKey}
+                        size={15}
+                        className="device-details__identity-icon"
+                        title={detailIcon.label}
+                      />
                       <span>{deviceDetail.deviceUid}</span>
                     </strong>
                   </div>

@@ -1,7 +1,11 @@
 import type { Device } from '../api/types';
 import { useAutoSession } from '../query/hooks';
 import { useSessions } from '../query/sessions';
-import DeviceIcon, { getDevicePrimaryLabel } from './DeviceIcon';
+import DeviceIcon, {
+  getDeviceIconDefinition,
+  getDevicePrimaryLabel,
+  getEffectiveIconKey
+} from './DeviceIcon';
 
 type SelectedDeviceHeaderProps = {
   device: Device | null;
@@ -58,6 +62,8 @@ export default function SelectedDeviceHeader({
 
   const deviceName = getDevicePrimaryLabel(device ?? {});
   const deviceUid = device?.deviceUid ?? null;
+  const iconKey = getEffectiveIconKey(device ?? {});
+  const iconDefinition = getDeviceIconDefinition(iconKey);
 
   return (
     <div className="selected-device-header">
@@ -65,9 +71,11 @@ export default function SelectedDeviceHeader({
         <div className="selected-device-header__identity-wrap">
           <DeviceIcon
             device={device ?? {}}
+            iconKey={iconKey}
             className="selected-device-header__icon"
             size={17}
             showBadge={Boolean(device)}
+            title={iconDefinition.label}
           />
           <div className="selected-device-header__identity">
             <strong>{deviceName}</strong>

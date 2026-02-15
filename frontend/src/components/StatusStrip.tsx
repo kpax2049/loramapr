@@ -1,4 +1,8 @@
-import DeviceIcon, { type DeviceIdentityInput } from './DeviceIcon';
+import DeviceIcon, {
+  getDeviceIconDefinition,
+  getEffectiveIconKey,
+  type DeviceIdentityInput
+} from './DeviceIcon';
 
 type StatusStripProps = {
   device?: DeviceIdentityInput | null;
@@ -32,13 +36,23 @@ export default function StatusStrip({
   themeMode = 'system',
   onThemeModeChange
 }: StatusStripProps) {
+  const iconKey = getEffectiveIconKey(device ?? {});
+  const iconDefinition = getDeviceIconDefinition(iconKey);
+
   return (
     <div className="status-strip" aria-live="polite">
       <span className="status-strip__item">
         <span className="status-strip__label">Device</span>
         <span className="status-strip__value status-strip__value--device">
           {device ? (
-            <DeviceIcon device={device} className="status-strip__device-icon" showBadge={false} size={13} />
+            <DeviceIcon
+              device={device}
+              iconKey={iconKey}
+              className="status-strip__device-icon"
+              showBadge={false}
+              size={13}
+              title={iconDefinition.label}
+            />
           ) : null}
           <span>{deviceLabel}</span>
         </span>

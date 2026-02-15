@@ -1,7 +1,9 @@
 import DeviceIcon, {
   DEVICE_ICON_CATALOG,
   buildDeviceIdentityLabel,
-  resolveDeviceIconFamily,
+  getDeviceIconDefinition,
+  resolveAutoIconKey,
+  type DeviceIconKey,
   type DeviceIdentityInput
 } from '../DeviceIcon';
 
@@ -18,17 +20,18 @@ const SAMPLE_DEVICES: Array<{ label: string; device: DeviceIdentityInput }> = [
   { label: 'Unknown fallback', device: { deviceUid: '!unknown01' } }
 ];
 
-const FAMILY_PREVIEW_INPUTS: Record<string, DeviceIdentityInput> = {
+const FAMILY_PREVIEW_INPUTS: Record<DeviceIconKey, DeviceIdentityInput> = {
+  auto: { deviceUid: '!auto' },
+  unknown: { deviceUid: '!unknown' },
   home: { role: 'home' },
   gateway: { role: 'gateway' },
   heltec: { hwModel: 'Heltec v3' },
   tbeam: { hwModel: 'LilyGO T-Beam' },
   rak: { hwModel: 'RAK4631' },
-  lilygo: { hwModel: 'LilyGO T-Echo' },
-  router: { role: 'router' },
+  wio: { hwModel: 'Wio tracker' },
   tracker: { role: 'tracker' },
-  sensor: { role: 'sensor' },
-  generic: { deviceUid: '!generic' }
+  node: { role: 'sensor' },
+  phone: { role: 'phone' }
 };
 
 export default function DeviceIconGallery() {
@@ -48,7 +51,7 @@ export default function DeviceIconGallery() {
               <DeviceIcon device={FAMILY_PREVIEW_INPUTS[family.key]} title={family.label} />
               <div className="device-icon-gallery__card-title">{family.label}</div>
               <div className="device-icon-gallery__card-subtitle">
-                {family.badge ? `badge: ${family.badge}` : 'badge: none'}
+                {family.badgeText ? `badge: ${family.badgeText}` : 'badge: none'}
               </div>
             </article>
           ))}
@@ -59,7 +62,8 @@ export default function DeviceIconGallery() {
         <h2>Sample devices</h2>
         <div className="device-icon-gallery__sample-list">
           {SAMPLE_DEVICES.map((sample) => {
-            const resolved = resolveDeviceIconFamily(sample.device);
+            const resolvedKey = resolveAutoIconKey(sample.device);
+            const resolved = getDeviceIconDefinition(resolvedKey);
             return (
               <article key={sample.label} className="device-icon-gallery__sample-row">
                 <DeviceIcon device={sample.device} title={resolved.label} />
@@ -69,7 +73,7 @@ export default function DeviceIconGallery() {
                     {buildDeviceIdentityLabel(sample.device)}
                   </div>
                 </div>
-                <div className="device-icon-gallery__sample-family">{resolved.key}</div>
+                <div className="device-icon-gallery__sample-family">{resolvedKey}</div>
               </article>
             );
           })}
