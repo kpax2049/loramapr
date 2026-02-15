@@ -2495,6 +2495,12 @@
   gap: 0.75rem;
 }
 
+.sessions-panel__header-meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+}
+
 .sessions-panel__header h3 {
   margin: 0;
   font-size: 1rem;
@@ -2506,6 +2512,17 @@
 .sessions-panel__device {
   font-size: 0.8rem;
   color: var(--panel-muted);
+}
+
+.sessions-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
 }
 
 .sessions-panel__actions {
@@ -2595,6 +2612,84 @@
 .sessions-panel__item {
   display: grid;
   gap: 0.25rem;
+}
+
+.sessions-panel__item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.sessions-panel__item-select {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+  flex: 1 1 auto;
+}
+
+.sessions-panel__item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.sessions-panel__badge {
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  color: var(--panel-muted);
+  border-radius: 999px;
+  padding: 0.08rem 0.42rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.sessions-panel__icon-button {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sessions-panel__icon-button:not(:disabled):hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+  color: var(--panel-text);
+}
+
+.sessions-panel__icon-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sessions-panel__rename-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  font-size: 0.82rem;
+}
+
+.sessions-panel__rename-error {
+  color: var(--danger-fg);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
 }
 
 .sessions-panel__item.is-selected {

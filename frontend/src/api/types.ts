@@ -79,6 +79,7 @@ export type Session = {
   startedAt: string;
   endedAt?: string | null;
   notes?: string | null;
+  isArchived: boolean;
 };
 
 export type SessionTimeline = {

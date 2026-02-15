@@ -392,10 +392,14 @@ export async function reprocessLorawanBatch(
 
 export async function listSessions(
   deviceId: string,
+  params?: { includeArchived?: boolean },
   options?: RequestOptions
 ): Promise<ListResponse<Session>> {
-  const params = new URLSearchParams({ deviceId });
-  return getJson<ListResponse<Session>>(`/api/sessions?${params.toString()}`, options);
+  const query = new URLSearchParams({ deviceId });
+  if (params?.includeArchived) {
+    query.set('includeArchived', 'true');
+  }
+  return getJson<ListResponse<Session>>(`/api/sessions?${query.toString()}`, options);
 }
 
 export async function startSession(input: { deviceId: string; name?: string }): Promise<Session> {
@@ -410,7 +414,11 @@ export async function updateSession(
   id: string,
   input: { name?: string; notes?: string }
 ): Promise<Session> {
-  return requestJson<Session>(`/api/sessions/${id}`, { method: 'PATCH', json: input });
+  return requestJson<Session>(`/api/sessions/${id}`, {
+    method: 'PATCH',
+    json: input,
+    ...withQueryApiKey()
+  });
 }
 
 export async function getSessionTimeline(

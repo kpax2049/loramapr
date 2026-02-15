@@ -10,16 +10,23 @@ import {
 } from '../api/endpoints';
 import type { ListResponse, Session, SessionTimeline, SessionWindowResponse } from '../api/types';
 import type { SessionWindowParams } from '../api/endpoints';
+import type { QueryKey } from '@tanstack/react-query';
 
 type QueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
 
-export function useSessions(deviceId?: string, options?: QueryOptions<ListResponse<Session>>) {
-  const enabled = options?.enabled ?? Boolean(deviceId);
+type SessionsQueryOptions = QueryOptions<ListResponse<Session>> & {
+  includeArchived?: boolean;
+};
+
+export function useSessions(deviceId?: string, options?: SessionsQueryOptions) {
+  const includeArchived = options?.includeArchived ?? false;
+  const { includeArchived: _includeArchived, ...queryOptions } = options ?? {};
+  const enabled = queryOptions.enabled ?? Boolean(deviceId);
 
   return useQuery<ListResponse<Session>>({
-    queryKey: ['sessions', deviceId ?? null],
-    queryFn: ({ signal }) => listSessions(deviceId as string, { signal }),
-    ...options,
+    queryKey: ['sessions', deviceId ?? null, includeArchived],
+    queryFn: ({ signal }) => listSessions(deviceId as string, { includeArchived }, { signal }),
+    ...queryOptions,
     enabled: enabled && Boolean(deviceId)
   });
 }
@@ -109,19 +116,67 @@ export function useStopSession(options?: MutationOptions<Session, { sessionId: s
 }
 
 export function useUpdateSession(
-  options?: MutationOptions<Session, { id: string; input: { name?: string; notes?: string } }>
+  options?: MutationOptions<Session, { id: string; deviceId: string; input: { name?: string; notes?: string } }>
 ) {
   const queryClient = useQueryClient();
+  const { onError, onSettled, onSuccess, ...mutationOptions } = options ?? {};
 
-  return useMutation<Session, Error, { id: string; input: { name?: string; notes?: string } }>({
+  return useMutation<
+    Session,
+    Error,
+    { id: string; deviceId: string; input: { name?: string; notes?: string } },
+    { previousEntries: Array<[QueryKey, ListResponse<Session> | undefined]> }
+  >({
+    ...mutationOptions,
     mutationFn: ({ id, input }) => updateSession(id, input),
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['sessions', variables.deviceId] });
+      const previousEntries = queryClient.getQueriesData<ListResponse<Session>>({
+        queryKey: ['sessions', variables.deviceId]
+      });
+
+      queryClient.setQueriesData<ListResponse<Session>>(
+        { queryKey: ['sessions', variables.deviceId] },
+        (current) => {
+          if (!current) {
+            return current;
+          }
+          return {
+            ...current,
+            items: current.items.map((session) =>
+              session.id === variables.id
+                ? {
+                    ...session,
+                    ...(variables.input.name !== undefined ? { name: variables.input.name } : {}),
+                    ...(variables.input.notes !== undefined ? { notes: variables.input.notes } : {})
+                  }
+                : session
+            )
+          };
+        }
+      );
+
+      return { previousEntries };
+    },
+    onError: (_error, variables, context) => {
+      context?.previousEntries.forEach(([key, data]) => {
+        queryClient.setQueryData(key, data);
+      });
+      onError?.(_error, variables, context);
+    },
     onSuccess: (...args) => {
       const session = args[0];
       if (session?.deviceId) {
         queryClient.invalidateQueries({ queryKey: ['sessions', session.deviceId] });
       }
-      options?.onSuccess?.(...args);
+      onSuccess?.(...args);
     },
-    ...options
+    onSettled: (...args) => {
+      const [, , variables] = args;
+      if (variables?.deviceId) {
+        queryClient.invalidateQueries({ queryKey: ['sessions', variables.deviceId] });
+      }
+      onSettled?.(...args);
+    }
   });
 }

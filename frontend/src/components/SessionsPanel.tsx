@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useSessions, useStartSession, useStopSession } from '../query/sessions';
+import { IconCheck, IconPencil, IconX } from '@tabler/icons-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSessions, useStartSession, useStopSession, useUpdateSession } from '../query/sessions';
 import type { Session } from '../api/types';
 
 type SessionsPanelProps = {
@@ -8,6 +9,16 @@ type SessionsPanelProps = {
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
 };
+
+const SHOW_ARCHIVED_KEY = 'sessionsShowArchived';
+const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
+
+function readStoredShowArchived(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(SHOW_ARCHIVED_KEY) === 'true';
+}
 
 function formatTimestamp(value?: string | null): string {
   if (!value) {
@@ -24,6 +35,18 @@ function sessionLabel(session: Session): string {
   return session.name?.trim() || `Session ${session.id.slice(0, 8)}`;
 }
 
+function activeSessionLabel(session: Session): string {
+  return session.name?.trim() || 'Active session';
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (typeof error === 'object' && error && 'status' in error) {
+    const status = (error as { status?: number }).status;
+    return typeof status === 'number' ? status : null;
+  }
+  return null;
+}
+
 export default function SessionsPanel({
   deviceId,
   selectedSessionId,
@@ -31,10 +54,18 @@ export default function SessionsPanel({
   onStartSession
 }: SessionsPanelProps) {
   const [sessionName, setSessionName] = useState('');
-  const { data: sessionsResponse, isLoading, error } = useSessions(deviceId ?? undefined);
+  const [showArchived, setShowArchived] = useState<boolean>(() => readStoredShowArchived());
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const { data: sessionsResponse, isLoading, error } = useSessions(deviceId ?? undefined, {
+    includeArchived: showArchived
+  });
   const sessions = sessionsResponse?.items ?? [];
   const startMutation = useStartSession();
   const stopMutation = useStopSession();
+  const updateSessionMutation = useUpdateSession();
 
   const activeSession = useMemo(
     () => sessions.find((session) => !session.endedAt) ?? null,
@@ -44,6 +75,19 @@ export default function SessionsPanel({
     () => sessions.filter((session) => Boolean(session.endedAt)),
     [sessions]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(SHOW_ARCHIVED_KEY, showArchived ? 'true' : 'false');
+  }, [showArchived]);
+
+  useEffect(() => {
+    setEditingSessionId(null);
+    setRenameDraft('');
+    setRenameError(null);
+  }, [deviceId]);
 
   const handleStart = () => {
     if (!deviceId || startMutation.isPending) {
@@ -69,15 +113,167 @@ export default function SessionsPanel({
     stopMutation.mutate({ sessionId: activeSession.id });
   };
 
+  const beginRename = (session: Session) => {
+    if (!hasQueryApiKey) {
+      return;
+    }
+    setEditingSessionId(session.id);
+    setRenameDraft(session.name?.trim() ?? '');
+    setRenameError(null);
+  };
+
+  const cancelRename = () => {
+    setEditingSessionId(null);
+    setRenameDraft('');
+    setRenameError(null);
+  };
+
+  const saveRename = (session: Session) => {
+    if (!hasQueryApiKey || updateSessionMutation.isPending) {
+      return;
+    }
+    const nextName = renameDraft.trim();
+    const currentName = session.name?.trim() ?? '';
+    if (nextName === currentName) {
+      cancelRename();
+      return;
+    }
+
+    setRenameError(null);
+    updateSessionMutation.mutate(
+      {
+        id: session.id,
+        deviceId: session.deviceId,
+        input: { name: nextName }
+      },
+      {
+        onSuccess: () => {
+          cancelRename();
+        },
+        onError: (mutationError) => {
+          const status = getErrorStatus(mutationError);
+          setRenameError(
+            status === 401 || status === 403
+              ? 'Renaming sessions requires QUERY key'
+              : 'Could not rename session'
+          );
+        }
+      }
+    );
+  };
+
+  const renderSessionRow = (session: Session, isActive = false) => {
+    const isSelected = selectedSessionId === session.id;
+    const isEditing = editingSessionId === session.id;
+    const title = isActive ? activeSessionLabel(session) : sessionLabel(session);
+
+    return (
+      <div
+        key={session.id}
+        className={`sessions-panel__item ${isSelected ? 'is-selected' : ''} ${
+          isEditing ? 'is-editing' : ''
+        }`}
+      >
+        <div className="sessions-panel__item-top">
+          {isEditing ? (
+            <input
+              type="text"
+              className="sessions-panel__rename-input"
+              value={renameDraft}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  saveRename(session);
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelRename();
+                }
+              }}
+              aria-label="Edit session name"
+              disabled={updateSessionMutation.isPending}
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              className="sessions-panel__item-select"
+              onClick={() => onSelectSessionId(session.id)}
+            >
+              <span className="sessions-panel__title">{title}</span>
+            </button>
+          )}
+          <div className="sessions-panel__item-actions">
+            {session.isArchived ? <span className="sessions-panel__badge">Archived</span> : null}
+            {hasQueryApiKey ? (
+              isEditing ? (
+                <>
+                  <button
+                    type="button"
+                    className="sessions-panel__icon-button"
+                    onClick={() => saveRename(session)}
+                    disabled={updateSessionMutation.isPending}
+                    aria-label="Save session name"
+                  >
+                    <IconCheck size={14} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="sessions-panel__icon-button"
+                    onClick={cancelRename}
+                    disabled={updateSessionMutation.isPending}
+                    aria-label="Cancel rename"
+                  >
+                    <IconX size={14} aria-hidden="true" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="sessions-panel__icon-button"
+                  onClick={() => beginRename(session)}
+                  aria-label={`Rename ${title}`}
+                  title="Rename session"
+                >
+                  <IconPencil size={14} aria-hidden="true" />
+                </button>
+              )
+            ) : null}
+          </div>
+        </div>
+        <div className="sessions-panel__meta">
+          <span>Start: {formatTimestamp(session.startedAt)}</span>
+          {!isActive ? <span>End: {formatTimestamp(session.endedAt)}</span> : null}
+        </div>
+        {isEditing && renameError ? (
+          <div className="sessions-panel__rename-error" role="status">
+            {renameError}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <section className="sessions-panel" aria-label="Sessions">
       <div className="sessions-panel__header">
         <h3>Sessions</h3>
-        {deviceId ? (
-          <span className="sessions-panel__device">Device selected</span>
-        ) : (
-          <span className="sessions-panel__device">Select a device</span>
-        )}
+        <div className="sessions-panel__header-meta">
+          {deviceId ? (
+            <span className="sessions-panel__device">Device selected</span>
+          ) : (
+            <span className="sessions-panel__device">Select a device</span>
+          )}
+          <label className="sessions-panel__toggle">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+            Show archived
+          </label>
+        </div>
       </div>
 
       <div className="sessions-panel__actions">
@@ -97,20 +293,7 @@ export default function SessionsPanel({
 
       {activeSession && (
         <div className="sessions-panel__active">
-          <button
-            type="button"
-            className={`sessions-panel__item ${
-              selectedSessionId === activeSession.id ? 'is-selected' : ''
-            }`}
-            onClick={() => onSelectSessionId(activeSession.id)}
-          >
-            <div className="sessions-panel__title">
-              {activeSession.name?.trim() || 'Active session'}
-            </div>
-            <div className="sessions-panel__meta">
-              <span>Start: {formatTimestamp(activeSession.startedAt)}</span>
-            </div>
-          </button>
+          {renderSessionRow(activeSession, true)}
           <button
             type="button"
             className="sessions-panel__stop"
@@ -129,22 +312,7 @@ export default function SessionsPanel({
         {!isLoading && sessions.length === 0 && (
           <div className="sessions-panel__empty">No sessions yet.</div>
         )}
-        {pastSessions.map((session) => (
-          <button
-            type="button"
-            key={session.id}
-            className={`sessions-panel__item ${
-              selectedSessionId === session.id ? 'is-selected' : ''
-            }`}
-            onClick={() => onSelectSessionId(session.id)}
-          >
-            <div className="sessions-panel__title">{sessionLabel(session)}</div>
-            <div className="sessions-panel__meta">
-              <span>Start: {formatTimestamp(session.startedAt)}</span>
-              <span>End: {formatTimestamp(session.endedAt)}</span>
-            </div>
-          </button>
-        ))}
+        {pastSessions.map((session) => renderSessionRow(session))}
       </div>
     </section>
   );
