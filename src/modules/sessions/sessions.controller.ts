@@ -1,4 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiKeyScope } from '@prisma/client';
+import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
+import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { StartSessionDto } from './dto/start-session.dto';
 import { StopSessionDto } from './dto/stop-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -45,6 +48,8 @@ export class SessionsController {
   }
 
   @Patch(':id')
+  @UseGuards(ApiKeyGuard)
+  @RequireApiKeyScope(ApiKeyScope.QUERY)
   async update(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
     return this.sessionsService.update(id, dto);
   }

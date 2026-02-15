@@ -46,22 +46,47 @@ export class SessionsService {
   }
 
   async update(id: string, dto: UpdateSessionDto) {
-    const data = {
-      name: dto.name ?? undefined,
-      notes: dto.notes ?? undefined
-    };
-
-    try {
-      return await this.prisma.session.update({
-        where: { id },
-        data
-      });
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        throw new NotFoundException('Session not found');
+    const existing = await this.prisma.session.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        isArchived: true
       }
-      throw error;
+    });
+    if (!existing) {
+      throw new NotFoundException('Session not found');
     }
+
+    const data: {
+      name?: string;
+      notes?: string;
+      isArchived?: boolean;
+      archivedAt?: Date | null;
+    } = {};
+
+    if (dto.name !== undefined) {
+      data.name = dto.name;
+    }
+    if (dto.notes !== undefined) {
+      data.notes = dto.notes;
+    }
+    if (dto.isArchived !== undefined) {
+      data.isArchived = dto.isArchived;
+      if (dto.isArchived !== existing.isArchived) {
+        data.archivedAt = dto.isArchived ? new Date() : null;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return this.prisma.session.findUnique({
+        where: { id }
+      });
+    }
+
+    return this.prisma.session.update({
+      where: { id },
+      data
+    });
   }
 
   async list(deviceId?: string, includeArchived = false) {
@@ -260,13 +285,4 @@ function sampleItems<T>(items: T[], sample: number): T[] {
     result.push(items[index]);
   }
   return result;
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === 'P2025'
-  );
 }
