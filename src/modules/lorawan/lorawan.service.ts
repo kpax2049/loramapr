@@ -386,6 +386,8 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
     fields: MeshtasticNodeInfoFields,
     timestamp: Date
   ): Promise<void> {
+    // Keep icon mapping frontend-driven unless the user explicitly overrides it.
+    // This worker intentionally does not set iconKey from Meshtastic metadata.
     const updateData: Prisma.DeviceUpdateInput = {
       lastSeenAt: timestamp,
       lastNodeInfoAt: timestamp
@@ -393,7 +395,8 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
     const createData: Prisma.DeviceCreateInput = {
       deviceUid,
       lastSeenAt: timestamp,
-      lastNodeInfoAt: timestamp
+      lastNodeInfoAt: timestamp,
+      iconOverride: false
     };
 
     if (fields.hwModel !== undefined) {
