@@ -20,6 +20,18 @@ DROP_FIRST=false
 NO_STOP_API=false
 BACKUP_FILE=""
 
+prompt_confirm() {
+  local expected="$1"
+  local prompt="$2"
+  local input=""
+
+  [[ -t 0 ]] || die "Interactive confirmation required. Re-run with a TTY or set CONFIRM_RESTORE=1."
+
+  echo "$prompt"
+  read -r input
+  [[ "$input" == "$expected" ]] || die "Confirmation failed. Expected '$expected'."
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --drop-first)
@@ -55,9 +67,33 @@ done
 if [[ "$BACKUP_FILE" != /* ]]; then
   BACKUP_FILE="$REPO_ROOT/$BACKUP_FILE"
 fi
+
+case "$BACKUP_FILE" in
+  *.sql|*.sql.gz) ;;
+  *)
+    die "BACKUP_FILE must end with .sql or .sql.gz: $BACKUP_FILE"
+    ;;
+esac
+
 [[ -f "$BACKUP_FILE" ]] || die "Backup file not found: $BACKUP_FILE"
 
 init_db_common
+
+POSTGRES_CONTAINER_ID="$(compose_cmd ps -q postgres 2>/dev/null || true)"
+POSTGRES_CONTAINER_NAME="$(docker inspect -f '{{.Name}}' "$POSTGRES_CONTAINER_ID" 2>/dev/null || true)"
+POSTGRES_CONTAINER_NAME="${POSTGRES_CONTAINER_NAME#/}"
+
+echo "Restore target DB: $POSTGRES_DB"
+echo "Restore target container: ${POSTGRES_CONTAINER_NAME:-$POSTGRES_CONTAINER_ID}"
+echo "Restore source file: $BACKUP_FILE"
+
+if [[ "${CONFIRM_RESTORE:-0}" != "1" ]]; then
+  prompt_confirm "RESTORE" "Type RESTORE to continue"
+fi
+
+if [[ "$DROP_FIRST" == "true" ]]; then
+  prompt_confirm "DROP" "Type DROP to continue with --drop-first"
+fi
 
 API_SERVICE=""
 API_WAS_STOPPED=false
