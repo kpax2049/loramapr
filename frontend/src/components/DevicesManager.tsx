@@ -362,6 +362,13 @@ export default function DevicesManager({
               }}
             >
               <div className="devices-manager__cell devices-manager__cell--name">
+                <DeviceOnlineDot
+                  latestMeasurementAt={device.latestMeasurementAt}
+                  latestWebhookReceivedAt={null}
+                  latestWebhookSource={null}
+                  formatRelativeTime={formatRelativeTime}
+                  className="devices-manager__online-dot"
+                />
                 <input
                   type="text"
                   value={inlineName}
@@ -385,13 +392,6 @@ export default function DevicesManager({
                   </button>
                 ) : null}
                 {device.isArchived ? <span className="devices-manager__badge">Archived</span> : null}
-                <DeviceOnlineDot
-                  latestMeasurementAt={device.latestMeasurementAt}
-                  latestWebhookReceivedAt={null}
-                  latestWebhookSource={null}
-                  formatRelativeTime={formatRelativeTime}
-                  className="devices-manager__online-dot"
-                />
               </div>
               <div
                 className="devices-manager__cell devices-manager__cell--uid"

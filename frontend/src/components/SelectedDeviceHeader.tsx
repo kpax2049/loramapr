@@ -86,19 +86,21 @@ export default function SelectedDeviceHeader({
             title={iconDefinition.label}
           />
           <div className="selected-device-header__identity">
-            <strong>{deviceName}</strong>
-            <span className="selected-device-header__uid-row">
-              {deviceUid ? (
-                <span title={deviceUid}>{truncateDeviceUid(deviceUid)}</span>
-              ) : (
-                <span>select a device</span>
-              )}
+            <div className="selected-device-header__name-row">
               <DeviceOnlineDot
                 latestMeasurementAt={latestMeasurementAt}
                 latestWebhookReceivedAt={latestWebhookReceivedAt}
                 latestWebhookSource={latestWebhookSource}
                 className="selected-device-header__online-dot"
               />
+              <strong>{deviceName}</strong>
+            </div>
+            <span className="selected-device-header__uid-row">
+              {deviceUid ? (
+                <span title={deviceUid}>{truncateDeviceUid(deviceUid)}</span>
+              ) : (
+                <span>select a device</span>
+              )}
             </span>
           </div>
         </div>

@@ -10,6 +10,7 @@ import {
   useUpdateAutoSession,
   useUpdateDevice
 } from '../query/hooks';
+import { getDeviceOnlineStatuses, type DeviceStatusBucket } from '../utils/deviceOnlineStatus';
 import { useLorawanEvents } from '../query/lorawan';
 import { useMeshtasticEvents } from '../query/meshtastic';
 import GatewayStatsPanel from './GatewayStatsPanel';
@@ -363,6 +364,18 @@ export default function Controls({
     receiverErrorStatus === 403;
 
   const latestLocation = deviceDetail?.latestMeasurement ?? null;
+  const latestMeasurementTimestamp = latest?.latestMeasurementAt ?? latestLocation?.capturedAt ?? null;
+  const latestWebhookTimestamp = latest?.latestWebhookReceivedAt ?? null;
+  const latestWebhookSourceLabel =
+    typeof latest?.latestWebhookSource === 'string' && latest.latestWebhookSource.trim().length > 0
+      ? latest.latestWebhookSource.trim()
+      : 'unknown';
+  const { measurementStatus, webhookStatus } = getDeviceOnlineStatuses({
+    latestMeasurementAt: latestMeasurementTimestamp,
+    latestWebhookReceivedAt: latestWebhookTimestamp
+  });
+  const measurementStatusLabel = formatDeviceStatusBucket(measurementStatus);
+  const webhookStatusLabel = formatDeviceStatusBucket(webhookStatus);
   const canCenterOnLatest = Boolean(
     latestLocation && Number.isFinite(latestLocation.lat) && Number.isFinite(latestLocation.lon)
   );
@@ -725,6 +738,24 @@ export default function Controls({
                   <div className="device-details__row">
                     <span>Last seen</span>
                     <strong>{deviceDetail.lastSeenAt ? formatRelativeTime(deviceDetail.lastSeenAt) : '—'}</strong>
+                  </div>
+                  <div className="device-details__row">
+                    <span>Status</span>
+                    <div className="device-details__status">
+                      <strong
+                        className={`device-details__status-value device-details__status-value--${measurementStatus}`}
+                      >
+                        {measurementStatusLabel}
+                      </strong>
+                      <span className="device-details__status-meta">
+                        Measurements: {measurementStatusLabel} (
+                        {latestMeasurementTimestamp ? formatRelativeTime(latestMeasurementTimestamp) : 'never'})
+                      </span>
+                      <span className="device-details__status-meta">
+                        Ingest ({latestWebhookSourceLabel}): {webhookStatusLabel} (
+                        {latestWebhookTimestamp ? formatRelativeTime(latestWebhookTimestamp) : 'never'})
+                      </span>
+                    </div>
                   </div>
                   <div className="device-details__row">
                     <span>Created</span>
@@ -1515,6 +1546,22 @@ function formatRelativeTime(value: string): string {
   }
   const days = Math.round(hours / 24);
   return `${days}d ago`;
+}
+
+function formatDeviceStatusBucket(status: DeviceStatusBucket): 'Online' | 'Recent' | 'Stale' | 'Offline' | 'Unknown' {
+  if (status === 'online') {
+    return 'Online';
+  }
+  if (status === 'recent') {
+    return 'Recent';
+  }
+  if (status === 'stale') {
+    return 'Stale';
+  }
+  if (status === 'offline') {
+    return 'Offline';
+  }
+  return 'Unknown';
 }
 
 type CoverageLegendItem = {

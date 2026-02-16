@@ -486,6 +486,13 @@
   min-width: 0;
 }
 
+.selected-device-header__name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .selected-device-header__identity-wrap {
   display: flex;
   align-items: center;
@@ -508,6 +515,11 @@
   white-space: nowrap;
 }
 
+.selected-device-header__name-row strong {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .selected-device-header__identity > span {
   color: var(--panel-muted);
   font-size: 0.65rem;
@@ -517,13 +529,11 @@
 }
 
 .selected-device-header__uid-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.33rem;
+  display: block;
   min-width: 0;
 }
 
-.selected-device-header__uid-row > span:first-child {
+.selected-device-header__uid-row > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1192,6 +1202,47 @@
   width: 1rem;
   height: 1rem;
   flex: 0 0 1rem;
+}
+
+.device-details__status {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.device-details__status-value {
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.device-details__status-value--online {
+  color: var(--device-online-online);
+}
+
+.device-details__status-value--recent {
+  color: var(--device-online-recent);
+}
+
+.device-details__status-value--stale {
+  color: var(--device-online-stale);
+}
+
+.device-details__status-value--offline {
+  color: var(--device-online-offline);
+}
+
+.device-details__status-value--unknown {
+  color: var(--device-online-unknown);
+}
+
+.device-details__status-meta {
+  color: var(--panel-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  font-family: var(--font-mono);
+  text-transform: none;
+  overflow-wrap: anywhere;
 }
 
 .device-details__body {
@@ -1903,6 +1954,7 @@
 }
 
 .devices-manager__cell--name input {
+  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
   padding: 0.35rem 0.45rem;
