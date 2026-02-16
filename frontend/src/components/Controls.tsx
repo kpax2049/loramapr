@@ -24,6 +24,7 @@ import DeviceIcon, {
   getDeviceIconDefinition,
   getEffectiveIconKey
 } from './DeviceIcon';
+import DeviceOnlineDot from './DeviceOnlineDot';
 import DevicesManager from './DevicesManager';
 
 const DEVICE_ICON_PICKER_OPTIONS = DEVICE_ICON_CATALOG;
@@ -637,6 +638,13 @@ export default function Controls({
                   <div className="device-details__row">
                     <span>deviceUid</span>
                     <strong title={buildDeviceIdentityLabel(deviceDetail)} className="device-details__identity">
+                      <DeviceOnlineDot
+                        latestMeasurementAt={latest?.latestMeasurementAt ?? null}
+                        latestWebhookReceivedAt={latest?.latestWebhookReceivedAt ?? null}
+                        latestWebhookSource={latest?.latestWebhookSource ?? null}
+                        formatRelativeTime={formatRelativeTime}
+                        className="device-details__online-dot"
+                      />
                       <DeviceIcon
                         device={deviceDetail}
                         iconKey={detailIconKey}

@@ -1,6 +1,7 @@
 import type { Device } from '../api/types';
 import { useAutoSession } from '../query/hooks';
 import { useSessions } from '../query/sessions';
+import DeviceOnlineDot from './DeviceOnlineDot';
 import DeviceIcon, {
   getDeviceIconDefinition,
   getDevicePrimaryLabel,
@@ -9,6 +10,9 @@ import DeviceIcon, {
 
 type SelectedDeviceHeaderProps = {
   device: Device | null;
+  latestMeasurementAt?: string | null;
+  latestWebhookReceivedAt?: string | null;
+  latestWebhookSource?: string | null;
   onFitToData?: () => void;
   fitFeedback?: string | null;
 };
@@ -49,6 +53,9 @@ function copyDeviceUid(deviceUid: string) {
 
 export default function SelectedDeviceHeader({
   device,
+  latestMeasurementAt = null,
+  latestWebhookReceivedAt = null,
+  latestWebhookSource = null,
   onFitToData,
   fitFeedback
 }: SelectedDeviceHeaderProps) {
@@ -80,11 +87,19 @@ export default function SelectedDeviceHeader({
           />
           <div className="selected-device-header__identity">
             <strong>{deviceName}</strong>
-            {deviceUid ? (
-              <span title={deviceUid}>{truncateDeviceUid(deviceUid)}</span>
-            ) : (
-              <span>select a device</span>
-            )}
+            <span className="selected-device-header__uid-row">
+              {deviceUid ? (
+                <span title={deviceUid}>{truncateDeviceUid(deviceUid)}</span>
+              ) : (
+                <span>select a device</span>
+              )}
+              <DeviceOnlineDot
+                latestMeasurementAt={latestMeasurementAt}
+                latestWebhookReceivedAt={latestWebhookReceivedAt}
+                latestWebhookSource={latestWebhookSource}
+                className="selected-device-header__online-dot"
+              />
+            </span>
           </div>
         </div>
         <div className="selected-device-header__badges">

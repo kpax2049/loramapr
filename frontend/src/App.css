@@ -369,6 +369,102 @@
   font-family: var(--font-mono);
 }
 
+.device-online-dot {
+  --device-online-dot-size: 12px;
+  --device-online-measurement-color: var(--device-online-unknown);
+  --device-online-ring-color: transparent;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--device-online-dot-size);
+  height: var(--device-online-dot-size);
+  min-width: var(--device-online-dot-size);
+  min-height: var(--device-online-dot-size);
+  flex: 0 0 var(--device-online-dot-size);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.device-online-dot__core {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--device-online-measurement-color);
+}
+
+.device-online-dot__ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 999px;
+  border: 1px solid var(--device-online-ring-color);
+}
+
+.device-online-dot--measurement-online {
+  --device-online-measurement-color: var(--device-online-online);
+}
+
+.device-online-dot--measurement-recent {
+  --device-online-measurement-color: var(--device-online-recent);
+}
+
+.device-online-dot--measurement-stale {
+  --device-online-measurement-color: var(--device-online-stale);
+}
+
+.device-online-dot--measurement-offline {
+  --device-online-measurement-color: var(--device-online-offline);
+}
+
+.device-online-dot--measurement-unknown {
+  --device-online-measurement-color: var(--device-online-unknown);
+}
+
+.device-online-dot--ring-online {
+  --device-online-ring-color: var(--device-online-online);
+}
+
+.device-online-dot--ring-recent {
+  --device-online-ring-color: var(--device-online-recent);
+}
+
+.device-online-dot--ring-stale {
+  --device-online-ring-color: var(--device-online-stale);
+}
+
+.device-online-dot--ring-offline {
+  --device-online-ring-color: var(--device-online-offline);
+}
+
+.device-online-dot--ring-unknown {
+  --device-online-ring-color: var(--device-online-unknown);
+}
+
+.device-online-dot--pulse .device-online-dot__core {
+  animation: device-online-dot-pulse 1.8s ease-out infinite;
+}
+
+@keyframes device-online-dot-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 var(--device-online-pulse);
+  }
+  70% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 calc(var(--device-online-dot-size) * 0.52) transparent;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-online-dot--pulse .device-online-dot__core {
+    animation: none;
+  }
+}
+
 .selected-device-header {
   display: grid;
   gap: 0.4rem;
@@ -412,15 +508,29 @@
   white-space: nowrap;
 }
 
-.selected-device-header__identity span {
+.selected-device-header__identity > span {
   color: var(--panel-muted);
   font-size: 0.65rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   font-family: var(--font-mono);
+}
+
+.selected-device-header__uid-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.33rem;
+  min-width: 0;
+}
+
+.selected-device-header__uid-row > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selected-device-header__online-dot {
+  --device-online-dot-size: 11px;
 }
 
 .selected-device-header__badges {
@@ -749,6 +859,10 @@
   gap: 0.35rem;
 }
 
+.status-strip__online-dot {
+  --device-online-dot-size: 11px;
+}
+
 .status-strip__device-icon {
   width: 1.15rem;
   height: 1.15rem;
@@ -1064,10 +1178,14 @@
   min-width: 0;
 }
 
-.device-details__identity span {
+.device-details__identity > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.device-details__online-dot {
+  --device-online-dot-size: 11px;
 }
 
 .device-details__identity-icon {
@@ -1778,6 +1896,10 @@
   align-items: center;
   gap: 0.35rem;
   overflow: visible;
+}
+
+.devices-manager__online-dot {
+  --device-online-dot-size: 10px;
 }
 
 .devices-manager__cell--name input {

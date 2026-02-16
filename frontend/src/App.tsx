@@ -1739,6 +1739,9 @@ function App() {
     <div className="sidebar-header" aria-label="Sidebar header">
       <SelectedDeviceHeader
         device={selectedDevice}
+        latestMeasurementAt={latestMeasurementAt}
+        latestWebhookReceivedAt={latestDeviceQuery.data?.latestWebhookReceivedAt ?? null}
+        latestWebhookSource={latestDeviceQuery.data?.latestWebhookSource ?? null}
         onFitToData={handleFitToData}
         fitFeedback={fitFeedback}
       />

@@ -3,6 +3,7 @@ import DeviceIcon, {
   getEffectiveIconKey,
   type DeviceIdentityInput
 } from './DeviceIcon';
+import DeviceOnlineDot from './DeviceOnlineDot';
 
 type StatusStripProps = {
   device?: DeviceIdentityInput | null;
@@ -44,6 +45,13 @@ export default function StatusStrip({
       <span className="status-strip__item">
         <span className="status-strip__label">Device</span>
         <span className="status-strip__value status-strip__value--device">
+          <DeviceOnlineDot
+            latestMeasurementAt={latestMeasurementAt}
+            latestWebhookReceivedAt={latestWebhookReceivedAt}
+            latestWebhookSource={latestWebhookSource}
+            formatRelativeTime={formatRelativeTime}
+            className="status-strip__online-dot"
+          />
           {device ? (
             <DeviceIcon
               device={device}

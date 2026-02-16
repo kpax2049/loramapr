@@ -9,16 +9,13 @@ import DeviceIcon, {
   getDevicePrimaryLabel,
   getDeviceSecondaryLabel
 } from './DeviceIcon';
-import LocationPinIcon from './LocationPinIcon';
-import HoverTooltip from './HoverTooltip';
+import DeviceOnlineDot from './DeviceOnlineDot';
 
 type DevicesManagerProps = {
   selectedDeviceId: string | null;
   onSelectDevice: (deviceId: string | null) => void;
   onOpenAutoSession?: () => void;
 };
-
-const LOCATION_INDICATOR_TOOLTIP = 'Has known last location';
 
 function formatRelativeTime(value: string | null): string {
   if (!value) {
@@ -388,16 +385,13 @@ export default function DevicesManager({
                   </button>
                 ) : null}
                 {device.isArchived ? <span className="devices-manager__badge">Archived</span> : null}
-                {device.latestMeasurementAt ? (
-                  <HoverTooltip label={LOCATION_INDICATOR_TOOLTIP}>
-                    <span
-                      className="devices-manager__badge devices-manager__badge--location"
-                      aria-label={LOCATION_INDICATOR_TOOLTIP}
-                    >
-                      <LocationPinIcon className="devices-manager__location-icon" />
-                    </span>
-                  </HoverTooltip>
-                ) : null}
+                <DeviceOnlineDot
+                  latestMeasurementAt={device.latestMeasurementAt}
+                  latestWebhookReceivedAt={null}
+                  latestWebhookSource={null}
+                  formatRelativeTime={formatRelativeTime}
+                  className="devices-manager__online-dot"
+                />
               </div>
               <div
                 className="devices-manager__cell devices-manager__cell--uid"
