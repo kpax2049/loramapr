@@ -11,6 +11,27 @@ function formatValue(value: number | string | null | undefined): string {
   return String(value);
 }
 
+function formatCapturedAt(value: string | null | undefined): string {
+  if (!value) {
+    return '—';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+}
+
 export default function PointDetails({ measurement }: PointDetailsProps) {
   if (!measurement) {
     return (
@@ -26,7 +47,7 @@ export default function PointDetails({ measurement }: PointDetailsProps) {
       <dl>
         <div>
           <dt>Captured at</dt>
-          <dd>{formatValue(measurement.capturedAt)}</dd>
+          <dd>{formatCapturedAt(measurement.capturedAt)}</dd>
         </div>
         <div>
           <dt>Session ID</dt>
