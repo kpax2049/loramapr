@@ -16,6 +16,9 @@ Description:
 
 Default output:
   backups/loramapr-YYYYmmdd-HHMMSS.sql.gz
+
+Optional env:
+  BACKUP_RETENTION=14  Keep last N timestamped backups in backups/
 EOF
 }
 
@@ -30,6 +33,10 @@ if [[ $# -gt 1 ]]; then
 fi
 
 init_db_common
+
+BACKUP_RETENTION_RAW="${BACKUP_RETENTION:-14}"
+[[ "$BACKUP_RETENTION_RAW" =~ ^[0-9]+$ ]] || die "BACKUP_RETENTION must be a non-negative integer"
+BACKUP_RETENTION="$BACKUP_RETENTION_RAW"
 
 BACKUP_DIR="$REPO_ROOT/backups"
 mkdir -p "$BACKUP_DIR"
@@ -58,4 +65,24 @@ if ! compose_cmd exec -T \
 fi
 
 mv "$TMP_FILE" "$OUTPUT_FILE"
+
+if (( BACKUP_RETENTION > 0 )); then
+  shopt -s nullglob
+  CANDIDATES=("$BACKUP_DIR"/loramapr-*.sql "$BACKUP_DIR"/loramapr-*.sql.gz)
+  shopt -u nullglob
+
+  if (( ${#CANDIDATES[@]} > BACKUP_RETENTION )); then
+    SORTED=()
+    while IFS= read -r file; do
+      SORTED+=("$file")
+    done < <(printf '%s\n' "${CANDIDATES[@]}" | sort)
+
+    DELETE_COUNT=$(( ${#SORTED[@]} - BACKUP_RETENTION ))
+    for ((i = 0; i < DELETE_COUNT; i++)); do
+      rm -f "${SORTED[$i]}"
+    done
+    echo "Pruned $DELETE_COUNT old backup(s); retention=$BACKUP_RETENTION" >&2
+  fi
+fi
+
 echo "$OUTPUT_FILE"

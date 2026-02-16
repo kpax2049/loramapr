@@ -1,0 +1,15 @@
+[Unit]
+Description=LoraMapr PostgreSQL backup
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/loramapr
+EnvironmentFile=/etc/loramapr/db-backup.env
+ExecStart=/opt/loramapr/scripts/db/backup.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
