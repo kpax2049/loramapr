@@ -24,6 +24,7 @@ import {
   DeviceAgentDecision,
   DeviceLatestStatus,
   DeviceListItem,
+  LatestWebhookSource,
   DeviceMutableSummary,
   DeviceSummary,
   DevicesService
@@ -107,7 +108,7 @@ export class DevicesController {
     latestMeasurementAt: string | null;
     latestWebhookReceivedAt: string | null;
     latestWebhookError: string | null;
-    latestWebhookSource: string | null;
+    latestWebhookSource: LatestWebhookSource | null;
   }> {
     const ownerId = getOwnerIdFromRequest(request);
     const latest = await this.devicesService.getLatestStatus(id, ownerId);
@@ -269,6 +270,9 @@ type DeviceDetailResponse = {
   appVersion: string | null;
   role: string | null;
   lastNodeInfoAt: string | null;
+  latestMeasurementAt: string | null;
+  latestWebhookReceivedAt: string | null;
+  latestWebhookSource: LatestWebhookSource | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;
@@ -546,6 +550,11 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
     appVersion: device.appVersion ?? null,
     role: device.role ?? null,
     lastNodeInfoAt: device.lastNodeInfoAt ? device.lastNodeInfoAt.toISOString() : null,
+    latestMeasurementAt: device.latestMeasurementAt ? device.latestMeasurementAt.toISOString() : null,
+    latestWebhookReceivedAt: device.latestWebhookReceivedAt
+      ? device.latestWebhookReceivedAt.toISOString()
+      : null,
+    latestWebhookSource: device.latestWebhookSource ?? null,
     latestMeasurement: device.latestMeasurement
       ? {
           capturedAt: device.latestMeasurement.capturedAt.toISOString(),

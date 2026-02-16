@@ -1,5 +1,8 @@
+import { Prisma } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+
+export type LatestWebhookSource = 'lorawan' | 'meshtastic' | 'agent';
 
 export type DeviceListItem = {
   id: string;
@@ -12,13 +15,15 @@ export type DeviceListItem = {
   isArchived: boolean;
   lastSeenAt: Date | null;
   latestMeasurementAt: Date | null;
+  latestWebhookReceivedAt: Date | null;
+  latestWebhookSource: LatestWebhookSource | null;
 };
 
 export type DeviceLatestStatus = {
   latestMeasurementAt: Date | null;
   latestWebhookReceivedAt: Date | null;
   latestWebhookError: string | null;
-  latestWebhookSource: string | null;
+  latestWebhookSource: LatestWebhookSource | null;
 };
 
 export type DeviceSummary = {
@@ -46,6 +51,9 @@ export type DeviceDetail = {
   appVersion: string | null;
   role: string | null;
   lastNodeInfoAt: Date | null;
+  latestMeasurementAt: Date | null;
+  latestWebhookReceivedAt: Date | null;
+  latestWebhookSource: LatestWebhookSource | null;
   latestMeasurement: {
     capturedAt: Date;
     lat: number;
@@ -117,49 +125,77 @@ export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(ownerId?: string, includeArchived = false): Promise<DeviceListItem[]> {
-    // TODO: enforce owner scoping once auth context is available.
-    const where = {
-      ...(ownerId ? { ownerId } : {}),
-      ...(includeArchived ? {} : { isArchived: false })
+    const ownerFilter = ownerId
+      ? Prisma.sql`AND d."ownerId" = ${ownerId}::uuid`
+      : Prisma.empty;
+    const archivedFilter = includeArchived ? Prisma.empty : Prisma.sql`AND d."isArchived" = false`;
+
+    type DeviceListRow = {
+      id: string;
+      deviceUid: string;
+      name: string | null;
+      longName: string | null;
+      hwModel: string | null;
+      iconKey: string | null;
+      iconOverride: boolean;
+      isArchived: boolean;
+      lastSeenAt: Date | null;
+      latestMeasurementAt: Date | null;
+      latestWebhookReceivedAt: Date | null;
+      latestWebhookSourceRaw: string | null;
     };
 
-    const devices = await this.prisma.device.findMany({
-      where,
-      select: {
-        id: true,
-        deviceUid: true,
-        name: true,
-        longName: true,
-        hwModel: true,
-        iconKey: true,
-        iconOverride: true,
-        isArchived: true,
-        lastSeenAt: true,
-        measurements: {
-          select: { capturedAt: true },
-          orderBy: { capturedAt: 'desc' },
-          take: 1
-        }
-      },
-      orderBy: {
-        lastSeenAt: {
-          sort: 'desc',
-          nulls: 'last'
-        }
-      }
-    });
+    const rows = await this.prisma.$queryRaw<DeviceListRow[]>(Prisma.sql`
+      WITH measurement_latest AS (
+        SELECT
+          m."deviceId",
+          MAX(m."capturedAt") AS "latestMeasurementAt"
+        FROM "Measurement" m
+        GROUP BY m."deviceId"
+      ),
+      webhook_latest AS (
+        SELECT DISTINCT ON (w."deviceUid")
+          w."deviceUid",
+          w."receivedAt" AS "latestWebhookReceivedAt",
+          w."source" AS "latestWebhookSourceRaw"
+        FROM "WebhookEvent" w
+        ORDER BY w."deviceUid", w."receivedAt" DESC
+      )
+      SELECT
+        d."id",
+        d."deviceUid",
+        d."name",
+        d."longName",
+        d."hwModel",
+        d."iconKey",
+        d."iconOverride",
+        d."isArchived",
+        d."lastSeenAt",
+        ml."latestMeasurementAt",
+        wl."latestWebhookReceivedAt",
+        wl."latestWebhookSourceRaw"
+      FROM "Device" d
+      LEFT JOIN measurement_latest ml ON ml."deviceId" = d."id"
+      LEFT JOIN webhook_latest wl ON wl."deviceUid" = d."deviceUid"
+      WHERE 1=1
+      ${ownerFilter}
+      ${archivedFilter}
+      ORDER BY d."lastSeenAt" DESC NULLS LAST
+    `);
 
-    return devices.map((device) => ({
-      id: device.id,
-      deviceUid: device.deviceUid,
-      name: device.name,
-      longName: device.longName,
-      hwModel: device.hwModel,
-      iconKey: device.iconKey,
-      iconOverride: device.iconOverride,
-      isArchived: device.isArchived,
-      lastSeenAt: device.lastSeenAt,
-      latestMeasurementAt: device.measurements[0]?.capturedAt ?? null
+    return rows.map((row) => ({
+      id: row.id,
+      deviceUid: row.deviceUid,
+      name: row.name,
+      longName: row.longName,
+      hwModel: row.hwModel,
+      iconKey: row.iconKey,
+      iconOverride: row.iconOverride,
+      isArchived: row.isArchived,
+      lastSeenAt: row.lastSeenAt,
+      latestMeasurementAt: row.latestMeasurementAt,
+      latestWebhookReceivedAt: row.latestWebhookReceivedAt,
+      latestWebhookSource: normalizeWebhookSource(row.latestWebhookSourceRaw)
     }));
   }
 
@@ -174,25 +210,7 @@ export class DevicesService {
       return null;
     }
 
-    const [latestMeasurement, latestWebhook] = await Promise.all([
-      this.prisma.measurement.findFirst({
-        where: { deviceId: device.id },
-        orderBy: { capturedAt: 'desc' },
-        select: { capturedAt: true }
-      }),
-      this.prisma.webhookEvent.findFirst({
-        where: { deviceUid: device.deviceUid },
-        orderBy: { receivedAt: 'desc' },
-        select: { receivedAt: true, processingError: true, source: true }
-      })
-    ]);
-
-    return {
-      latestMeasurementAt: latestMeasurement?.capturedAt ?? null,
-      latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
-      latestWebhookError: latestWebhook?.processingError ?? null,
-      latestWebhookSource: normalizeWebhookSource(latestWebhook?.source)
-    };
+    return this.getLatestStatusForDevice(device.id, device.deviceUid);
   }
 
   async getByUid(deviceUid: string, ownerId?: string): Promise<DeviceSummary | null> {
@@ -238,22 +256,53 @@ export class DevicesService {
 
     // lat/lon are required in the current schema, so latest by capturedAt already satisfies
     // "latest measurement with lat/lon not null".
-    const latestMeasurement = await this.prisma.measurement.findFirst({
-      where: { deviceId: device.id },
-      orderBy: { capturedAt: 'desc' },
-      select: {
-        capturedAt: true,
-        lat: true,
-        lon: true,
-        rssi: true,
-        snr: true,
-        gatewayId: true
-      }
-    });
+    const [latestMeasurement, latestStatus] = await Promise.all([
+      this.prisma.measurement.findFirst({
+        where: { deviceId: device.id },
+        orderBy: { capturedAt: 'desc' },
+        select: {
+          capturedAt: true,
+          lat: true,
+          lon: true,
+          rssi: true,
+          snr: true,
+          gatewayId: true
+        }
+      }),
+      this.getLatestStatusForDevice(device.id, device.deviceUid)
+    ]);
 
     return {
       ...device,
+      latestMeasurementAt: latestStatus.latestMeasurementAt,
+      latestWebhookReceivedAt: latestStatus.latestWebhookReceivedAt,
+      latestWebhookSource: latestStatus.latestWebhookSource,
       latestMeasurement
+    };
+  }
+
+  private async getLatestStatusForDevice(
+    deviceId: string,
+    deviceUid: string
+  ): Promise<DeviceLatestStatus> {
+    const [latestMeasurement, latestWebhook] = await Promise.all([
+      this.prisma.measurement.findFirst({
+        where: { deviceId },
+        orderBy: { capturedAt: 'desc' },
+        select: { capturedAt: true }
+      }),
+      this.prisma.webhookEvent.findFirst({
+        where: { deviceUid },
+        orderBy: { receivedAt: 'desc' },
+        select: { receivedAt: true, processingError: true, source: true }
+      })
+    ]);
+
+    return {
+      latestMeasurementAt: latestMeasurement?.capturedAt ?? null,
+      latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
+      latestWebhookError: latestWebhook?.processingError ?? null,
+      latestWebhookSource: normalizeWebhookSource(latestWebhook?.source)
     };
   }
 
@@ -525,12 +574,18 @@ export class DevicesService {
   }
 }
 
-function normalizeWebhookSource(source?: string | null): string | null {
+function normalizeWebhookSource(source?: string | null): LatestWebhookSource | null {
   if (!source) {
     return null;
   }
-  if (source === 'tts') {
+  if (source === 'tts' || source === 'lorawan') {
     return 'lorawan';
   }
-  return source;
+  if (source === 'meshtastic') {
+    return 'meshtastic';
+  }
+  if (source === 'agent') {
+    return 'agent';
+  }
+  return null;
 }
