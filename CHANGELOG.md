@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.9.8 - 2026-02-16
+
+### Added
+- Session list row actions now include archive/unarchive and safe delete entry points from a per-row menu.
+- Session delete modal now supports archive-first workflow, measurement count visibility, and typed `DELETE` confirmation before destructive action.
+
+### Changed
+- Session lifecycle UX is now safer and clearer: archived sessions are hidden by default with a persisted toggle, and session selection/playback clearing is guarded against stale list race conditions.
+- Sessions panel no longer uses a fixed subpanel height and now inherits parent layout height with proper internal scrolling.
+- Map dark theme now renders with Fiord Color style while light theme remains OpenStreetMap raster tiles.
+- Status Strip wrapping and alignment were adjusted to prevent clipped second-line content and mixed icon/text baseline drift.
+- Selected device header identity area now has higher horizontal priority to reduce unnecessary truncation next to badges.
+
+### Acceptance
+- Rename persists and reflects across UI.
+- Archived sessions hidden by default; toggle shows them.
+- Archive/unarchive works.
+- Delete requires typed confirmation + confirm header.
+- Delete detaches measurements (verify `sessionId` becomes `null`) and does not erase data.
+- No regressions to playback/session timeline endpoints.
+- Dark OpenStreetMap theme.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.7 - 2026-02-15
 
 ### Added

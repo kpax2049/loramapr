@@ -1892,6 +1892,7 @@ function App() {
       >
         <MapView
           ref={mapRef}
+          theme={effectiveTheme}
           mapLayerMode={effectiveMapLayerMode}
           coverageMetric={coverageMetric}
           measurements={activeMeasurements}

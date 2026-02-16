@@ -386,12 +386,14 @@
 .selected-device-header__identity {
   display: grid;
   gap: 0.15rem;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .selected-device-header__identity-wrap {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
   gap: 0.5rem;
   min-width: 0;
 }
@@ -422,9 +424,10 @@
 }
 
 .selected-device-header__badges {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  flex: 0 0 auto;
   gap: 0.25rem;
 }
 

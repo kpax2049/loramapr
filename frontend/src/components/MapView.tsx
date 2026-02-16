@@ -18,6 +18,8 @@ import {
   useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
+import '@maplibre/maplibre-gl-leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import simplify from 'simplify-js';
 import type { CoverageBin } from '../api/types';
 import DeviceIcon, {
@@ -30,6 +32,10 @@ import DeviceIcon, {
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
+const FIORD_STYLE_URL = 'https://tiles.openfreemap.org/styles/fiord';
+const FIORD_ATTRIBUTION =
+  '&copy; <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> ' +
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors';
 
 const markerIconUrl = new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString();
 const markerRetinaUrl = new URL(
@@ -41,6 +47,7 @@ const markerShadowUrl = new URL('leaflet/dist/images/marker-shadow.png', import.
 type MapViewProps = {
   center?: [number, number];
   zoom?: number;
+  theme?: 'light' | 'dark';
   mapLayerMode?: 'points' | 'coverage';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
@@ -223,6 +230,23 @@ function MapInstanceSync({ mapRef }: { mapRef: MutableRefObject<L.Map | null> })
   return null;
 }
 
+function FiordStyleLayer({ styleUrl, attribution }: { styleUrl: string; attribution: string }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const layer = L.maplibreGL({ style: styleUrl });
+    layer.addTo(map);
+    map.attributionControl?.addAttribution(attribution);
+
+    return () => {
+      map.attributionControl?.removeAttribution(attribution);
+      map.removeLayer(layer);
+    };
+  }, [map, styleUrl, attribution]);
+
+  return null;
+}
+
 function zoomToTolerance(zoom: number): number {
   const clampedZoom = Math.min(Math.max(zoom, 1), 20);
   const tolerance = 0.5 / Math.pow(2, clampedZoom);
@@ -318,6 +342,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 {
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
+  theme = 'light',
   mapLayerMode = 'points',
   coverageMetric = 'count',
   measurements = [],
@@ -485,6 +510,14 @@ ref
 
   const latestLocationIconKey = latestLocationIconInput ? getEffectiveIconKey(latestLocationIconInput) : 'unknown';
   const latestLocationIconDefinition = getDeviceIconDefinition(latestLocationIconKey);
+  const tileConfig = useMemo(
+    () => ({
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }),
+    []
+  );
 
   return (
     <MapContainer
@@ -500,10 +533,16 @@ ref
         onZoomChange={setCurrentZoom}
         onUserInteraction={onUserInteraction}
       />
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      {theme === 'dark' ? (
+        <FiordStyleLayer styleUrl={FIORD_STYLE_URL} attribution={FIORD_ATTRIBUTION} />
+      ) : (
+        <TileLayer
+          key={`tile-${theme}`}
+          attribution={tileConfig.attribution}
+          url={tileConfig.url}
+          subdomains={['a', 'b', 'c']}
+        />
+      )}
       {showTrack && overviewTrackPositions.length > 0 && (
         <Polyline
           positions={overviewTrackPositions}
