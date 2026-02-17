@@ -172,6 +172,20 @@ function ensureSectionJumpControl(
   }
 }
 
+function setHelpPopoverOpen(open: boolean): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetHelpPopoverOpen?.(open);
+}
+
+function readHelpPopoverOpen(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.tourGetHelpPopoverOpen?.() ?? false;
+}
+
 export function AppTourProvider({ children }: { children: ReactNode }) {
   const [tourCompleted, setTourCompleted] = useState<boolean>(() => readTourCompleted());
   const [tourPromptDismissed, setTourPromptDismissed] = useState<boolean>(() =>
@@ -181,6 +195,26 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
   const driverRef = useRef<Driver | null>(null);
   const sectionStartIndexesRef = useRef<Partial<Record<TourSectionKey, number>>>({});
   const stepSectionsRef = useRef<TourSectionKey[]>([]);
+  const activeSectionRef = useRef<TourSectionKey | null>(null);
+  const shortcutsPopoverPreviousOpenRef = useRef<boolean | null>(null);
+
+  const syncSectionSideEffects = useCallback((nextSection: TourSectionKey | null) => {
+    const previousSection = activeSectionRef.current;
+    if (previousSection === nextSection) {
+      return;
+    }
+
+    if (previousSection !== 'shortcuts' && nextSection === 'shortcuts') {
+      shortcutsPopoverPreviousOpenRef.current = readHelpPopoverOpen();
+      setHelpPopoverOpen(true);
+    } else if (previousSection === 'shortcuts' && nextSection !== 'shortcuts') {
+      const restoreOpen = shortcutsPopoverPreviousOpenRef.current;
+      setHelpPopoverOpen(restoreOpen ?? false);
+      shortcutsPopoverPreviousOpenRef.current = null;
+    }
+
+    activeSectionRef.current = nextSection;
+  }, []);
 
   const startTour = useCallback((steps?: DriveStep[]) => {
     let tourSteps: DriveStep[];
@@ -198,6 +232,8 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
     if (tourSteps.length === 0) {
       return;
     }
+    activeSectionRef.current = null;
+    shortcutsPopoverPreviousOpenRef.current = null;
     writeTourCompleted(true);
     writeTourPromptDismissed(true);
     setTourCompleted(true);
@@ -217,6 +253,10 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
       nextBtnText: 'Next',
       doneBtnText: 'Done',
       onPopoverRender: (popover, options) => {
+        const activeIndex = options.driver.getActiveIndex();
+        const activeSection =
+          typeof activeIndex === 'number' ? stepSectionsRef.current[activeIndex] ?? null : null;
+        syncSectionSideEffects(activeSection);
         ensureSkipButton(popover, options.driver);
         ensureSectionJumpControl(
           popover,
@@ -226,6 +266,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
         );
       },
       onDestroyed: () => {
+        syncSectionSideEffects(null);
         setIsTourActive(false);
         if (driverRef.current === driverInstance) {
           driverRef.current = null;
@@ -237,7 +278,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
     driverRef.current = driverInstance;
     setIsTourActive(true);
     driverInstance.drive();
-  }, []);
+  }, [syncSectionSideEffects]);
 
   const dismissTourPrompt = useCallback(() => {
     writeTourPromptDismissed(true);

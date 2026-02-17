@@ -340,8 +340,10 @@
 
 .layout__tour-menu-shortcuts {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.22rem;
   padding: 0.24rem 0.1rem 0.14rem;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
 }
 
 .layout__tour-menu-shortcuts-title {
@@ -352,9 +354,31 @@
   font-family: var(--font-mono);
 }
 
+.layout__tour-menu-shortcuts-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.42rem;
+}
+
+.layout__tour-menu-shortcuts-key {
+  min-width: 3.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  font-size: 0.53rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  padding: 0.08rem 0.26rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .layout__tour-menu-shortcuts-list {
   color: var(--panel-text);
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   letter-spacing: 0.02em;
   font-family: var(--font-mono);
 }

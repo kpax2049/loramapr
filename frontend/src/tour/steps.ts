@@ -33,6 +33,8 @@ declare global {
   interface Window {
     tourSetActiveTab?: (tab: TourSidebarTabKey) => void;
     tourGetActiveTab?: () => TourSidebarTabKey | null;
+    tourSetHelpPopoverOpen?: (open: boolean) => void;
+    tourGetHelpPopoverOpen?: () => boolean;
   }
 }
 
@@ -288,12 +290,12 @@ const TOUR_STEPS: TourStepSpec[] = [
   {
     id: 'shortcuts-help',
     section: 'shortcuts',
-    selector: '[data-tour="tour-start-button"]',
-    title: 'Tour and help',
+    selector: '[data-tour="shortcuts-help"]',
+    title: 'Keyboard shortcuts',
     content:
-      'Use this help menu anytime to restart the tour or reset onboarding state.',
-    side: 'bottom',
-    align: 'end'
+      'This panel summarizes the main keys for zen mode, sidebar controls, and playback navigation.',
+    side: 'left',
+    align: 'start'
   },
 
   // 8) Debug (optional)
@@ -330,6 +332,13 @@ function setActiveTab(tab: TourSidebarTabKey | undefined): void {
   window.tourSetActiveTab?.(tab);
 }
 
+function setHelpPopoverOpen(open: boolean): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetHelpPopoverOpen?.(open);
+}
+
 function isElementVisible(element: Element): boolean {
   if ('offsetParent' in element) {
     return (element as HTMLElement).offsetParent !== null;
@@ -342,6 +351,9 @@ function resolveStepTarget(step: TourStepSpec): Element | null {
     return null;
   }
   setActiveTab(step.tab);
+  if (step.section === 'shortcuts') {
+    setHelpPopoverOpen(true);
+  }
   const target = document.querySelector(step.selector);
   if (!target) {
     return null;
@@ -388,6 +400,7 @@ export function buildCoreTourPlan(): TourPlan {
   }
 
   const previousTab = window.tourGetActiveTab?.() ?? null;
+  const previousHelpPopoverOpen = window.tourGetHelpPopoverOpen?.() ?? null;
   const steps: DriveStep[] = [];
   const stepSections: TourSectionKey[] = [];
   const sectionStartIndexes: Partial<Record<TourSectionKey, number>> = {};
@@ -405,6 +418,9 @@ export function buildCoreTourPlan(): TourPlan {
 
   if (previousTab) {
     setActiveTab(previousTab);
+  }
+  if (typeof previousHelpPopoverOpen === 'boolean') {
+    setHelpPopoverOpen(previousHelpPopoverOpen);
   }
 
   return { steps, sectionStartIndexes, stepSections };
@@ -441,4 +457,3 @@ export function filterAvailableTourSteps(steps: DriveStep[]): DriveStep[] {
 export function buildCoreTourSteps(): DriveStep[] {
   return buildCoreTourPlan().steps;
 }
-

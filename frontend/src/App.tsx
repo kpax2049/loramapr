@@ -553,11 +553,16 @@ function App() {
   const [sessionSelectionNotice, setSessionSelectionNotice] = useState<string | null>(null);
   const [tourMenuOpen, setTourMenuOpen] = useState(false);
   const [tourResetNotice, setTourResetNotice] = useState<string | null>(null);
+  const tourMenuOpenRef = useRef(tourMenuOpen);
   const tourMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     sidebarTabRef.current = sidebarTab;
   }, [sidebarTab]);
+
+  useEffect(() => {
+    tourMenuOpenRef.current = tourMenuOpen;
+  }, [tourMenuOpen]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -570,10 +575,21 @@ function App() {
       });
     };
     window.tourGetActiveTab = () => sidebarTabRef.current;
+    window.tourSetHelpPopoverOpen = (open: boolean) => {
+      flushSync(() => {
+        setTourMenuOpen(open);
+        if (!open) {
+          setTourResetNotice(null);
+        }
+      });
+    };
+    window.tourGetHelpPopoverOpen = () => tourMenuOpenRef.current;
 
     return () => {
       delete window.tourSetActiveTab;
       delete window.tourGetActiveTab;
+      delete window.tourSetHelpPopoverOpen;
+      delete window.tourGetHelpPopoverOpen;
     };
   }, []);
 
@@ -672,7 +688,7 @@ function App() {
   }, [sessionSelectionNotice]);
 
   useEffect(() => {
-    if (!tourMenuOpen) {
+    if (!tourMenuOpen || isTourActive) {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -699,7 +715,7 @@ function App() {
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [tourMenuOpen]);
+  }, [tourMenuOpen, isTourActive]);
 
   useEffect(() => {
     if (!isTourActive) {
@@ -2077,9 +2093,28 @@ function App() {
           <button type="button" className="layout__tour-menu-item" role="menuitem" onClick={handleTourReset}>
             Reset tour
           </button>
-          <div className="layout__tour-menu-shortcuts" aria-label="Keyboard shortcuts">
+          <div
+            className="layout__tour-menu-shortcuts"
+            aria-label="Keyboard shortcuts"
+            data-tour="shortcuts-help"
+          >
             <span className="layout__tour-menu-shortcuts-title">Keyboard shortcuts</span>
-            <span className="layout__tour-menu-shortcuts-list">Z: zen mode · Ctrl+B: sidebar</span>
+            <div className="layout__tour-menu-shortcuts-row">
+              <span className="layout__tour-menu-shortcuts-key">Z</span>
+              <span className="layout__tour-menu-shortcuts-list">Zen mode toggle</span>
+            </div>
+            <div className="layout__tour-menu-shortcuts-row">
+              <span className="layout__tour-menu-shortcuts-key">Esc</span>
+              <span className="layout__tour-menu-shortcuts-list">Collapse sidebar</span>
+            </div>
+            <div className="layout__tour-menu-shortcuts-row">
+              <span className="layout__tour-menu-shortcuts-key">Space / ← →</span>
+              <span className="layout__tour-menu-shortcuts-list">Playback play and scrub</span>
+            </div>
+            <div className="layout__tour-menu-shortcuts-row">
+              <span className="layout__tour-menu-shortcuts-key">Ctrl+B</span>
+              <span className="layout__tour-menu-shortcuts-list">Sidebar toggle</span>
+            </div>
           </div>
           {tourResetNotice ? <div className="layout__tour-menu-note">{tourResetNotice}</div> : null}
         </div>
