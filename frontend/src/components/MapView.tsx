@@ -66,6 +66,7 @@ type MapViewProps = {
   coverageBinSize?: number | null;
   showPoints?: boolean;
   showTrack?: boolean;
+  interactionEnabled?: boolean;
   playbackCursorPosition?: [number, number] | null;
   latestLocationMarker?: LatestLocationMarker | null;
   showLatestLocationMarker?: boolean;
@@ -440,6 +441,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   coverageBinSize = 0.001,
   showPoints = true,
   showTrack = true,
+  interactionEnabled = true,
   playbackCursorPosition = null,
   latestLocationMarker = null,
   showLatestLocationMarker = true,
@@ -784,6 +786,13 @@ ref
       center={center}
       zoom={zoom}
       preferCanvas={true}
+      dragging={interactionEnabled}
+      touchZoom={interactionEnabled}
+      doubleClickZoom={interactionEnabled}
+      scrollWheelZoom={interactionEnabled}
+      boxZoom={interactionEnabled}
+      keyboard={interactionEnabled}
+      zoomControl={interactionEnabled}
       className="map-view"
       data-tour="map"
       style={{ height: '100%', width: '100%' }}

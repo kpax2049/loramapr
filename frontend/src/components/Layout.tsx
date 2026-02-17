@@ -24,6 +24,7 @@ type LayoutProps = {
   sidebar: ReactNode;
   children: ReactNode;
   forceSidebarCollapsed?: boolean;
+  forceSidebarExpanded?: boolean;
 };
 
 type ResizeStart = {
@@ -84,7 +85,8 @@ export default function Layout({
   sidebarCollapsedContent,
   sidebar,
   children,
-  forceSidebarCollapsed = false
+  forceSidebarCollapsed = false,
+  forceSidebarExpanded = false
 }: LayoutProps) {
   const [sidebarWidth, setSidebarWidth] = useState<number>(readStoredSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(readStoredSidebarCollapsed);
@@ -147,7 +149,7 @@ export default function Layout({
     };
   }, [isResizing]);
 
-  const isSidebarCollapsed = forceSidebarCollapsed || sidebarCollapsed;
+  const isSidebarCollapsed = forceSidebarExpanded ? false : forceSidebarCollapsed || sidebarCollapsed;
   const computedSidebarWidth = isSidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : sidebarWidth;
 
   useEffect(() => {
@@ -157,7 +159,7 @@ export default function Layout({
       }
 
       if (event.key === 'Escape') {
-        if (forceSidebarCollapsed || isSidebarCollapsed) {
+        if (forceSidebarCollapsed || forceSidebarExpanded || isSidebarCollapsed) {
           return;
         }
         event.preventDefault();
@@ -172,7 +174,7 @@ export default function Layout({
         !event.altKey &&
         event.key.toLowerCase() === 'b'
       ) {
-        if (forceSidebarCollapsed) {
+        if (forceSidebarCollapsed || forceSidebarExpanded) {
           return;
         }
         event.preventDefault();
@@ -182,7 +184,7 @@ export default function Layout({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [forceSidebarCollapsed, isSidebarCollapsed]);
+  }, [forceSidebarCollapsed, forceSidebarExpanded, isSidebarCollapsed]);
 
   return (
     <div className={`layout${isResizing ? ' layout--resizing' : ''}`}>
@@ -233,7 +235,7 @@ export default function Layout({
               className="layout__toggle-button"
               title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              disabled={forceSidebarCollapsed}
+              disabled={forceSidebarCollapsed || forceSidebarExpanded}
               onClick={() => setSidebarCollapsed((value) => !value)}
             >
               {isSidebarCollapsed ? '>' : '<'}

@@ -492,6 +492,7 @@ function App() {
   const initial = useMemo(() => readInitialQueryState(), []);
   const {
     startTour,
+    isTourActive,
     isTourPromptVisible,
     dismissTourPrompt,
     resetTour,
@@ -2113,7 +2114,8 @@ function App() {
         sidebarHeaderBottomActions={themeModeControl}
         sidebarCollapsedContent={zenMode ? null : sidebarCollapsedRail}
         sidebar={controlsPanel}
-        forceSidebarCollapsed={zenMode}
+        forceSidebarCollapsed={zenMode && !isTourActive}
+        forceSidebarExpanded={isTourActive}
       >
         <MapView
           ref={mapRef}
@@ -2128,6 +2130,7 @@ function App() {
           coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
           showPoints={showPoints}
           showTrack={showTrack}
+          interactionEnabled={!isTourActive}
           playbackCursorPosition={safePlaybackCursorPosition}
           latestLocationMarker={latestLocationMarker}
           showLatestLocationMarker={!isPlaybackMode}

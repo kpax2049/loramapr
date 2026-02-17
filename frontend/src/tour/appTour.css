@@ -1,5 +1,6 @@
 .driver-popover {
   max-width: min(92vw, 340px);
+  z-index: 2147483001;
 }
 
 .driver-popover .driver-popover-footer {
@@ -8,4 +9,8 @@
 
 .driver-popover .lm-tour-skip-btn {
   margin-right: auto;
+}
+
+.driver-overlay {
+  z-index: 2147483000;
 }

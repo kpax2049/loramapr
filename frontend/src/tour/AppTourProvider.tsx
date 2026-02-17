@@ -20,6 +20,7 @@ type AppTourContextValue = {
   startTour: (steps?: DriveStep[]) => void;
   tourCompleted: boolean;
   hasSeenTour: boolean;
+  isTourActive: boolean;
   isTourPromptVisible: boolean;
   dismissTourPrompt: () => void;
   resetTour: () => void;
@@ -103,6 +104,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
   const [tourPromptDismissed, setTourPromptDismissed] = useState<boolean>(() =>
     readTourPromptDismissed()
   );
+  const [isTourActive, setIsTourActive] = useState(false);
   const driverRef = useRef<Driver | null>(null);
 
   const startTour = useCallback((steps?: DriveStep[]) => {
@@ -115,6 +117,10 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
     writeTourPromptDismissed(true);
     setTourCompleted(true);
     setTourPromptDismissed(true);
+    if (driverRef.current) {
+      driverRef.current.destroy();
+      driverRef.current = null;
+    }
     const driverInstance = driver({
       animate: true,
       allowClose: true,
@@ -127,11 +133,18 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
       doneBtnText: 'Done',
       onPopoverRender: (popover, options) => {
         ensureSkipButton(popover, options.driver);
+      },
+      onDestroyed: () => {
+        setIsTourActive(false);
+        if (driverRef.current === driverInstance) {
+          driverRef.current = null;
+        }
       }
     });
 
     driverInstance.setSteps(tourSteps);
     driverRef.current = driverInstance;
+    setIsTourActive(true);
     driverInstance.drive();
   }, []);
 
@@ -155,6 +168,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
       startTour,
       tourCompleted,
       hasSeenTour: tourCompleted,
+      isTourActive,
       isTourPromptVisible,
       dismissTourPrompt,
       resetTour,
@@ -163,6 +177,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
     [
       startTour,
       tourCompleted,
+      isTourActive,
       isTourPromptVisible,
       dismissTourPrompt,
       resetTour
