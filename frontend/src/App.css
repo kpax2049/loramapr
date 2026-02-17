@@ -3241,6 +3241,112 @@
   fill: var(--map-point-latest-halo);
 }
 
+.lm-device-divicon {
+  background: transparent;
+  border: 0;
+}
+
+.lm-device-marker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px 999px 999px 4px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--panel-shadow);
+  color: var(--panel-text);
+  transform: translateZ(0);
+}
+
+.lm-device-marker__icon-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lm-device-marker__icon {
+  width: 64%;
+  height: 64%;
+}
+
+.lm-device-marker__status {
+  position: absolute;
+  top: -0.12rem;
+  right: -0.12rem;
+  width: 0.56rem;
+  height: 0.56rem;
+  border-radius: 999px;
+}
+
+.lm-device-marker__status-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--panel-bg);
+  background: var(--device-online-unknown);
+}
+
+.lm-device-marker__status-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 1px solid var(--device-online-unknown);
+}
+
+.lm-device-marker__status--online .lm-device-marker__status-dot {
+  background: var(--device-online-online);
+}
+
+.lm-device-marker__status--recent .lm-device-marker__status-dot {
+  background: var(--device-online-recent);
+}
+
+.lm-device-marker__status--stale .lm-device-marker__status-dot {
+  background: var(--device-online-stale);
+}
+
+.lm-device-marker__status--offline .lm-device-marker__status-dot {
+  background: var(--device-online-offline);
+}
+
+.lm-device-marker__status-ring--online {
+  border-color: var(--device-online-online);
+}
+
+.lm-device-marker__status-ring--recent {
+  border-color: var(--device-online-recent);
+}
+
+.lm-device-marker__status-ring--stale {
+  border-color: var(--device-online-stale);
+}
+
+.lm-device-marker__status-ring--offline {
+  border-color: var(--device-online-offline);
+}
+
+.lm-device-marker__badge {
+  position: absolute;
+  right: -0.05rem;
+  bottom: -0.08rem;
+  min-width: 1rem;
+  height: 0.74rem;
+  padding: 0 0.14rem;
+  border-radius: 999px;
+  border: 1px solid var(--panel-accent);
+  background: var(--panel-bg);
+  color: var(--accent-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.44rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
 .map-point.is-selected {
   stroke-width: 3px;
 }

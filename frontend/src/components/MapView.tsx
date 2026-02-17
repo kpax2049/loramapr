@@ -10,6 +10,7 @@ import {
 import {
   CircleMarker,
   MapContainer,
+  Marker,
   Polyline,
   Rectangle,
   TileLayer,
@@ -29,6 +30,8 @@ import DeviceIcon, {
   type DeviceIdentityInput,
   type DeviceIconKey
 } from './DeviceIcon';
+import { createDeviceDivIcon } from '../map/deviceMarkerIcon';
+import { getDeviceOnlineStatuses } from '../utils/deviceOnlineStatus';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -94,6 +97,8 @@ type LatestLocationMarker = {
   iconOverride?: boolean | null;
   iconKey?: DeviceIconKey | string | null;
   capturedAt: string | null;
+  latestMeasurementAt?: string | null;
+  latestWebhookReceivedAt?: string | null;
   lat: number;
   lon: number;
   rssi: number | null;
@@ -598,6 +603,42 @@ ref
 
   const latestLocationIconKey = latestLocationIconInput ? getEffectiveIconKey(latestLocationIconInput) : 'unknown';
   const latestLocationIconDefinition = getDeviceIconDefinition(latestLocationIconKey);
+  const latestLocationStatuses = useMemo(() => {
+    if (!latestLocationMarker) {
+      return { measurementStatus: 'unknown', webhookStatus: 'unknown' } as const;
+    }
+    return getDeviceOnlineStatuses({
+      latestMeasurementAt: latestLocationMarker.latestMeasurementAt ?? latestLocationMarker.capturedAt,
+      latestWebhookReceivedAt: latestLocationMarker.latestWebhookReceivedAt ?? null
+    });
+  }, [
+    latestLocationMarker?.capturedAt,
+    latestLocationMarker?.latestMeasurementAt,
+    latestLocationMarker?.latestWebhookReceivedAt
+  ]);
+  const latestLocationDivIcon = useMemo(() => {
+    if (!latestLocationMarker) {
+      return null;
+    }
+    const documentTheme =
+      typeof document !== 'undefined'
+        ? document.documentElement.dataset.theme
+        : null;
+    const resolvedTheme = documentTheme === 'light' || documentTheme === 'dark' ? documentTheme : theme;
+    return createDeviceDivIcon({
+      iconKey: latestLocationIconKey,
+      badgeText: latestLocationIconDefinition.badgeText ?? undefined,
+      status: latestLocationStatuses,
+      theme: resolvedTheme,
+      size: 32
+    });
+  }, [
+    latestLocationMarker,
+    latestLocationIconKey,
+    latestLocationIconDefinition.badgeText,
+    latestLocationStatuses,
+    theme
+  ]);
   const tileConfig = useMemo(
     () => ({
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -760,27 +801,11 @@ ref
           interactive={false}
         />
       )}
-      {showLatestLocationMarker && latestLocationMarker ? (
+      {showLatestLocationMarker && latestLocationMarker && latestLocationDivIcon ? (
         Number.isFinite(latestLocationMarker.lat) && Number.isFinite(latestLocationMarker.lon) ? (
-        <>
-          <CircleMarker
-            center={[latestLocationMarker.lat, latestLocationMarker.lon]}
-            radius={11}
-            pathOptions={{
-              className: 'map-point map-point--latest-halo',
-              weight: 2,
-              fillOpacity: 0.2
-            }}
-            interactive={false}
-          />
-          <CircleMarker
-            center={[latestLocationMarker.lat, latestLocationMarker.lon]}
-            radius={7}
-            pathOptions={{
-              className: 'map-point map-point--latest',
-              weight: 3,
-              fillOpacity: 0.95
-            }}
+          <Marker
+            position={[latestLocationMarker.lat, latestLocationMarker.lon]}
+            icon={latestLocationDivIcon}
           >
             <Tooltip className="map-latest-tooltip" direction="top" offset={[0, -8]} opacity={0.95}>
               <div>
@@ -834,8 +859,7 @@ ref
                 ) : null}
               </div>
             </Tooltip>
-          </CircleMarker>
-        </>
+          </Marker>
         ) : null
       ) : null}
     </MapContainer>

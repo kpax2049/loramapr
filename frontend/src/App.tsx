@@ -1420,6 +1420,8 @@ function App() {
       role: deviceDetailQuery.data?.role ?? null,
       shortName: deviceDetailQuery.data?.shortName ?? null,
       capturedAt: latestMeasurement.capturedAt,
+      latestMeasurementAt: latestDeviceQuery.data?.latestMeasurementAt ?? latestMeasurement.capturedAt,
+      latestWebhookReceivedAt: latestDeviceQuery.data?.latestWebhookReceivedAt ?? null,
       lat: latestMeasurement.lat,
       lon: latestMeasurement.lon,
       rssi: latestMeasurement.rssi,
@@ -1430,7 +1432,9 @@ function App() {
     selectedDevice,
     deviceDetailQuery.data?.latestMeasurement,
     deviceDetailQuery.data?.role,
-    deviceDetailQuery.data?.shortName
+    deviceDetailQuery.data?.shortName,
+    latestDeviceQuery.data?.latestMeasurementAt,
+    latestDeviceQuery.data?.latestWebhookReceivedAt
   ]);
 
   useEffect(() => {
