@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.9.10 - 2026-02-17
+
+### Title
+- Device Online Status
+
+### Added
+- Reusable `DeviceOnlineDot` component with theme-aware status colors for `online`, `recent`, `stale`, `offline`, and `unknown`.
+- Device online status indicator surfaced consistently in device list rows, selected-device header, and status strip.
+- Dot tooltip now reports measurement and ingest recency, including ingest source.
+- Device details panel now includes a `Status` row summarizing measurement/ingest status and last-seen timing.
+
+### Changed
+- Online indicator now pulses only while measurement status is `online`, and respects `prefers-reduced-motion`.
+- Ingest ring logic now appears when ingest status is more recent than measurement status to highlight ingest-vs-measurement drift.
+- Device status thresholds are configurable via `VITE_ONLINE_MS`, `VITE_RECENT_MS`, and `VITE_STALE_MS`.
+
+### Acceptance
+- Dot is visible in device list + selected header + status strip.
+- Online state pulses (and stops pulsing when not online).
+- Tooltip shows both measurement and ingest recency + source.
+- Ring appears when ingest is recent but measurement is not.
+- Honors `prefers-reduced-motion`.
+- Thresholds adjustable via env without rebuild breakage.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.9 - 2026-02-16
 
 ### Title
