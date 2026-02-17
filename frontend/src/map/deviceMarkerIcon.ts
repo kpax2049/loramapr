@@ -56,8 +56,7 @@ export function createDeviceDivIcon(options: CreateDeviceDivIconOptions): L.DivI
           `lm-device-marker--measurement-${measurementStatus}`
         ].join(' '),
         style: {
-          width: `${size}px`,
-          height: `${size}px`
+          '--lm-device-marker-size': `${size}px`
         }
       },
       createElement(

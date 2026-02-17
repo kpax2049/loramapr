@@ -3243,39 +3243,48 @@
 
 .lm-device-divicon {
   background: transparent;
-  border: 0;
+  border: none;
 }
 
 .lm-device-marker {
+  --lm-device-marker-size: 32px;
   position: relative;
-  display: inline-flex;
+  width: var(--lm-device-marker-size);
+  height: var(--lm-device-marker-size);
+  display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px 999px 999px 4px;
   background: var(--panel-bg);
   border: 1px solid var(--border-strong);
-  box-shadow: var(--panel-shadow);
+  box-shadow: 0 1px 3px var(--overlay-scrim);
   color: var(--panel-text);
+  line-height: 0;
   transform: translateZ(0);
+  will-change: transform;
 }
 
 .lm-device-marker__icon-shell {
-  display: inline-flex;
+  width: 100%;
+  height: 100%;
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .lm-device-marker__icon {
-  width: 64%;
-  height: 64%;
+  width: 62%;
+  height: 62%;
+  display: block;
+  transform: translateZ(0);
 }
 
 .lm-device-marker__status {
   position: absolute;
-  top: -0.12rem;
-  right: -0.12rem;
-  width: 0.56rem;
-  height: 0.56rem;
+  top: -0.14rem;
+  right: -0.14rem;
+  width: clamp(0.5rem, calc(var(--lm-device-marker-size) * 0.25), 0.66rem);
+  height: clamp(0.5rem, calc(var(--lm-device-marker-size) * 0.25), 0.66rem);
   border-radius: 999px;
 }
 
@@ -3310,6 +3319,10 @@
   background: var(--device-online-offline);
 }
 
+.lm-device-marker__status--online .lm-device-marker__status-dot {
+  animation: lm-device-marker-online-pulse 1.7s ease-out infinite;
+}
+
 .lm-device-marker__status-ring--online {
   border-color: var(--device-online-online);
 }
@@ -3328,15 +3341,15 @@
 
 .lm-device-marker__badge {
   position: absolute;
-  right: -0.05rem;
-  bottom: -0.08rem;
-  min-width: 1rem;
-  height: 0.74rem;
+  right: -0.08rem;
+  bottom: -0.1rem;
+  min-width: 0.98rem;
+  height: 0.72rem;
   padding: 0 0.14rem;
   border-radius: 999px;
-  border: 1px solid var(--panel-accent);
-  background: var(--panel-bg);
-  color: var(--accent-fg);
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3345,6 +3358,27 @@
   text-transform: uppercase;
   font-family: var(--font-mono);
   line-height: 1;
+}
+
+@keyframes lm-device-marker-online-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-device-marker__status--online .lm-device-marker__status-dot {
+    animation: none;
+  }
 }
 
 .map-point.is-selected {
