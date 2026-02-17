@@ -299,6 +299,36 @@ function isFiniteCoordinate(lat: unknown, lon: unknown): boolean {
   return toLatLonPoint(lat, lon) !== null;
 }
 
+function normalizeLatLonItem<T extends { lat: unknown; lon: unknown }>(
+  item: T
+): (Omit<T, 'lat' | 'lon'> & { lat: number; lon: number }) | null {
+  const point = toLatLonPoint(item.lat, item.lon);
+  if (!point) {
+    return null;
+  }
+  return {
+    ...item,
+    lat: point[0],
+    lon: point[1]
+  };
+}
+
+function isValidLatLonBounds(bounds: LatLonBounds | null): bounds is LatLonBounds {
+  if (!bounds) {
+    return false;
+  }
+  return (
+    toLatLonPoint(bounds[0][0], bounds[0][1]) !== null &&
+    toLatLonPoint(bounds[1][0], bounds[1][1]) !== null
+  );
+}
+
+function isDegenerateBounds(bounds: LatLonBounds): boolean {
+  const latSpan = Math.abs(bounds[1][0] - bounds[0][0]);
+  const lonSpan = Math.abs(bounds[1][1] - bounds[0][1]);
+  return latSpan < 1e-9 && lonSpan < 1e-9;
+}
+
 function buildBoundsFromPoints(points: LatLonPoint[]): LatLonBounds | null {
   if (points.length === 0) {
     return null;
@@ -1056,6 +1086,32 @@ function App() {
   const activeCompareMeasurements = isPlaybackMode
     ? []
     : compareMeasurementsQuery.data?.items ?? [];
+  const mapMeasurements = useMemo(() => {
+    return activeMeasurements
+      .map((point) => normalizeLatLonItem(point))
+      .filter((point): point is NonNullable<typeof point> => point !== null);
+  }, [activeMeasurements]);
+  const mapTrackPoints = useMemo(() => {
+    return activeTrack
+      .map((point) => normalizeLatLonItem(point))
+      .filter((point): point is NonNullable<typeof point> => point !== null);
+  }, [activeTrack]);
+  const mapCompareMeasurements = useMemo(() => {
+    return activeCompareMeasurements
+      .map((point) => normalizeLatLonItem(point))
+      .filter((point): point is NonNullable<typeof point> => point !== null);
+  }, [activeCompareMeasurements]);
+  const mapOverviewTrack = useMemo(() => {
+    return playbackOverviewTrack
+      .map((point) => normalizeLatLonItem(point))
+      .filter((point): point is NonNullable<typeof point> => point !== null);
+  }, [playbackOverviewTrack]);
+  const safePlaybackCursorPosition = useMemo<LatLonPoint | null>(() => {
+    if (!playbackCursorPosition) {
+      return null;
+    }
+    return toLatLonPoint(playbackCursorPosition[0], playbackCursorPosition[1]);
+  }, [playbackCursorPosition]);
   const activeMeasurementsQuery = isPlaybackMode
     ? playbackWindowQuery
     : exploreMeasurementsQuery;
@@ -1129,7 +1185,7 @@ function App() {
   );
   const renderedPointCount =
     effectiveMapLayerMode === 'points'
-      ? (showPoints ? activeMeasurements.length : 0) + activeCompareMeasurements.length
+      ? (showPoints ? mapMeasurements.length : 0) + mapCompareMeasurements.length
       : 0;
   const renderedBinCount =
     effectiveMapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
@@ -1511,31 +1567,13 @@ function App() {
     setCompareReceiverId(null);
   }, [deviceId, selectedSessionId, receiverSource]);
 
-  const measurementBounds = useMemo(() => {
-    const items = activeMeasurements;
-    if (items.length === 0) {
-      return null;
-    }
-    let minLat = items[0].lat;
-    let maxLat = items[0].lat;
-    let minLon = items[0].lon;
-    let maxLon = items[0].lon;
-
-    for (const item of items) {
-      if (item.lat < minLat) minLat = item.lat;
-      if (item.lat > maxLat) maxLat = item.lat;
-      if (item.lon < minLon) minLon = item.lon;
-      if (item.lon > maxLon) maxLon = item.lon;
-    }
-
-    return [
-      [minLat, minLon],
-      [maxLat, maxLon]
-    ] as [[number, number], [number, number]];
-  }, [activeMeasurements]);
+  const measurementBounds = useMemo(
+    () => buildBoundsFromPoints(mapMeasurements.map((point) => [point.lat, point.lon] as LatLonPoint)),
+    [mapMeasurements]
+  );
 
   useEffect(() => {
-    if (!measurementBounds) {
+    if (!measurementBounds || !isValidLatLonBounds(measurementBounds)) {
       return;
     }
     if (activeMeasurementsQuery.isFetching) {
@@ -1547,7 +1585,11 @@ function App() {
     if (hasAutoFitRef.current) {
       return;
     }
-    mapRef.current?.fitBounds(measurementBounds);
+    if (isDegenerateBounds(measurementBounds)) {
+      mapRef.current?.focusPoint(measurementBounds[0], 16);
+    } else {
+      mapRef.current?.fitBounds(measurementBounds, { padding: [24, 24], maxZoom: 17 });
+    }
     hasAutoFitRef.current = true;
   }, [measurementBounds, userInteractedWithMap, activeMeasurementsQuery.isFetching]);
 
@@ -1931,15 +1973,15 @@ function App() {
           theme={effectiveTheme}
           mapLayerMode={effectiveMapLayerMode}
           coverageMetric={coverageMetric}
-          measurements={activeMeasurements}
-          compareMeasurements={activeCompareMeasurements}
-          track={activeTrack}
-          overviewTrack={isPlaybackMode ? playbackOverviewTrack : []}
+          measurements={mapMeasurements}
+          compareMeasurements={mapCompareMeasurements}
+          track={mapTrackPoints}
+          overviewTrack={isPlaybackMode ? mapOverviewTrack : []}
           coverageBins={coverageQuery.data?.items ?? []}
           coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
           showPoints={showPoints}
           showTrack={showTrack}
-          playbackCursorPosition={playbackCursorPosition}
+          playbackCursorPosition={safePlaybackCursorPosition}
           latestLocationMarker={latestLocationMarker}
           showLatestLocationMarker={!isPlaybackMode}
           onBoundsChange={setBbox}

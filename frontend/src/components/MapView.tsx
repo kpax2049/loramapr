@@ -106,11 +106,49 @@ export type MapViewHandle = {
   focusPoint: (point: [number, number], fallbackZoom?: number) => void;
 };
 
-function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] {
+function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] | null {
   const southWest = bounds.getSouthWest();
   const northEast = bounds.getNorthEast();
+  const values = [southWest.lng, southWest.lat, northEast.lng, northEast.lat] as const;
+  if (values.some((value) => !Number.isFinite(value))) {
+    return null;
+  }
+  return [values[0], values[1], values[2], values[3]];
+}
 
-  return [southWest.lng, southWest.lat, northEast.lng, northEast.lat];
+function toSafeBounds(bounds: L.LatLngBoundsExpression): L.LatLngBounds | null {
+  try {
+    const normalized = L.latLngBounds(bounds);
+    const southWest = normalized.getSouthWest();
+    const northEast = normalized.getNorthEast();
+    if (
+      !Number.isFinite(southWest.lat) ||
+      !Number.isFinite(southWest.lng) ||
+      !Number.isFinite(northEast.lat) ||
+      !Number.isFinite(northEast.lng)
+    ) {
+      return null;
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+function toSafePoint(point: [number, number]): [number, number] | null {
+  const [lat, lon] = point;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+  return [lat, lon];
+}
+
+function hasFiniteLatLon(point: { lat: number; lon: number }): boolean {
+  return Number.isFinite(point.lat) && Number.isFinite(point.lon);
+}
+
+function hasFiniteBinCoordinates(bin: Pick<CoverageBin, 'latBin' | 'lonBin'>): boolean {
+  return Number.isFinite(bin.latBin) && Number.isFinite(bin.lonBin);
 }
 
 function BoundsListener({
@@ -122,19 +160,39 @@ function BoundsListener({
   onZoomChange?: (zoom: number) => void;
   onUserInteraction?: () => void;
 }) {
-  const map = useMapEvents({
+  const map = useMap();
+
+  const emitBounds = () => {
+    if (!onChange) {
+      return;
+    }
+    try {
+      const bbox = boundsToBbox(map.getBounds());
+      if (bbox) {
+        onChange(bbox);
+      }
+    } catch {
+      // Ignore transient invalid Leaflet bounds states caused by bad/stale layer data.
+    }
+  };
+
+  const emitZoom = () => {
+    if (!onZoomChange) {
+      return;
+    }
+    const zoom = map.getZoom();
+    if (Number.isFinite(zoom)) {
+      onZoomChange(zoom);
+    }
+  };
+
+  useMapEvents({
     load: () => {
-      if (onChange) {
-        onChange(boundsToBbox(map.getBounds()));
-      }
-      if (onZoomChange) {
-        onZoomChange(map.getZoom());
-      }
+      emitBounds();
+      emitZoom();
     },
     moveend: () => {
-      if (onChange) {
-        onChange(boundsToBbox(map.getBounds()));
-      }
+      emitBounds();
     },
     dragstart: () => {
       onUserInteraction?.();
@@ -143,23 +201,15 @@ function BoundsListener({
       onUserInteraction?.();
     },
     zoomend: () => {
-      if (onChange) {
-        onChange(boundsToBbox(map.getBounds()));
-      }
-      if (onZoomChange) {
-        onZoomChange(map.getZoom());
-      }
+      emitBounds();
+      emitZoom();
     }
   });
 
   useEffect(() => {
-    if (onChange) {
-      onChange(boundsToBbox(map.getBounds()));
-    }
-    if (onZoomChange) {
-      onZoomChange(map.getZoom());
-    }
-  }, [map, onChange]);
+    emitBounds();
+    emitZoom();
+  }, [map, onChange, onZoomChange]);
 
   return null;
 }
@@ -376,18 +426,34 @@ ref
   useImperativeHandle(ref, () => ({
     fitBounds: (bounds, options) => {
       if (mapRef.current) {
-        mapRef.current.fitBounds(bounds, options ?? { padding: [20, 20] });
+        const safeBounds = toSafeBounds(bounds);
+        if (!safeBounds) {
+          return;
+        }
+        try {
+          mapRef.current.fitBounds(safeBounds, options ?? { padding: [20, 20], maxZoom: 17 });
+        } catch {
+          // Ignore invalid-layer zoom failures caused by transient bad data.
+        }
       }
     },
     focusPoint: (point, fallbackZoom = 16) => {
       if (!mapRef.current) {
         return;
       }
+      const safePoint = toSafePoint(point);
+      if (!safePoint) {
+        return;
+      }
       const currentZoom = mapRef.current.getZoom();
       const targetZoom = Number.isFinite(currentZoom)
         ? Math.max(currentZoom, fallbackZoom)
         : fallbackZoom;
-      mapRef.current.setView(point, targetZoom);
+      try {
+        mapRef.current.setView(safePoint, targetZoom);
+      } catch {
+        // Ignore invalid-layer pan failures caused by transient bad data.
+      }
     }
   }));
 
@@ -395,17 +461,24 @@ ref
     if (!showTrack || track.length === 0) {
       return [];
     }
-    if (track.length <= 2) {
-      return track.map((point) => [point.lat, point.lon] as [number, number]);
+    const validTrack = track.filter(hasFiniteLatLon);
+    if (validTrack.length === 0) {
+      return [];
+    }
+    if (validTrack.length <= 2) {
+      return validTrack.map((point) => [point.lat, point.lon] as [number, number]);
     }
 
     const tolerance = zoomToTolerance(currentZoom);
-    const points = track.map((point) => ({ x: point.lon, y: point.lat }));
+    const points = validTrack.map((point) => ({ x: point.lon, y: point.lat }));
     const simplified = simplify(points, tolerance, true);
     const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
 
-    const first = [track[0].lat, track[0].lon] as [number, number];
-    const last = [track[track.length - 1].lat, track[track.length - 1].lon] as [number, number];
+    const first = [validTrack[0].lat, validTrack[0].lon] as [number, number];
+    const last = [
+      validTrack[validTrack.length - 1].lat,
+      validTrack[validTrack.length - 1].lon
+    ] as [number, number];
     if (positions.length > 0) {
       positions[0] = first;
       positions[positions.length - 1] = last;
@@ -430,19 +503,23 @@ ref
     if (!showTrack || overviewTrack.length === 0) {
       return [];
     }
-    if (overviewTrack.length <= 2) {
-      return overviewTrack.map((point) => [point.lat, point.lon] as [number, number]);
+    const validOverview = overviewTrack.filter(hasFiniteLatLon);
+    if (validOverview.length === 0) {
+      return [];
+    }
+    if (validOverview.length <= 2) {
+      return validOverview.map((point) => [point.lat, point.lon] as [number, number]);
     }
 
     const tolerance = zoomToTolerance(currentZoom);
-    const points = overviewTrack.map((point) => ({ x: point.lon, y: point.lat }));
+    const points = validOverview.map((point) => ({ x: point.lon, y: point.lat }));
     const simplified = simplify(points, tolerance, true);
     const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
 
-    const first = [overviewTrack[0].lat, overviewTrack[0].lon] as [number, number];
+    const first = [validOverview[0].lat, validOverview[0].lon] as [number, number];
     const last = [
-      overviewTrack[overviewTrack.length - 1].lat,
-      overviewTrack[overviewTrack.length - 1].lon
+      validOverview[validOverview.length - 1].lat,
+      validOverview[validOverview.length - 1].lon
     ] as [number, number];
     if (positions.length > 0) {
       positions[0] = first;
@@ -462,11 +539,22 @@ ref
     if (mapLayerMode !== 'coverage' || coverageBins.length === 0 || !coverageBinSize) {
       return { bins: [] as Array<CoverageBin & { bounds: [[number, number], [number, number]]; bucket: CoverageBucket }> };
     }
-    const bins = coverageBins.map((bin) => {
+    const bins = coverageBins.flatMap((bin) => {
+      if (!hasFiniteBinCoordinates(bin)) {
+        return [];
+      }
       const minLat = bin.latBin * coverageBinSize;
       const minLon = bin.lonBin * coverageBinSize;
       const maxLat = minLat + coverageBinSize;
       const maxLon = minLon + coverageBinSize;
+      if (
+        !Number.isFinite(minLat) ||
+        !Number.isFinite(minLon) ||
+        !Number.isFinite(maxLat) ||
+        !Number.isFinite(maxLon)
+      ) {
+        return [];
+      }
       const metricValue =
         coverageMetric === 'count'
           ? bin.count
@@ -601,6 +689,7 @@ ref
       {mapLayerMode === 'points' &&
         compareMeasurements.length > 0 &&
         compareMeasurements.map((measurement) => (
+          Number.isFinite(measurement.lat) && Number.isFinite(measurement.lon) ? (
           <CircleMarker
             key={`compare-${measurement.id}`}
             center={[measurement.lat, measurement.lon]}
@@ -612,10 +701,14 @@ ref
             }}
             interactive={false}
           />
+          ) : null
         ))}
       {mapLayerMode === 'points' &&
         showPoints &&
         measurements.map((measurement) => {
+          if (!Number.isFinite(measurement.lat) || !Number.isFinite(measurement.lon)) {
+            return null;
+          }
           const bucket = getRssiBucket(measurement.rssi);
           const color = palette[bucket] || palette.default;
           const isSelected = measurement.id === selectedPointId;
@@ -668,6 +761,7 @@ ref
         />
       )}
       {showLatestLocationMarker && latestLocationMarker ? (
+        Number.isFinite(latestLocationMarker.lat) && Number.isFinite(latestLocationMarker.lon) ? (
         <>
           <CircleMarker
             center={[latestLocationMarker.lat, latestLocationMarker.lon]}
@@ -742,6 +836,7 @@ ref
             </Tooltip>
           </CircleMarker>
         </>
+        ) : null
       ) : null}
     </MapContainer>
   );
