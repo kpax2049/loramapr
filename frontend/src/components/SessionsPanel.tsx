@@ -496,7 +496,12 @@ export default function SessionsPanel({
           disabled={!deviceId || startMutation.isPending}
         />
         <div className="sessions-panel__buttons">
-          <button type="button" onClick={handleStart} disabled={!deviceId || startMutation.isPending}>
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={!deviceId || startMutation.isPending}
+            data-tour="start-session"
+          >
             {startMutation.isPending ? 'Starting…' : 'Start session'}
           </button>
         </div>

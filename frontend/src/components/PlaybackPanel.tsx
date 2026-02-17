@@ -233,7 +233,7 @@ export default function PlaybackPanel({
   }, [windowChartData, playbackCursorMs]);
 
   return (
-    <section className="playback-panel" aria-label="Playback controls">
+    <section className="playback-panel" aria-label="Playback controls" data-tour="playback-controls">
       <div className="playback-panel__header">
         <h3>Playback</h3>
       </div>

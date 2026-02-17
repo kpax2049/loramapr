@@ -551,6 +551,7 @@ export default function Controls({
               aria-haspopup="listbox"
               aria-expanded={devicePickerOpen}
               aria-label="Select device"
+              data-tour="device-list"
             >
               {selectedDevice ? (
                 <>
@@ -573,7 +574,12 @@ export default function Controls({
               )}
             </button>
             {devicePickerOpen && devices.length > 0 ? (
-              <div className="controls__device-picker-list" role="listbox" aria-label="Device options">
+              <div
+                className="controls__device-picker-list"
+                role="listbox"
+                aria-label="Device options"
+                data-tour="device-list"
+              >
                 {devices.map((device) => {
                   const optionIconKey = getEffectiveIconKey(device);
                   const optionIcon = getDeviceIconDefinition(optionIconKey);
@@ -972,7 +978,7 @@ export default function Controls({
       )}
 
       {showDeviceTab && (
-        <div className="controls__group">
+        <div className="controls__group" data-tour="device-markers-toggle">
           <span className="controls__label">Map</span>
           <label className="controls__toggle">
             <input
@@ -1053,7 +1059,12 @@ export default function Controls({
       {showCoverageTab && (
         <div className="controls__group">
           <span className="controls__label">Map layer</span>
-          <div className="controls__segmented" role="radiogroup" aria-label="Map layer">
+          <div
+            className="controls__segmented"
+            role="radiogroup"
+            aria-label="Map layer"
+            data-tour="coverage-toggle"
+          >
             <label className={`controls__segment ${mapLayerMode === 'points' ? 'is-active' : ''}`}>
               <input
                 type="radio"
@@ -1301,6 +1312,7 @@ export default function Controls({
             onClick={onFitToData}
             title="Recenter map to visible data"
             aria-label="Recenter map to visible data"
+            data-tour="fit-to-data"
           >
             Fit to data
           </button>

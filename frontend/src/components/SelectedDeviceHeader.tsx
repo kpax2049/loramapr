@@ -74,7 +74,7 @@ export default function SelectedDeviceHeader({
   const sessionStatus = device ? (activeSession ? 'active' : 'idle') : null;
 
   return (
-    <div className="selected-device-header">
+    <div className="selected-device-header" data-tour="selected-device-header">
       <div className="selected-device-header__row">
         <div className="selected-device-header__identity-wrap">
           <DeviceIcon
@@ -135,6 +135,7 @@ export default function SelectedDeviceHeader({
             onClick={onFitToData}
             title="Recenter map to visible data"
             aria-label="Recenter map to visible data"
+            data-tour="fit-to-data"
           >
             Fit to data
           </button>

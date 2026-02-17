@@ -7,11 +7,14 @@ import App from './App';
 import './styles/theme.css';
 import './index.css';
 import { queryClient } from './query/queryClient';
+import { AppTourProvider } from './tour/AppTourProvider';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <AppTourProvider>
+        <App />
+      </AppTourProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

@@ -1,0 +1,11 @@
+.driver-popover {
+  max-width: min(92vw, 340px);
+}
+
+.driver-popover .driver-popover-footer {
+  gap: 0.4rem;
+}
+
+.driver-popover .lm-tour-skip-btn {
+  margin-right: auto;
+}

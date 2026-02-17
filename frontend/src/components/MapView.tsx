@@ -784,6 +784,8 @@ ref
       center={center}
       zoom={zoom}
       preferCanvas={true}
+      className="map-view"
+      data-tour="map"
       style={{ height: '100%', width: '100%' }}
     >
       <MapInstanceSync mapRef={mapRef} />

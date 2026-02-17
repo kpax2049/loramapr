@@ -41,7 +41,7 @@ export default function StatusStrip({
   const iconDefinition = getDeviceIconDefinition(iconKey);
 
   return (
-    <div className="status-strip" aria-live="polite">
+    <div className="status-strip" aria-live="polite" data-tour="status-strip">
       <span className="status-strip__item">
         <span className="status-strip__label">Device</span>
         <span className="status-strip__value status-strip__value--device">

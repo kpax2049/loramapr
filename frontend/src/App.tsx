@@ -28,6 +28,7 @@ import {
 } from './query/hooks';
 import { useLorawanEvents } from './query/lorawan';
 import { useSessionTimeline, useSessions, useSessionWindow } from './query/sessions';
+import { useAppTour } from './tour/AppTourProvider';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -489,6 +490,7 @@ function App() {
   }
 
   const initial = useMemo(() => readInitialQueryState(), []);
+  const { startTour } = useAppTour();
 
   const queryClient = useQueryClient();
   const prevLatestMeasurementAt = useRef<string | null>(null);
@@ -1884,7 +1886,7 @@ function App() {
   const statusSessionId = playbackSessionId ?? selectedSessionId;
 
   const sidebarHeader = (
-    <div className="sidebar-header" aria-label="Sidebar header">
+    <div className="sidebar-header" aria-label="Sidebar header" data-tour="sidebar-header">
       <SelectedDeviceHeader
         device={selectedDevice}
         latestMeasurementAt={latestMeasurementAt}
@@ -1893,7 +1895,7 @@ function App() {
         onFitToData={handleFitToData}
         fitFeedback={fitFeedback}
       />
-      <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs">
+      <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs" data-tour="sidebar-tabs">
         {SIDEBAR_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -1903,6 +1905,7 @@ function App() {
             aria-selected={sidebarTab === tab.key}
             className={`sidebar-header__tab${sidebarTab === tab.key ? ' is-active' : ''}`}
             onClick={() => setSidebarTab(tab.key)}
+            data-tour={`sidebar-tab-${tab.key}`}
           >
             {tab.label}
           </button>
@@ -1968,6 +1971,18 @@ function App() {
       onClick={() => setZenMode((value) => !value)}
     >
       Z
+    </button>
+  );
+  const tourToggleButton = (
+    <button
+      type="button"
+      className="layout__toggle-button"
+      title="Start guided tour"
+      aria-label="Start guided tour"
+      data-tour="tour-start-button"
+      onClick={() => startTour()}
+    >
+      ?
     </button>
   );
   const themeModeControl = (
@@ -2066,7 +2081,12 @@ function App() {
         sidebarHeader={sidebarHeader}
         sidebarFooter={sidebarFooter}
         sidebarFooterCollapsed={sidebarFooterCollapsed}
-        sidebarHeaderActions={zenToggleButton}
+        sidebarHeaderActions={
+          <>
+            {tourToggleButton}
+            {zenToggleButton}
+          </>
+        }
         sidebarHeaderBottomActions={themeModeControl}
         sidebarCollapsedContent={zenMode ? null : sidebarCollapsedRail}
         sidebar={controlsPanel}
