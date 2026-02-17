@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.9.12 - 2026-02-17
+
+### Title
+- Guided Onboarding Tour
+
+### Added
+- Header `?` help popover is now the single tour entry point and includes `Start tour`, `Reset tour`, and an inline keyboard shortcuts panel.
+- Tour step metadata was expanded into sectioned coverage across tabs, selected device header, device controls, sessions, playback, coverage, stats/right panel, shortcuts, and optional debug areas.
+- Added broad `data-tour` anchors so steps target stable UI containers and controls consistently across app states.
+
+### Changed
+- Tour now auto-switches sidebar tabs for tab-scoped steps, auto-opens/closes the help popover for shortcuts steps, and temporarily expands/collapses the right panel for stats steps while restoring prior state afterward.
+- Step filtering now skips gracefully when targets are missing or not visible, reducing broken transitions in conditional UI.
+- Tour popover layout was tightened so section jumping and progress text remain readable across widths.
+
+### Acceptance
+- Tour covers: tabs, selected device header, device picker, sessions picker, start/stop session, playback, coverage, right panel, shortcuts (Z).
+- Starting tour from `?` works and no bottom sidebar tour launch button remains.
+- Tour auto-switches tabs for drill-down steps.
+- Steps skip gracefully when features are absent.
+- Works in light/dark themes and does not break Leaflet interactions.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.11 - 2026-02-17
 
 ### Title
