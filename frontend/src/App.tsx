@@ -490,7 +490,13 @@ function App() {
   }
 
   const initial = useMemo(() => readInitialQueryState(), []);
-  const { startTour } = useAppTour();
+  const {
+    startTour,
+    isTourPromptVisible,
+    dismissTourPrompt,
+    resetTour,
+    tourCompleted
+  } = useAppTour();
 
   const queryClient = useQueryClient();
   const prevLatestMeasurementAt = useRef<string | null>(null);
@@ -1945,6 +1951,23 @@ function App() {
         className="layout__sidebar-brand-logo layout__sidebar-brand-logo--light"
       />
       <span className="layout__sidebar-footer-meta">{`v${APP_VERSION}`}</span>
+      <div className="layout__sidebar-footer-help">
+        <button
+          type="button"
+          className="layout__sidebar-help-button"
+          onClick={() => startTour()}
+        >
+          Take a quick tour
+        </button>
+        <button
+          type="button"
+          className="layout__sidebar-help-button layout__sidebar-help-button--muted"
+          onClick={resetTour}
+          disabled={!tourCompleted && isTourPromptVisible}
+        >
+          Reset tour
+        </button>
+      </div>
     </div>
   );
   const sidebarFooterCollapsed = (
@@ -2127,6 +2150,19 @@ function App() {
             {effectiveMapLayerMode === 'coverage'
               ? `Coverage bins: ${renderedBinCount}`
               : `Points: ${renderedPointCount}`}
+          </div>
+        )}
+        {isTourPromptVisible && (
+          <div className="tour-prompt" role="status" aria-live="polite">
+            <span className="tour-prompt__title">Take a quick tour</span>
+            <div className="tour-prompt__actions">
+              <button type="button" onClick={() => startTour()}>
+                Start
+              </button>
+              <button type="button" className="tour-prompt__dismiss" onClick={dismissTourPrompt}>
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
         {!zenMode &&

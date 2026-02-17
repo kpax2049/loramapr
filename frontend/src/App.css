@@ -97,6 +97,10 @@
   gap: 0.25rem;
 }
 
+.layout__sidebar--collapsed [data-tour='tour-start-button'] {
+  display: none;
+}
+
 .layout__sidebar-top-right-bottom {
   display: flex;
   align-items: center;
@@ -257,7 +261,7 @@
   min-width: 0;
   display: grid;
   justify-items: center;
-  gap: 0.18rem;
+  gap: 0.22rem;
 }
 
 .layout__sidebar-footer-mark {
@@ -290,6 +294,42 @@
 
 .layout__sidebar-brand-mark--light {
   display: none;
+}
+
+.layout__sidebar-footer-help {
+  width: 100%;
+  display: grid;
+  gap: 0.28rem;
+  justify-items: stretch;
+  margin-top: 0.14rem;
+}
+
+.layout__sidebar-help-button {
+  width: 100%;
+  min-height: 1.45rem;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.layout__sidebar-help-button:not(:disabled):hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.layout__sidebar-help-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.layout__sidebar-help-button--muted {
+  color: var(--panel-muted);
 }
 
 [data-theme='light'] .layout__sidebar-brand-logo--dark {
@@ -865,6 +905,65 @@
   font-size: 0.75rem;
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
+}
+
+.tour-prompt {
+  position: absolute;
+  right: 1rem;
+  bottom: 2rem;
+  z-index: 1040;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.62rem 0.72rem;
+  border-radius: 9px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: 0 1px 3px var(--overlay-scrim);
+  color: var(--panel-text);
+  font-family: var(--font-mono);
+  min-width: min(280px, calc(100vw - 1.5rem));
+}
+
+.tour-prompt__title {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tour-prompt__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tour-prompt__actions button {
+  min-height: 1.48rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  padding: 0 0.55rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.tour-prompt__actions button:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.tour-prompt__dismiss {
+  color: var(--panel-muted);
+}
+
+@media (max-width: 900px) {
+  .tour-prompt {
+    right: 0.6rem;
+    left: 0.6rem;
+    min-width: 0;
+  }
 }
 
 .status-strip {
