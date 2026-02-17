@@ -554,6 +554,8 @@ function App() {
   const [tourMenuOpen, setTourMenuOpen] = useState(false);
   const [tourResetNotice, setTourResetNotice] = useState<string | null>(null);
   const tourMenuOpenRef = useRef(tourMenuOpen);
+  const [tourForceRightPanelExpanded, setTourForceRightPanelExpanded] = useState(false);
+  const tourForceRightPanelExpandedRef = useRef(tourForceRightPanelExpanded);
   const tourMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -563,6 +565,10 @@ function App() {
   useEffect(() => {
     tourMenuOpenRef.current = tourMenuOpen;
   }, [tourMenuOpen]);
+
+  useEffect(() => {
+    tourForceRightPanelExpandedRef.current = tourForceRightPanelExpanded;
+  }, [tourForceRightPanelExpanded]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -584,12 +590,20 @@ function App() {
       });
     };
     window.tourGetHelpPopoverOpen = () => tourMenuOpenRef.current;
+    window.tourSetRightPanelExpanded = (expanded: boolean) => {
+      flushSync(() => {
+        setTourForceRightPanelExpanded(expanded);
+      });
+    };
+    window.tourGetRightPanelExpanded = () => tourForceRightPanelExpandedRef.current;
 
     return () => {
       delete window.tourSetActiveTab;
       delete window.tourGetActiveTab;
       delete window.tourSetHelpPopoverOpen;
       delete window.tourGetHelpPopoverOpen;
+      delete window.tourSetRightPanelExpanded;
+      delete window.tourGetRightPanelExpanded;
     };
   }, []);
 
@@ -1966,6 +1980,7 @@ function App() {
     ? buildDeviceIdentityLabel(selectedDevice)
     : 'No device';
   const statusSessionId = playbackSessionId ?? selectedSessionId;
+  const isRightPanelExpanded = !zenMode || tourForceRightPanelExpanded;
 
   const sidebarHeader = (
     <div className="sidebar-header" aria-label="Sidebar header" data-tour="sidebar-header">
@@ -2293,16 +2308,24 @@ function App() {
           themeMode={themeMode}
           onThemeModeChange={setThemeMode}
         />
-        {!zenMode && (
-          <div className="right-column" data-tour="right-panel">
-            <PointDetails measurement={selectedMeasurement} />
-            <StatsCard
-              stats={statsQuery.data}
-              isLoading={statsQuery.isLoading}
-              error={statsQuery.error as Error | null}
-            />
-          </div>
-        )}
+        <div
+          className={`right-column${isRightPanelExpanded ? '' : ' right-column--shell'}`}
+          data-tour="right-panel"
+          aria-hidden={!isRightPanelExpanded}
+        >
+          {isRightPanelExpanded ? (
+            <>
+              <PointDetails measurement={selectedMeasurement} />
+              <StatsCard
+                stats={statsQuery.data}
+                isLoading={statsQuery.isLoading}
+                error={statsQuery.error as Error | null}
+              />
+            </>
+          ) : (
+            <div className="right-column__shell" aria-hidden="true" />
+          )}
+        </div>
         {!zenMode && (isLoading || error) && (
           <div className="status">
             {isLoading && <p>Loading map data…</p>}

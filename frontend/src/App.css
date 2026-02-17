@@ -823,6 +823,19 @@
   min-height: 0;
 }
 
+.right-column.right-column--shell {
+  width: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.right-column__shell {
+  width: 0;
+  height: 0;
+}
+
 [data-theme='dark'] .leaflet-container .leaflet-bar,
 [data-theme='light'] .leaflet-container .leaflet-bar {
   border: 1px solid var(--panel-border);

@@ -35,6 +35,8 @@ declare global {
     tourGetActiveTab?: () => TourSidebarTabKey | null;
     tourSetHelpPopoverOpen?: (open: boolean) => void;
     tourGetHelpPopoverOpen?: () => boolean;
+    tourSetRightPanelExpanded?: (expanded: boolean) => void;
+    tourGetRightPanelExpanded?: () => boolean;
   }
 }
 
@@ -66,7 +68,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="sidebar-tabs"]',
     title: 'Sidebar tabs',
     content:
-      'Use these tabs to switch between Device, Sessions, Playback, Coverage, and Debug controls.',
+      'Switch between Device, Sessions, Playback, Coverage, and Debug views here.',
     side: 'right',
     align: 'start'
   },
@@ -76,7 +78,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="selected-device-header"]',
     title: 'Selected device',
     content:
-      'This header shows the active device identity and status, plus quick actions like Copy deviceUid.',
+      'Shows the selected device identity, online status, and quick actions like Copy deviceUid.',
     side: 'right',
     align: 'start'
   },
@@ -86,7 +88,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="fit-to-data"]',
     title: 'Fit to data',
     content:
-      'Use Fit to data to recenter the map to whatever is currently visible in your active view.',
+      'Recenter the map to the currently visible dataset in explore, playback, or coverage views.',
     side: 'bottom',
     align: 'start'
   },
@@ -96,7 +98,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="map"]',
     title: 'Map',
     content:
-      'The map shows measurements, tracks, coverage, and device markers. Click points or markers to inspect details.',
+      'This is the main map canvas for points, tracks, coverage bins, and device markers. Click a point or marker for details.',
     side: 'left',
     align: 'start'
   },
@@ -109,7 +111,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'device',
     title: 'Device picker',
     content:
-      'Choose which device is active. The rest of the app updates to that selection.',
+      'Select the active device used across all tabs.',
     side: 'right',
     align: 'start'
   },
@@ -120,7 +122,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'device',
     title: 'Device details',
     content:
-      'This panel shows metadata, timestamps, and status for the selected device.',
+      'Review metadata, status, timestamps, and latest location for the selected device.',
     side: 'right',
     align: 'start'
   },
@@ -131,7 +133,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'device',
     title: 'Device status dot',
     content:
-      'The dot reflects measurement freshness and ingest activity. Hover it to see last-seen details.',
+      'Dot color reflects measurement recency, and the ring shows ingest recency when it is newer. Hover for last-seen details.',
     side: 'right',
     align: 'start'
   },
@@ -142,7 +144,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'device',
     title: 'Latest location actions',
     content:
-      'Use these controls to center on a device latest point and manage map marker visibility.',
+      'Center on the latest known location and toggle device markers on the map.',
     side: 'right',
     align: 'start'
   },
@@ -155,7 +157,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'sessions',
     title: 'Sessions panel',
     content:
-      'This panel lists sessions for the selected device and supports selecting one for analysis.',
+      'Manage recording sessions for the selected device.',
     side: 'right',
     align: 'start'
   },
@@ -166,7 +168,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'sessions',
     title: 'Start and stop session',
     content:
-      'Start a new session here, then stop it when your run is complete.',
+      'Start a session before a run and stop it when finished.',
     side: 'right',
     align: 'start'
   },
@@ -177,7 +179,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'sessions',
     title: 'Session list',
     content:
-      'Review past sessions, select one, and compare start/end times before drilling into playback or exports.',
+      'Select past sessions for analysis and export.',
     side: 'right',
     align: 'start'
   },
@@ -188,7 +190,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'sessions',
     title: 'Session actions',
     content:
-      'Session actions include rename, archive/unarchive, and safe delete when permissions allow it.',
+      'Rename, archive, unarchive, or safely delete sessions when QUERY access is available.',
     side: 'right',
     align: 'start',
     condition: () => Boolean(document.querySelector('[data-tour="session-actions"]'))
@@ -202,7 +204,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'playback',
     title: 'Playback controls',
     content:
-      'Select a session and replay movement over time with play, pause, and window controls.',
+      'Replay a selected session timeline with play/pause, speed, and window controls.',
     side: 'left',
     align: 'start'
   },
@@ -213,7 +215,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'playback',
     title: 'Playback scrubber',
     content:
-      'Drag the scrubber to jump to a specific moment and inspect what was seen at that time.',
+      'Drag the scrubber to inspect any timestamp in the selected session.',
     side: 'left',
     align: 'start'
   },
@@ -224,7 +226,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'playback',
     title: 'Playback speed',
     content:
-      'Adjust speed to review quickly or step through slowly when validating timelines.',
+      'Change replay speed from slow review to fast scan.',
     side: 'left',
     align: 'start'
   },
@@ -237,7 +239,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'coverage',
     title: 'Coverage toggle',
     content:
-      'Switch between points and coverage to move from raw observations to aggregate spatial view.',
+      'Toggle between raw points and aggregated coverage.',
     side: 'left',
     align: 'start'
   },
@@ -248,7 +250,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'coverage',
     title: 'Coverage metric',
     content:
-      'Choose which metric powers the coverage visualization, such as count, RSSI average, or SNR average.',
+      'Choose the metric used to color coverage bins.',
     side: 'left',
     align: 'start'
   },
@@ -259,19 +261,30 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'coverage',
     title: 'Coverage legend',
     content:
-      'Use the legend to read bucket meaning and interpret color values on the map.',
+      'Read the current color buckets for the selected coverage metric.',
     side: 'left',
     align: 'start'
   },
 
   // 6) Stats / Right panel
   {
-    id: 'stats-right-panel',
+    id: 'stats-overview',
     section: 'stats',
     selector: '[data-tour="right-panel"]',
-    title: 'Point details and stats',
+    title: 'Stats overview',
     content:
-      'The right panel shows selected point details and session stats to validate what you see on the map.',
+      'Point Details and Stats summarize the active map selection and filtered dataset.',
+    side: 'left',
+    align: 'start'
+  },
+  {
+    id: 'stats-compare',
+    section: 'stats',
+    selector: '[data-tour="gateway-receiver-compare"]',
+    tab: 'coverage',
+    title: 'Gateway/Receiver compare',
+    content:
+      'Compare controls filter by gateway or receiver and support side-by-side analysis.',
     side: 'left',
     align: 'start'
   },
@@ -283,7 +296,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="zen-mode"]',
     title: 'Zen mode',
     content:
-      'Use Z or this button to simplify layout and focus on the map.',
+      'Toggle Zen mode here, or press Z.',
     side: 'bottom',
     align: 'end'
   },
@@ -293,7 +306,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="shortcuts-help"]',
     title: 'Keyboard shortcuts',
     content:
-      'This panel summarizes the main keys for zen mode, sidebar controls, and playback navigation.',
+      'This panel lists available keyboard shortcuts for sidebar and playback navigation.',
     side: 'left',
     align: 'start'
   },
@@ -306,7 +319,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'debug',
     title: 'Debug events',
     content:
-      'Debug panels show recent ingest events and processing results for troubleshooting.',
+      'Inspect recent ingest events and processing errors for troubleshooting.',
     side: 'left',
     align: 'start',
     condition: () => Boolean(document.querySelector('[data-tour="debug-events"]'))
@@ -318,7 +331,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'debug',
     title: 'Receiver and gateway stats',
     content:
-      'Use these stats panels to inspect receiver or gateway behavior in the current scope.',
+      'Gateway and receiver stats help validate source behavior in the current scope.',
     side: 'left',
     align: 'start',
     condition: () => Boolean(document.querySelector('[data-tour="debug-gateways"]'))
@@ -339,6 +352,13 @@ function setHelpPopoverOpen(open: boolean): void {
   window.tourSetHelpPopoverOpen?.(open);
 }
 
+function setRightPanelExpanded(expanded: boolean): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetRightPanelExpanded?.(expanded);
+}
+
 function isElementVisible(element: Element): boolean {
   if ('offsetParent' in element) {
     return (element as HTMLElement).offsetParent !== null;
@@ -353,6 +373,9 @@ function resolveStepTarget(step: TourStepSpec): Element | null {
   setActiveTab(step.tab);
   if (step.section === 'shortcuts') {
     setHelpPopoverOpen(true);
+  }
+  if (step.section === 'stats') {
+    setRightPanelExpanded(true);
   }
   const target = document.querySelector(step.selector);
   if (!target) {
@@ -401,6 +424,7 @@ export function buildCoreTourPlan(): TourPlan {
 
   const previousTab = window.tourGetActiveTab?.() ?? null;
   const previousHelpPopoverOpen = window.tourGetHelpPopoverOpen?.() ?? null;
+  const previousRightPanelExpanded = window.tourGetRightPanelExpanded?.() ?? null;
   const steps: DriveStep[] = [];
   const stepSections: TourSectionKey[] = [];
   const sectionStartIndexes: Partial<Record<TourSectionKey, number>> = {};
@@ -421,6 +445,9 @@ export function buildCoreTourPlan(): TourPlan {
   }
   if (typeof previousHelpPopoverOpen === 'boolean') {
     setHelpPopoverOpen(previousHelpPopoverOpen);
+  }
+  if (typeof previousRightPanelExpanded === 'boolean') {
+    setRightPanelExpanded(previousRightPanelExpanded);
   }
 
   return { steps, sectionStartIndexes, stepSections };

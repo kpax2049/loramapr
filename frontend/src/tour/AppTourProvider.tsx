@@ -186,6 +186,20 @@ function readHelpPopoverOpen(): boolean {
   return window.tourGetHelpPopoverOpen?.() ?? false;
 }
 
+function setRightPanelExpanded(expanded: boolean): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetRightPanelExpanded?.(expanded);
+}
+
+function readRightPanelExpanded(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.tourGetRightPanelExpanded?.() ?? false;
+}
+
 export function AppTourProvider({ children }: { children: ReactNode }) {
   const [tourCompleted, setTourCompleted] = useState<boolean>(() => readTourCompleted());
   const [tourPromptDismissed, setTourPromptDismissed] = useState<boolean>(() =>
@@ -197,6 +211,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
   const stepSectionsRef = useRef<TourSectionKey[]>([]);
   const activeSectionRef = useRef<TourSectionKey | null>(null);
   const shortcutsPopoverPreviousOpenRef = useRef<boolean | null>(null);
+  const rightPanelPreviousExpandedRef = useRef<boolean | null>(null);
 
   const syncSectionSideEffects = useCallback((nextSection: TourSectionKey | null) => {
     const previousSection = activeSectionRef.current;
@@ -211,6 +226,15 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
       const restoreOpen = shortcutsPopoverPreviousOpenRef.current;
       setHelpPopoverOpen(restoreOpen ?? false);
       shortcutsPopoverPreviousOpenRef.current = null;
+    }
+
+    if (previousSection !== 'stats' && nextSection === 'stats') {
+      rightPanelPreviousExpandedRef.current = readRightPanelExpanded();
+      setRightPanelExpanded(true);
+    } else if (previousSection === 'stats' && nextSection !== 'stats') {
+      const restoreExpanded = rightPanelPreviousExpandedRef.current;
+      setRightPanelExpanded(restoreExpanded ?? false);
+      rightPanelPreviousExpandedRef.current = null;
     }
 
     activeSectionRef.current = nextSection;
@@ -234,6 +258,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
     }
     activeSectionRef.current = null;
     shortcutsPopoverPreviousOpenRef.current = null;
+    rightPanelPreviousExpandedRef.current = null;
     writeTourCompleted(true);
     writeTourPromptDismissed(true);
     setTourCompleted(true);

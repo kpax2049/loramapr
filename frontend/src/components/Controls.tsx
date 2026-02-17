@@ -1232,7 +1232,7 @@ export default function Controls({
       )}
 
       {showCoverageTab && (
-        <div className="controls__group">
+        <div className="controls__group" data-tour="gateway-receiver-compare">
           {receiverSource === 'meshtastic' ? (
             <>
               <label htmlFor="receiver-select">Receiver</label>
