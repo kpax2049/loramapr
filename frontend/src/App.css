@@ -132,6 +132,8 @@
   justify-content: center;
   border-bottom: 0;
   border-top: 1px solid var(--divider);
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
 }
 
 .layout__sidebar-header-content {
@@ -248,6 +250,62 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-family: var(--font-mono);
+}
+
+.layout__sidebar-footer-brand {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.18rem;
+}
+
+.layout__sidebar-footer-mark {
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.layout__sidebar-brand-logo {
+  display: block;
+  width: min(176px, 100%);
+  max-width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+.layout__sidebar-brand-logo--light {
+  display: none;
+}
+
+.layout__sidebar-brand-mark {
+  display: block;
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.layout__sidebar-brand-mark--light {
+  display: none;
+}
+
+[data-theme='light'] .layout__sidebar-brand-logo--dark {
+  display: none;
+}
+
+[data-theme='light'] .layout__sidebar-brand-logo--light {
+  display: block;
+}
+
+[data-theme='light'] .layout__sidebar-brand-mark--dark {
+  display: none;
+}
+
+[data-theme='light'] .layout__sidebar-brand-mark--light {
+  display: block;
 }
 
 .layout__resize-handle {
@@ -1851,6 +1909,13 @@
   align-items: center;
 }
 
+.devices-manager__toolbar-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
 .devices-manager__toolbar input[type='search'] {
   width: 100%;
   min-width: 0;
@@ -1877,6 +1942,31 @@
 .devices-manager__archived-toggle input {
   width: 14px;
   height: 14px;
+}
+
+.devices-manager__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  font-size: 0.68rem;
+  color: var(--panel-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.devices-manager__sort select {
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  padding: 0.25rem 0.4rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  cursor: pointer;
 }
 
 .devices-manager__message {
@@ -2811,6 +2901,11 @@
   gap: 0.25rem;
 }
 
+.sessions-panel__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
 .sessions-panel__item-top {
   display: flex;
   align-items: center;
@@ -2819,6 +2914,7 @@
 }
 
 .sessions-panel__item-select {
+  display: block;
   border: 0;
   background: transparent;
   color: inherit;

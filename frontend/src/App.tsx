@@ -11,6 +11,10 @@ import PointDetails from './components/PointDetails';
 import SelectedDeviceHeader from './components/SelectedDeviceHeader';
 import StatusStrip from './components/StatusStrip';
 import StatsCard from './components/StatsCard';
+import markDark from './assets/branding/loramapr-mark-dark.png';
+import markLight from './assets/branding/loramapr-mark-light.png';
+import logoDark from './assets/branding/loramapr-logo-dark.png';
+import logoLight from './assets/branding/loramapr-logo-light.png';
 import {
   useCoverageBins,
   useDevice,
@@ -1781,7 +1785,35 @@ function App() {
   );
 
   const sidebarFooter = (
-    <span className="layout__sidebar-footer-meta">{`${APP_NAME} v${APP_VERSION}`}</span>
+    <div className="layout__sidebar-footer-brand">
+      <img
+        src={logoDark}
+        alt={`${APP_NAME} logo`}
+        className="layout__sidebar-brand-logo layout__sidebar-brand-logo--dark"
+      />
+      <img
+        src={logoLight}
+        alt=""
+        aria-hidden="true"
+        className="layout__sidebar-brand-logo layout__sidebar-brand-logo--light"
+      />
+      <span className="layout__sidebar-footer-meta">{`v${APP_VERSION}`}</span>
+    </div>
+  );
+  const sidebarFooterCollapsed = (
+    <div className="layout__sidebar-footer-mark">
+      <img
+        src={markDark}
+        alt={`${APP_NAME} icon`}
+        className="layout__sidebar-brand-mark layout__sidebar-brand-mark--dark"
+      />
+      <img
+        src={markLight}
+        alt=""
+        aria-hidden="true"
+        className="layout__sidebar-brand-mark layout__sidebar-brand-mark--light"
+      />
+    </div>
   );
   const zenToggleButton = (
     <button
@@ -1887,6 +1919,7 @@ function App() {
       <Layout
         sidebarHeader={sidebarHeader}
         sidebarFooter={sidebarFooter}
+        sidebarFooterCollapsed={sidebarFooterCollapsed}
         sidebarHeaderActions={zenToggleButton}
         sidebarHeaderBottomActions={themeModeControl}
         sidebarCollapsedContent={zenMode ? null : sidebarCollapsedRail}

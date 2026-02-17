@@ -17,6 +17,7 @@ const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
 type LayoutProps = {
   sidebarHeader?: ReactNode;
   sidebarFooter?: ReactNode;
+  sidebarFooterCollapsed?: ReactNode;
   sidebarHeaderActions?: ReactNode;
   sidebarHeaderBottomActions?: ReactNode;
   sidebarCollapsedContent?: ReactNode;
@@ -77,6 +78,7 @@ function readStoredSidebarCollapsed(): boolean {
 export default function Layout({
   sidebarHeader,
   sidebarFooter,
+  sidebarFooterCollapsed,
   sidebarHeaderActions,
   sidebarHeaderBottomActions,
   sidebarCollapsedContent,
@@ -207,11 +209,17 @@ export default function Layout({
           )}
         </div>
         <div className="layout__sidebar-footer">
-          {!isSidebarCollapsed && sidebarFooter ? (
+          {isSidebarCollapsed ? (
+            sidebarFooterCollapsed ?? (
+              <span className="layout__sidebar-footer-meta">
+                SB
+              </span>
+            )
+          ) : sidebarFooter ? (
             sidebarFooter
           ) : (
             <span className="layout__sidebar-footer-meta">
-              {isSidebarCollapsed ? 'SB' : `${Math.round(sidebarWidth)}px`}
+              {`${Math.round(sidebarWidth)}px`}
             </span>
           )}
         </div>

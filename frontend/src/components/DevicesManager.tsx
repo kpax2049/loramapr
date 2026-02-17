@@ -17,7 +17,19 @@ type DevicesManagerProps = {
   onOpenAutoSession?: () => void;
 };
 
-function formatRelativeTime(value: string | null): string {
+type DeviceSortMode = 'name' | 'lastSeen';
+
+const DEVICE_SORT_STORAGE_KEY = 'devicesManagerSortMode';
+
+function readStoredSortMode(): DeviceSortMode {
+  if (typeof window === 'undefined') {
+    return 'name';
+  }
+  const value = window.localStorage.getItem(DEVICE_SORT_STORAGE_KEY);
+  return value === 'lastSeen' ? 'lastSeen' : 'name';
+}
+
+function formatRelativeTime(value: string | null, nowMs = Date.now()): string {
   if (!value) {
     return '-';
   }
@@ -25,7 +37,7 @@ function formatRelativeTime(value: string | null): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const seconds = Math.round((date.getTime() - nowMs) / 1000);
   const absSeconds = Math.abs(seconds);
 
   if (typeof Intl !== 'undefined' && 'RelativeTimeFormat' in Intl) {
@@ -65,6 +77,18 @@ function normalizeDeviceName(device: Device): string {
   return trimmed && trimmed.length > 0 ? trimmed : '';
 }
 
+function toTimestampMs(value: string | null | undefined): number {
+  if (!value) {
+    return 0;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getDeviceSortTimestamp(device: Device): number {
+  return toTimestampMs(device.latestMeasurementAt ?? device.latestWebhookReceivedAt ?? null);
+}
+
 function getErrorStatus(error: unknown): number | null {
   if (error instanceof ApiError) {
     return error.status;
@@ -83,6 +107,8 @@ export default function DevicesManager({
 }: DevicesManagerProps) {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [sortMode, setSortMode] = useState<DeviceSortMode>(() => readStoredSortMode());
+  const [relativeClockMs, setRelativeClockMs] = useState(() => Date.now());
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const [actionMenuDeviceId, setActionMenuDeviceId] = useState<string | null>(null);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
@@ -93,7 +119,9 @@ export default function DevicesManager({
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
 
   const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
-  const devicesQuery = useDevices(showArchived);
+  const devicesQuery = useDevices(showArchived, {
+    refetchInterval: 5000
+  });
   const updateDeviceMutation = useUpdateDevice();
   const archiveDeviceMutation = useArchiveDevice();
   const deleteDeviceMutation = useDeleteDevice();
@@ -117,6 +145,53 @@ export default function DevicesManager({
       );
     });
   }, [devices, search]);
+
+  const sortedDevices = useMemo(() => {
+    const items = [...filteredDevices];
+    if (sortMode === 'lastSeen') {
+      items.sort((left, right) => {
+        const leftTimestamp = getDeviceSortTimestamp(left);
+        const rightTimestamp = getDeviceSortTimestamp(right);
+        if (leftTimestamp !== rightTimestamp) {
+          return rightTimestamp - leftTimestamp;
+        }
+        const leftName = getDevicePrimaryLabel(left).toLowerCase();
+        const rightName = getDevicePrimaryLabel(right).toLowerCase();
+        const byName = leftName.localeCompare(rightName);
+        if (byName !== 0) {
+          return byName;
+        }
+        return left.deviceUid.localeCompare(right.deviceUid);
+      });
+      return items;
+    }
+
+    items.sort((left, right) => {
+      const leftName = getDevicePrimaryLabel(left).toLowerCase();
+      const rightName = getDevicePrimaryLabel(right).toLowerCase();
+      const byName = leftName.localeCompare(rightName);
+      if (byName !== 0) {
+        return byName;
+      }
+      return left.deviceUid.localeCompare(right.deviceUid);
+    });
+    return items;
+  }, [filteredDevices, sortMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(DEVICE_SORT_STORAGE_KEY, sortMode);
+  }, [sortMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const timer = window.setInterval(() => setRelativeClockMs(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!actionMenuDeviceId) {
@@ -301,14 +376,27 @@ export default function DevicesManager({
           placeholder="Search name or deviceUid"
           aria-label="Search devices by name or device UID"
         />
-        <label className="devices-manager__archived-toggle">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(event) => setShowArchived(event.target.checked)}
-          />
-          Show archived
-        </label>
+        <div className="devices-manager__toolbar-controls">
+          <label className="devices-manager__sort">
+            <span>Sort</span>
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as DeviceSortMode)}
+              aria-label="Sort devices"
+            >
+              <option value="name">Name</option>
+              <option value="lastSeen">Last seen</option>
+            </select>
+          </label>
+          <label className="devices-manager__archived-toggle">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+            Show archived
+          </label>
+        </div>
       </div>
 
       {errorMessage ? (
@@ -334,10 +422,10 @@ export default function DevicesManager({
         {devicesQuery.isLoading ? (
           <div className="devices-manager__empty">Loading devices...</div>
         ) : null}
-        {!devicesQuery.isLoading && filteredDevices.length === 0 ? (
+        {!devicesQuery.isLoading && sortedDevices.length === 0 ? (
           <div className="devices-manager__empty">No devices match current filters.</div>
         ) : null}
-        {filteredDevices.map((device) => {
+        {sortedDevices.map((device) => {
           const inlineName = nameDrafts[device.id] ?? normalizeDeviceName(device);
           const isDirty = inlineName.trim() !== normalizeDeviceName(device);
           const isSelected = selectedDeviceId === device.id;
@@ -347,6 +435,7 @@ export default function DevicesManager({
           const identityLabel = buildDeviceIdentityLabel(device);
           const iconKey = getEffectiveIconKey(device);
           const iconDefinition = getDeviceIconDefinition(iconKey);
+          const formatWithTick = (value: string) => formatRelativeTime(value, relativeClockMs);
           return (
             <div
               key={device.id}
@@ -364,9 +453,9 @@ export default function DevicesManager({
               <div className="devices-manager__cell devices-manager__cell--name">
                 <DeviceOnlineDot
                   latestMeasurementAt={device.latestMeasurementAt}
-                  latestWebhookReceivedAt={null}
-                  latestWebhookSource={null}
-                  formatRelativeTime={formatRelativeTime}
+                  latestWebhookReceivedAt={device.latestWebhookReceivedAt}
+                  latestWebhookSource={device.latestWebhookSource}
+                  formatRelativeTime={formatWithTick}
                   className="devices-manager__online-dot"
                 />
                 <input
@@ -418,10 +507,10 @@ export default function DevicesManager({
                 </div>
               </div>
               <div className="devices-manager__cell" title={device.lastSeenAt ?? ''}>
-                {formatRelativeTime(device.lastSeenAt)}
+                {formatRelativeTime(device.lastSeenAt, relativeClockMs)}
               </div>
               <div className="devices-manager__cell" title={device.latestMeasurementAt ?? ''}>
-                {formatRelativeTime(device.latestMeasurementAt)}
+                {formatRelativeTime(device.latestMeasurementAt, relativeClockMs)}
               </div>
               <div className="devices-manager__cell devices-manager__cell--actions">
                 <button

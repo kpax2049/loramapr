@@ -156,10 +156,16 @@ function normalizeReceiversParams(
   };
 }
 
-export function useDevices(includeArchived = false) {
+export function useDevices(
+  includeArchived = false,
+  options?: Omit<UseQueryOptions<ListResponse<Device>>, 'queryKey' | 'queryFn'>
+) {
+  const enabled = options?.enabled ?? true;
   return useQuery<ListResponse<Device>>({
     queryKey: ['devices', includeArchived ? 'with-archived' : 'active-only'],
-    queryFn: ({ signal }) => listDevices({ includeArchived }, { signal })
+    queryFn: ({ signal }) => listDevices({ includeArchived }, { signal }),
+    ...options,
+    enabled
   });
 }
 

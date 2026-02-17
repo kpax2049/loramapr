@@ -10,6 +10,8 @@ export type Device = {
   isArchived: boolean;
   lastSeenAt: string | null;
   latestMeasurementAt: string | null;
+  latestWebhookReceivedAt: string | null;
+  latestWebhookSource: 'lorawan' | 'meshtastic' | 'agent' | null;
 };
 
 export type DeviceMutable = {

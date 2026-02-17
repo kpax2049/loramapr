@@ -62,6 +62,13 @@ function getErrorStatus(error: unknown): number | null {
   return null;
 }
 
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(target.closest('button, input, textarea, select, a, [role="menuitem"]'));
+}
+
 export default function SessionsPanel({
   deviceId,
   selectedSessionId,
@@ -307,6 +314,7 @@ export default function SessionsPanel({
       deleteSessionMutation.isPending && deleteSessionMutation.variables?.id === session.id;
     const disableRowActions = isRowUpdating || isRowDeleting;
     const title = isActive ? activeSessionLabel(session) : sessionLabel(session);
+    const canSelectRow = !isEditing;
 
     return (
       <div
@@ -314,6 +322,29 @@ export default function SessionsPanel({
         className={`sessions-panel__item ${isSelected ? 'is-selected' : ''} ${
           isEditing ? 'is-editing' : ''
         }`}
+        role={canSelectRow ? 'button' : undefined}
+        tabIndex={canSelectRow ? 0 : undefined}
+        aria-label={canSelectRow ? `Select ${title}` : undefined}
+        onClick={
+          canSelectRow
+            ? (event) => {
+                if (isInteractiveTarget(event.target)) {
+                  return;
+                }
+                onSelectSessionId(session.id);
+              }
+            : undefined
+        }
+        onKeyDown={
+          canSelectRow
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelectSessionId(session.id);
+                }
+              }
+            : undefined
+        }
       >
         <div className="sessions-panel__item-top">
           {isEditing ? (
@@ -337,13 +368,9 @@ export default function SessionsPanel({
               autoFocus
             />
           ) : (
-            <button
-              type="button"
-              className="sessions-panel__item-select"
-              onClick={() => onSelectSessionId(session.id)}
-            >
+            <span className="sessions-panel__item-select">
               <span className="sessions-panel__title">{title}</span>
-            </button>
+            </span>
           )}
           <div className="sessions-panel__item-actions">
             {session.isArchived ? <span className="sessions-panel__badge">Archived</span> : null}
