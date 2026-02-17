@@ -20,6 +20,8 @@ import {
   useDevice,
   useDeviceDetail,
   useDeviceLatest,
+  useDevices,
+  useDevicesLatestLocations,
   useMeasurements,
   useStats,
   useTrack
@@ -38,6 +40,7 @@ const LORAWAN_DIAG_WINDOW_MINUTES = 10;
 const SIDEBAR_TAB_KEY = 'sidebarTab';
 const ZEN_MODE_KEY = 'zenMode';
 const THEME_MODE_KEY = 'themeMode';
+const SHOW_DEVICE_MARKERS_KEY = 'showDeviceMarkers';
 const APP_NAME = __APP_NAME__;
 const APP_VERSION = __APP_VERSION__;
 const DEVICE_ICON_GALLERY_ROUTE = '/dev/device-icons';
@@ -178,6 +181,13 @@ function readStoredThemeMode(): ThemeMode {
   return 'system';
 }
 
+function readStoredShowDeviceMarkers(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(SHOW_DEVICE_MARKERS_KEY) === 'true';
+}
+
 function readSystemTheme(): EffectiveTheme {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return 'dark';
@@ -270,6 +280,18 @@ function formatRelativeTime(value: string): string {
   }
   const days = Math.round(hours / 24);
   return `${days}d ago`;
+}
+
+function getDeviceMarkerSortTimestamp(device: {
+  latestMeasurementAt: string | null;
+  latestWebhookReceivedAt: string | null;
+}): number {
+  const value = device.latestMeasurementAt ?? device.latestWebhookReceivedAt;
+  if (!value) {
+    return 0;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 type LatLonPoint = [number, number];
@@ -513,6 +535,7 @@ function App() {
   const [systemTheme, setSystemTheme] = useState<EffectiveTheme>(() => readSystemTheme());
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
+  const [showDeviceMarkers, setShowDeviceMarkers] = useState<boolean>(() => readStoredShowDeviceMarkers());
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [receiverSource, setReceiverSource] = useState<'lorawan' | 'meshtastic'>('lorawan');
   const [receiverSourceOverridden, setReceiverSourceOverridden] = useState(false);
@@ -560,6 +583,13 @@ function App() {
     }
     window.localStorage.setItem(THEME_MODE_KEY, themeMode);
   }, [themeMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(SHOW_DEVICE_MARKERS_KEY, showDeviceMarkers ? 'true' : 'false');
+  }, [showDeviceMarkers]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -1398,6 +1428,74 @@ function App() {
   const { device: selectedDevice } = useDevice(deviceId);
   const deviceDetailQuery = useDeviceDetail(deviceId, { enabled: Boolean(deviceId) });
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
+  const deviceMarkerDevicesQuery = useDevices(false, { enabled: showDeviceMarkers });
+  const markerCandidateDevices = useMemo(() => {
+    const items = deviceMarkerDevicesQuery.data?.items ?? [];
+    return items
+      .filter((device) => Boolean(device.latestMeasurementAt))
+      .sort((a, b) => getDeviceMarkerSortTimestamp(b) - getDeviceMarkerSortTimestamp(a))
+      .slice(0, 200);
+  }, [deviceMarkerDevicesQuery.data?.items]);
+  const markerCandidateDeviceIds = useMemo(
+    () => markerCandidateDevices.map((device) => device.id),
+    [markerCandidateDevices]
+  );
+  const markerCandidateDeviceMap = useMemo(
+    () => new Map(markerCandidateDevices.map((device) => [device.id, device])),
+    [markerCandidateDevices]
+  );
+  const deviceMarkerDetailsQuery = useDevicesLatestLocations(markerCandidateDeviceIds, {
+    enabled: showDeviceMarkers && markerCandidateDeviceIds.length > 0
+  });
+  const deviceLocationMarkers = useMemo(() => {
+    if (!showDeviceMarkers) {
+      return [];
+    }
+
+    return (deviceMarkerDetailsQuery.data ?? []).flatMap((detail) => {
+      if (detail.id === deviceId) {
+        return [];
+      }
+      const latestMeasurement = detail.latestMeasurement;
+      if (
+        !latestMeasurement ||
+        !Number.isFinite(latestMeasurement.lat) ||
+        !Number.isFinite(latestMeasurement.lon)
+      ) {
+        return [];
+      }
+      const summary = markerCandidateDeviceMap.get(detail.id);
+      return [
+        {
+          deviceId: detail.id,
+          deviceName: detail.name,
+          deviceUid: detail.deviceUid,
+          longName: detail.longName,
+          shortName: detail.shortName,
+          hwModel: detail.hwModel,
+          role: detail.role,
+          iconOverride: detail.iconOverride,
+          iconKey: detail.iconKey,
+          capturedAt: latestMeasurement.capturedAt,
+          latestMeasurementAt:
+            detail.latestMeasurementAt ?? summary?.latestMeasurementAt ?? latestMeasurement.capturedAt,
+          latestWebhookReceivedAt:
+            detail.latestWebhookReceivedAt ?? summary?.latestWebhookReceivedAt ?? null,
+          latestWebhookSource: detail.latestWebhookSource ?? summary?.latestWebhookSource ?? null,
+          lat: latestMeasurement.lat,
+          lon: latestMeasurement.lon,
+          rssi: latestMeasurement.rssi,
+          snr: latestMeasurement.snr,
+          gatewayId: latestMeasurement.gatewayId
+        }
+      ];
+    });
+  }, [
+    showDeviceMarkers,
+    deviceMarkerDetailsQuery.data,
+    markerCandidateDeviceMap,
+    deviceId
+  ]);
   const latestMeasurementAt =
     latestDeviceQuery.data?.latestMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
   const selectedDeviceUid = selectedDevice?.deviceUid;
@@ -1952,6 +2050,8 @@ function App() {
       onToChange={setTo}
       showPoints={showPoints}
       showTrack={showTrack}
+      showDeviceMarkers={showDeviceMarkers}
+      onShowDeviceMarkersChange={setShowDeviceMarkers}
       onShowPointsChange={setShowPoints}
       onShowTrackChange={setShowTrack}
       playbackControls={playbackControls}
@@ -1988,6 +2088,8 @@ function App() {
           playbackCursorPosition={safePlaybackCursorPosition}
           latestLocationMarker={latestLocationMarker}
           showLatestLocationMarker={!isPlaybackMode}
+          deviceLocationMarkers={!isPlaybackMode && showDeviceMarkers ? deviceLocationMarkers : []}
+          onSelectDeviceMarker={setDeviceId}
           onBoundsChange={setBbox}
           onSelectPoint={setSelectedPointId}
           onOverviewSelectTime={isPlaybackMode ? handlePlaybackCursorMsChange : undefined}

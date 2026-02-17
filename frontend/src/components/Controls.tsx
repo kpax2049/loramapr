@@ -72,6 +72,8 @@ type ControlsProps = {
   onToChange: (value: string) => void;
   showPoints: boolean;
   showTrack: boolean;
+  showDeviceMarkers: boolean;
+  onShowDeviceMarkersChange: (value: boolean) => void;
   onShowPointsChange: (value: boolean) => void;
   onShowTrackChange: (value: boolean) => void;
   playbackControls?: ReactNode;
@@ -119,6 +121,8 @@ export default function Controls({
   onToChange,
   showPoints,
   showTrack,
+  showDeviceMarkers,
+  onShowDeviceMarkersChange,
   onShowPointsChange,
   onShowTrackChange,
   playbackControls,
@@ -964,6 +968,20 @@ export default function Controls({
           {autoSessionError ? (
             <div className="controls__gateway-error">{autoSessionError}</div>
           ) : null}
+        </div>
+      )}
+
+      {showDeviceTab && (
+        <div className="controls__group">
+          <span className="controls__label">Map</span>
+          <label className="controls__toggle">
+            <input
+              type="checkbox"
+              checked={showDeviceMarkers}
+              onChange={(event) => onShowDeviceMarkersChange(event.target.checked)}
+            />
+            Show device markers
+          </label>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   forwardRef,
   type MutableRefObject,
   useEffect,
@@ -11,6 +12,7 @@ import {
   CircleMarker,
   MapContainer,
   Marker,
+  Popup,
   Polyline,
   Rectangle,
   TileLayer,
@@ -31,7 +33,10 @@ import DeviceIcon, {
   type DeviceIconKey
 } from './DeviceIcon';
 import { createDeviceDivIcon } from '../map/deviceMarkerIcon';
-import { getDeviceOnlineStatuses } from '../utils/deviceOnlineStatus';
+import {
+  getDeviceOnlineStatuses,
+  type DeviceStatusBucket
+} from '../utils/deviceOnlineStatus';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -64,6 +69,8 @@ type MapViewProps = {
   playbackCursorPosition?: [number, number] | null;
   latestLocationMarker?: LatestLocationMarker | null;
   showLatestLocationMarker?: boolean;
+  deviceLocationMarkers?: DeviceLocationMarker[];
+  onSelectDeviceMarker?: (deviceId: string) => void;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
   onZoomChange?: (zoom: number) => void;
   selectedPointId?: string | null;
@@ -106,10 +113,35 @@ type LatestLocationMarker = {
   gatewayId: string | null;
 };
 
+type DeviceLocationMarker = LatestLocationMarker & {
+  deviceId: string;
+  latestWebhookSource?: string | null;
+};
+
+type DeviceMarkerStatus = {
+  measurementStatus: DeviceStatusBucket;
+  webhookStatus: DeviceStatusBucket;
+};
+
 export type MapViewHandle = {
   fitBounds: (bounds: L.LatLngBoundsExpression, options?: L.FitBoundsOptions) => void;
   focusPoint: (point: [number, number], fallbackZoom?: number) => void;
 };
+
+function buildDeviceMarkerRenderKey(
+  deviceId: string,
+  iconKey: DeviceIconKey,
+  status: DeviceMarkerStatus,
+  theme: 'light' | 'dark'
+): string {
+  return [
+    deviceId,
+    iconKey,
+    status.measurementStatus,
+    status.webhookStatus,
+    theme
+  ].join('-');
+}
 
 function boundsToBbox(bounds: L.LatLngBounds): [number, number, number, number] | null {
   const southWest = bounds.getSouthWest();
@@ -411,6 +443,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   playbackCursorPosition = null,
   latestLocationMarker = null,
   showLatestLocationMarker = true,
+  deviceLocationMarkers = [],
+  onSelectDeviceMarker,
   onBoundsChange,
   onZoomChange,
   selectedPointId = null,
@@ -423,6 +457,35 @@ ref
   const [currentZoom, setCurrentZoom] = useState(zoom);
   const palette = useMemo(() => readPalette(), []);
   const mapRef = useRef<L.Map | null>(null);
+  const markerIconCacheRef = useRef<Map<string, L.DivIcon>>(new Map());
+
+  const getMemoizedDeviceDivIcon = useCallback(
+    (options: {
+      iconKey: DeviceIconKey;
+      badgeText?: string;
+      status: DeviceMarkerStatus;
+      theme: 'light' | 'dark';
+      size: number;
+    }): L.DivIcon => {
+      const cacheKey = [
+        options.iconKey,
+        options.badgeText ?? '',
+        options.status.measurementStatus,
+        options.status.webhookStatus,
+        options.theme,
+        String(options.size)
+      ].join('|');
+      const cache = markerIconCacheRef.current;
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+      const created = createDeviceDivIcon(options);
+      cache.set(cacheKey, created);
+      return created;
+    },
+    []
+  );
 
   useEffect(() => {
     configureLeafletIcons();
@@ -603,6 +666,10 @@ ref
 
   const latestLocationIconKey = latestLocationIconInput ? getEffectiveIconKey(latestLocationIconInput) : 'unknown';
   const latestLocationIconDefinition = getDeviceIconDefinition(latestLocationIconKey);
+  const resolvedMarkerTheme = useMemo<'light' | 'dark'>(() => {
+    const documentTheme = typeof document !== 'undefined' ? document.documentElement.dataset.theme : null;
+    return documentTheme === 'light' || documentTheme === 'dark' ? documentTheme : theme;
+  }, [theme]);
   const latestLocationStatuses = useMemo(() => {
     if (!latestLocationMarker) {
       return { measurementStatus: 'unknown', webhookStatus: 'unknown' } as const;
@@ -620,25 +687,89 @@ ref
     if (!latestLocationMarker) {
       return null;
     }
-    const documentTheme =
-      typeof document !== 'undefined'
-        ? document.documentElement.dataset.theme
-        : null;
-    const resolvedTheme = documentTheme === 'light' || documentTheme === 'dark' ? documentTheme : theme;
-    return createDeviceDivIcon({
+    return getMemoizedDeviceDivIcon({
       iconKey: latestLocationIconKey,
       badgeText: latestLocationIconDefinition.badgeText ?? undefined,
       status: latestLocationStatuses,
-      theme: resolvedTheme,
+      theme: resolvedMarkerTheme,
       size: 32
     });
   }, [
-    latestLocationMarker,
     latestLocationIconKey,
     latestLocationIconDefinition.badgeText,
-    latestLocationStatuses,
-    theme
+    latestLocationStatuses.measurementStatus,
+    latestLocationStatuses.webhookStatus,
+    resolvedMarkerTheme,
+    getMemoizedDeviceDivIcon
   ]);
+  const latestLocationMarkerRenderKey = useMemo(() => {
+    if (!latestLocationMarker) {
+      return null;
+    }
+    return buildDeviceMarkerRenderKey(
+      latestLocationMarker.deviceUid,
+      latestLocationIconKey,
+      latestLocationStatuses,
+      resolvedMarkerTheme
+    );
+  }, [
+    latestLocationMarker,
+    latestLocationIconKey,
+    latestLocationStatuses.measurementStatus,
+    latestLocationStatuses.webhookStatus,
+    resolvedMarkerTheme
+  ]);
+  const deviceLocationMarkerEntries = useMemo(() => {
+    if (deviceLocationMarkers.length === 0) {
+      return [];
+    }
+
+    return deviceLocationMarkers
+      .flatMap((marker) => {
+        if (!Number.isFinite(marker.lat) || !Number.isFinite(marker.lon)) {
+          return [];
+        }
+
+        const iconInput: DeviceIdentityInput = {
+          name: marker.deviceName,
+          longName: marker.longName,
+          shortName: marker.shortName,
+          deviceUid: marker.deviceUid,
+          hwModel: marker.hwModel,
+          role: marker.role,
+          iconOverride: marker.iconOverride,
+          iconKey: marker.iconKey
+        };
+        const iconKey = getEffectiveIconKey(iconInput);
+        const iconDefinition = getDeviceIconDefinition(iconKey);
+        const status = getDeviceOnlineStatuses({
+          latestMeasurementAt: marker.latestMeasurementAt ?? marker.capturedAt,
+          latestWebhookReceivedAt: marker.latestWebhookReceivedAt ?? null
+        });
+        const icon = getMemoizedDeviceDivIcon({
+          iconKey,
+          badgeText: iconDefinition.badgeText ?? undefined,
+          status,
+          theme: resolvedMarkerTheme,
+          size: 30
+        });
+        const markerRenderKey = buildDeviceMarkerRenderKey(
+          marker.deviceId,
+          iconKey,
+          status,
+          resolvedMarkerTheme
+        );
+
+        return {
+          marker,
+          iconInput,
+          iconKey,
+          iconDefinition,
+          icon,
+          markerRenderKey
+        };
+      });
+  }, [deviceLocationMarkers, resolvedMarkerTheme, getMemoizedDeviceDivIcon]);
   const tileConfig = useMemo(
     () => ({
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -801,13 +932,75 @@ ref
           interactive={false}
         />
       )}
+      {deviceLocationMarkerEntries.map(({ marker, icon, iconInput, iconKey, iconDefinition, markerRenderKey }) => (
+        <Marker
+          key={markerRenderKey}
+          position={[marker.lat, marker.lon]}
+          icon={icon}
+          eventHandlers={
+            onSelectDeviceMarker
+              ? {
+                  click: () => onSelectDeviceMarker(marker.deviceId)
+                }
+              : undefined
+          }
+        >
+          <Popup className="map-latest-tooltip" autoPan={true}>
+            <div>
+              <div className="map-latest-tooltip__title">Latest device location</div>
+              <div className="map-latest-tooltip__row">
+                <span>Device</span>
+                <strong className="map-latest-tooltip__device">
+                  <DeviceIcon
+                    device={iconInput}
+                    iconKey={iconKey}
+                    className="map-latest-tooltip__device-icon"
+                    size={13}
+                    title={iconDefinition.label}
+                  />
+                  <span>{buildDeviceIdentityLabel(iconInput)}</span>
+                </strong>
+              </div>
+              <div className="map-latest-tooltip__row">
+                <span>capturedAt</span>
+                <strong>{formatTimestamp(marker.capturedAt ?? undefined)}</strong>
+              </div>
+              <div className="map-latest-tooltip__row">
+                <span>lat/lon</span>
+                <strong>
+                  {formatCoordinate(marker.lat)}, {formatCoordinate(marker.lon)}
+                </strong>
+              </div>
+              {marker.rssi !== null && marker.rssi !== undefined ? (
+                <div className="map-latest-tooltip__row">
+                  <span>rssi</span>
+                  <strong>{marker.rssi}</strong>
+                </div>
+              ) : null}
+              {marker.snr !== null && marker.snr !== undefined ? (
+                <div className="map-latest-tooltip__row">
+                  <span>snr</span>
+                  <strong>{marker.snr}</strong>
+                </div>
+              ) : null}
+              {marker.gatewayId ? (
+                <div className="map-latest-tooltip__row">
+                  <span>gatewayId</span>
+                  <strong>{marker.gatewayId}</strong>
+                </div>
+              ) : null}
+            </div>
+          </Popup>
+        </Marker>
+      ))}
       {showLatestLocationMarker && latestLocationMarker && latestLocationDivIcon ? (
         Number.isFinite(latestLocationMarker.lat) && Number.isFinite(latestLocationMarker.lon) ? (
           <Marker
+            key={latestLocationMarkerRenderKey ?? latestLocationMarker.deviceUid}
             position={[latestLocationMarker.lat, latestLocationMarker.lon]}
             icon={latestLocationDivIcon}
           >
-            <Tooltip className="map-latest-tooltip" direction="top" offset={[0, -8]} opacity={0.95}>
+            <Popup className="map-latest-tooltip" autoPan={true}>
               <div>
                 <div className="map-latest-tooltip__title">Latest device location</div>
                 <div className="map-latest-tooltip__row">
@@ -858,7 +1051,7 @@ ref
                   </div>
                 ) : null}
               </div>
-            </Tooltip>
+            </Popup>
           </Marker>
         ) : null
       ) : null}

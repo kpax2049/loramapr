@@ -43,6 +43,9 @@ export type DeviceDetail = {
   appVersion: string | null;
   role: string | null;
   lastNodeInfoAt: string | null;
+  latestMeasurementAt: string | null;
+  latestWebhookReceivedAt: string | null;
+  latestWebhookSource: 'lorawan' | 'meshtastic' | 'agent' | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;

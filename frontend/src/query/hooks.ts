@@ -191,6 +191,42 @@ export function useDeviceDetail(deviceId?: string | null, options?: QueryOptions
   });
 }
 
+export function useDevicesLatestLocations(
+  deviceIds: string[],
+  options?: QueryOptions<DeviceDetail[]>
+) {
+  const enabled = options?.enabled ?? deviceIds.length > 0;
+
+  return useQuery<DeviceDetail[]>({
+    queryKey: ['devices-latest-locations', deviceIds],
+    queryFn: async ({ signal }) => {
+      if (deviceIds.length === 0) {
+        return [];
+      }
+
+      const results = await Promise.allSettled(
+        deviceIds.map((id) => getDeviceById(id, { signal }))
+      );
+
+      const items: DeviceDetail[] = [];
+      for (const result of results) {
+        if (result.status !== 'fulfilled') {
+          continue;
+        }
+        const latest = result.value.latestMeasurement;
+        if (!latest || !Number.isFinite(latest.lat) || !Number.isFinite(latest.lon)) {
+          continue;
+        }
+        items.push(result.value);
+      }
+
+      return items;
+    },
+    ...options,
+    enabled
+  });
+}
+
 export function useDeviceLatest(deviceId?: string) {
   const [unsupported, setUnsupported] = useState(false);
   const enabled = Boolean(deviceId) && !unsupported;
