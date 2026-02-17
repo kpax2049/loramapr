@@ -5,10 +5,43 @@
 
 .driver-popover .driver-popover-footer {
   gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .driver-popover .lm-tour-skip-btn {
   margin-right: auto;
+}
+
+.driver-popover .lm-tour-section-jump {
+  flex: 1 0 100%;
+  width: 100%;
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.1rem;
+}
+
+.driver-popover .lm-tour-section-jump__label {
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.driver-popover .lm-tour-section-jump__select {
+  width: 100%;
+  min-height: 1.8rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.74rem;
+  padding: 0 0.45rem;
+}
+
+.driver-popover .driver-popover-progress-text {
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .driver-overlay {

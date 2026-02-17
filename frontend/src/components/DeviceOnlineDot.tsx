@@ -10,6 +10,7 @@ type DeviceOnlineDotProps = {
   formatRelativeTime?: (value: string) => string;
   className?: string;
   size?: number;
+  dataTour?: string;
 };
 
 const STATUS_RANK: Record<DeviceStatusBucket, number> = {
@@ -74,7 +75,8 @@ export default function DeviceOnlineDot({
   latestWebhookSource = null,
   formatRelativeTime,
   className,
-  size = 12
+  size = 12,
+  dataTour
 }: DeviceOnlineDotProps) {
   const { measurementStatus, webhookStatus } = getDeviceOnlineStatuses({
     latestMeasurementAt,
@@ -111,6 +113,7 @@ export default function DeviceOnlineDot({
       style={{ ['--device-online-dot-size' as const]: `${size}px` }}
       title={tooltip}
       aria-label={tooltip}
+      data-tour={dataTour}
     >
       {showRing ? <span className="device-online-dot__ring" aria-hidden="true" /> : null}
       <span className="device-online-dot__core" aria-hidden="true" />

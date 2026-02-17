@@ -542,7 +542,7 @@ export default function Controls({
       {showDeviceTab && (
         <div className="controls__group">
           <label className="controls__label">Device</label>
-          <div className="controls__device-picker" ref={devicePickerRef}>
+          <div className="controls__device-picker" ref={devicePickerRef} data-tour="device-picker">
             <button
               type="button"
               className="controls__device-picker-trigger"
@@ -616,7 +616,7 @@ export default function Controls({
       )}
 
       {showDeviceTab && deviceId ? (
-        <div className="controls__group device-details">
+        <div className="controls__group device-details" data-tour="device-details">
           <button
             type="button"
             className="device-details__toggle"
@@ -667,6 +667,7 @@ export default function Controls({
                         latestWebhookSource={latest?.latestWebhookSource ?? null}
                         formatRelativeTime={formatRelativeTime}
                         className="device-details__online-dot"
+                        dataTour="device-online-dot"
                       />
                       <DeviceIcon
                         device={deviceDetail}
@@ -881,6 +882,7 @@ export default function Controls({
                       onCenterOnLatestLocation([latestLocation.lat, latestLocation.lon])
                     }
                     disabled={!canCenterOnLatest}
+                    data-tour="device-latest-location"
                   >
                     Center on latest
                   </button>
@@ -978,7 +980,7 @@ export default function Controls({
       )}
 
       {showDeviceTab && (
-        <div className="controls__group" data-tour="device-markers-toggle">
+        <div className="controls__group" data-tour="device-latest-location">
           <span className="controls__label">Map</span>
           <label className="controls__toggle">
             <input
@@ -1090,7 +1092,7 @@ export default function Controls({
       )}
 
       {showCoverageTab && mapLayerMode === 'coverage' ? (
-        <div className="controls__group">
+        <div className="controls__group" data-tour="coverage-metric">
           <label htmlFor="coverage-metric">Coverage metric</label>
           <select
             id="coverage-metric"
@@ -1354,21 +1356,25 @@ export default function Controls({
             <div className="controls__debug-message">Debug requires QUERY key</div>
           ) : (
             <>
-              <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
-              <MeshtasticEventsPanel deviceUid={selectedDevice?.deviceUid} />
-              {receiverSource === 'lorawan' ? (
-                <GatewayStatsPanel
-                  gatewayId={selectedGatewayId}
-                  scope={gatewayScope}
-                  enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
-                />
-              ) : (
-                <ReceiverStatsPanel
-                  receiverId={selectedReceiverId}
-                  count={selectedReceiver?.count ?? null}
-                  lastSeenAt={selectedReceiver?.lastSeenAt ?? null}
-                />
-              )}
+              <div data-tour="debug-events">
+                <LorawanEventsPanel deviceUid={selectedDevice?.deviceUid} />
+                <MeshtasticEventsPanel deviceUid={selectedDevice?.deviceUid} />
+              </div>
+              <div data-tour="debug-gateways">
+                {receiverSource === 'lorawan' ? (
+                  <GatewayStatsPanel
+                    gatewayId={selectedGatewayId}
+                    scope={gatewayScope}
+                    enabled={gatewayScopeEnabled && Boolean(selectedGatewayId)}
+                  />
+                ) : (
+                  <ReceiverStatsPanel
+                    receiverId={selectedReceiverId}
+                    count={selectedReceiver?.count ?? null}
+                    lastSeenAt={selectedReceiver?.lastSeenAt ?? null}
+                  />
+                )}
+              </div>
             </>
           )}
           {(latest?.latestMeasurementAt ||
@@ -1620,7 +1626,7 @@ function CoverageLegend({ metric }: { metric: 'count' | 'rssiAvg' | 'snrAvg' }) 
           ];
 
   return (
-    <div className="controls__legend" aria-label="Coverage legend">
+    <div className="controls__legend" aria-label="Coverage legend" data-tour="coverage-legend">
       {items.map((item) => (
         <div key={item.label} className="controls__legend-row">
           <span className={`controls__legend-swatch coverage-bin coverage-bin--${item.bucket}`} />

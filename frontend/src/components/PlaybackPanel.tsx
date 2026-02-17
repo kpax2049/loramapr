@@ -328,6 +328,7 @@ export default function PlaybackPanel({
           <label className="playback-panel__select">
             <span>Speed</span>
             <select
+              data-tour="playback-speed"
               value={playbackSpeed}
               onChange={(event) =>
                 onPlaybackSpeedChange(Number(event.target.value) as 0.25 | 0.5 | 1 | 2 | 4)
@@ -378,7 +379,7 @@ export default function PlaybackPanel({
           </div>
         </div>
 
-        <div className="playback-panel__scrubber">
+        <div className="playback-panel__scrubber" data-tour="playback-scrubber">
           <input
             type="range"
             min={scrubberMin}

@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
 import type { CoverageBin, Measurement, SessionWindowPoint } from './api/types';
@@ -29,6 +30,7 @@ import {
 import { useLorawanEvents } from './query/lorawan';
 import { useSessionTimeline, useSessions, useSessionWindow } from './query/sessions';
 import { useAppTour } from './tour/AppTourProvider';
+import type { TourSidebarTabKey } from './tour/steps';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -490,14 +492,7 @@ function App() {
   }
 
   const initial = useMemo(() => readInitialQueryState(), []);
-  const {
-    startTour,
-    isTourActive,
-    isTourPromptVisible,
-    dismissTourPrompt,
-    resetTour,
-    tourCompleted
-  } = useAppTour();
+  const { startTour, isTourActive, resetTour } = useAppTour();
 
   const queryClient = useQueryClient();
   const prevLatestMeasurementAt = useRef<string | null>(null);
@@ -539,6 +534,7 @@ function App() {
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() => readInitialSidebarTab());
+  const sidebarTabRef = useRef<SidebarTab>(sidebarTab);
   const [zenMode, setZenMode] = useState<boolean>(() => readStoredZenMode());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [systemTheme, setSystemTheme] = useState<EffectiveTheme>(() => readSystemTheme());
@@ -555,6 +551,31 @@ function App() {
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
   const [fitFeedback, setFitFeedback] = useState<string | null>(null);
   const [sessionSelectionNotice, setSessionSelectionNotice] = useState<string | null>(null);
+  const [tourMenuOpen, setTourMenuOpen] = useState(false);
+  const [tourResetNotice, setTourResetNotice] = useState<string | null>(null);
+  const tourMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    sidebarTabRef.current = sidebarTab;
+  }, [sidebarTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.tourSetActiveTab = (tab: TourSidebarTabKey) => {
+      flushSync(() => {
+        setSidebarTab(tab as SidebarTab);
+      });
+    };
+    window.tourGetActiveTab = () => sidebarTabRef.current;
+
+    return () => {
+      delete window.tourSetActiveTab;
+      delete window.tourGetActiveTab;
+    };
+  }, []);
 
   useEffect(() => {
     playbackCursorRef.current = playbackCursorMs;
@@ -649,6 +670,44 @@ function App() {
     }, 3200);
     return () => window.clearTimeout(handle);
   }, [sessionSelectionNotice]);
+
+  useEffect(() => {
+    if (!tourMenuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!target || !(target instanceof Node)) {
+        return;
+      }
+      if (tourMenuRef.current?.contains(target)) {
+        return;
+      }
+      setTourMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setTourMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [tourMenuOpen]);
+
+  useEffect(() => {
+    if (!isTourActive) {
+      return;
+    }
+    setTourMenuOpen(false);
+    setTourResetNotice(null);
+  }, [isTourActive]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1938,6 +1997,18 @@ function App() {
     </>
   );
 
+  const handleTourStart = useCallback(() => {
+    setTourMenuOpen(false);
+    setTourResetNotice(null);
+    startTour();
+  }, [startTour]);
+
+  const handleTourReset = useCallback(() => {
+    resetTour();
+    setTourMenuOpen(true);
+    setTourResetNotice('Tour reset. Start tour when ready.');
+  }, [resetTour]);
+
   const sidebarFooter = (
     <div className="layout__sidebar-footer-brand">
       <img
@@ -1952,23 +2023,6 @@ function App() {
         className="layout__sidebar-brand-logo layout__sidebar-brand-logo--light"
       />
       <span className="layout__sidebar-footer-meta">{`v${APP_VERSION}`}</span>
-      <div className="layout__sidebar-footer-help">
-        <button
-          type="button"
-          className="layout__sidebar-help-button"
-          onClick={() => startTour()}
-        >
-          Take a quick tour
-        </button>
-        <button
-          type="button"
-          className="layout__sidebar-help-button layout__sidebar-help-button--muted"
-          onClick={resetTour}
-          disabled={!tourCompleted && isTourPromptVisible}
-        >
-          Reset tour
-        </button>
-      </div>
     </div>
   );
   const sidebarFooterCollapsed = (
@@ -1993,21 +2047,44 @@ function App() {
       title={zenMode ? 'Disable zen mode (z)' : 'Enable zen mode (z)'}
       aria-label={zenMode ? 'Disable zen mode' : 'Enable zen mode'}
       onClick={() => setZenMode((value) => !value)}
+      data-tour="zen-mode"
     >
       Z
     </button>
   );
   const tourToggleButton = (
-    <button
-      type="button"
-      className="layout__toggle-button"
-      title="Start guided tour"
-      aria-label="Start guided tour"
-      data-tour="tour-start-button"
-      onClick={() => startTour()}
-    >
-      ?
-    </button>
+    <div className="layout__tour-menu-wrap" ref={tourMenuRef}>
+      <button
+        type="button"
+        className="layout__toggle-button"
+        title="Help and tour"
+        aria-label="Help and tour"
+        aria-expanded={tourMenuOpen}
+        aria-haspopup="menu"
+        data-tour="tour-start-button"
+        onClick={() => {
+          setTourMenuOpen((value) => !value);
+          setTourResetNotice(null);
+        }}
+      >
+        ?
+      </button>
+      {tourMenuOpen ? (
+        <div className="layout__tour-menu" role="menu" aria-label="Help menu">
+          <button type="button" className="layout__tour-menu-item" role="menuitem" onClick={handleTourStart}>
+            Start tour
+          </button>
+          <button type="button" className="layout__tour-menu-item" role="menuitem" onClick={handleTourReset}>
+            Reset tour
+          </button>
+          <div className="layout__tour-menu-shortcuts" aria-label="Keyboard shortcuts">
+            <span className="layout__tour-menu-shortcuts-title">Keyboard shortcuts</span>
+            <span className="layout__tour-menu-shortcuts-list">Z: zen mode · Ctrl+B: sidebar</span>
+          </div>
+          {tourResetNotice ? <div className="layout__tour-menu-note">{tourResetNotice}</div> : null}
+        </div>
+      ) : null}
+    </div>
   );
   const themeModeControl = (
     <select
@@ -2155,19 +2232,6 @@ function App() {
               : `Points: ${renderedPointCount}`}
           </div>
         )}
-        {isTourPromptVisible && (
-          <div className="tour-prompt" role="status" aria-live="polite">
-            <span className="tour-prompt__title">Take a quick tour</span>
-            <div className="tour-prompt__actions">
-              <button type="button" onClick={() => startTour()}>
-                Start
-              </button>
-              <button type="button" className="tour-prompt__dismiss" onClick={dismissTourPrompt}>
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
         {!zenMode &&
           activeMeasurementsQuery.data &&
           activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit && (
@@ -2195,7 +2259,7 @@ function App() {
           onThemeModeChange={setThemeMode}
         />
         {!zenMode && (
-          <div className="right-column">
+          <div className="right-column" data-tour="right-panel">
             <PointDetails measurement={selectedMeasurement} />
             <StatsCard
               stats={statsQuery.data}

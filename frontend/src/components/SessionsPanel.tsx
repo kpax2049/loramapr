@@ -372,7 +372,7 @@ export default function SessionsPanel({
               <span className="sessions-panel__title">{title}</span>
             </span>
           )}
-          <div className="sessions-panel__item-actions">
+          <div className="sessions-panel__item-actions" data-tour="session-actions">
             {session.isArchived ? <span className="sessions-panel__badge">Archived</span> : null}
             {hasQueryApiKey ? (
               isEditing ? (
@@ -418,6 +418,7 @@ export default function SessionsPanel({
                   aria-label={`Open actions for ${title}`}
                   aria-expanded={isMenuOpen}
                   disabled={disableRowActions}
+                  data-tour="session-actions"
                 >
                   <IconDotsVertical size={14} aria-hidden="true" />
                 </button>
@@ -467,7 +468,7 @@ export default function SessionsPanel({
   };
 
   return (
-    <section className="sessions-panel" aria-label="Sessions">
+    <section className="sessions-panel" aria-label="Sessions" data-tour="session-picker">
       <div className="sessions-panel__header">
         <h3>Sessions</h3>
         <div className="sessions-panel__header-meta">
@@ -487,7 +488,7 @@ export default function SessionsPanel({
         </div>
       </div>
 
-      <div className="sessions-panel__actions">
+      <div className="sessions-panel__actions" data-tour="session-start-stop">
         <input
           type="text"
           placeholder="Session name (optional)"
@@ -508,7 +509,7 @@ export default function SessionsPanel({
       </div>
 
       {activeSession && (
-        <div className="sessions-panel__active">
+        <div className="sessions-panel__active" data-tour="session-start-stop">
           {renderSessionRow(activeSession, true)}
           <button
             type="button"
@@ -523,7 +524,7 @@ export default function SessionsPanel({
 
       {error && <div className="sessions-panel__error">Failed to load sessions.</div>}
 
-      <div className="sessions-panel__list" aria-live="polite">
+      <div className="sessions-panel__list" aria-live="polite" data-tour="session-list">
         {isLoading && <div className="sessions-panel__loading">Loading sessions…</div>}
         {!isLoading && sessions.length === 0 && (
           <div className="sessions-panel__empty">No sessions yet.</div>

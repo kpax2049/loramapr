@@ -92,6 +92,7 @@ export default function SelectedDeviceHeader({
                 latestWebhookReceivedAt={latestWebhookReceivedAt}
                 latestWebhookSource={latestWebhookSource}
                 className="selected-device-header__online-dot"
+                dataTour="device-online-dot"
               />
               <strong>{deviceName}</strong>
             </div>

@@ -10,7 +10,13 @@ import {
 import { driver, type DriveStep, type Driver, type PopoverDOM } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import './appTour.css';
-import { buildCoreTourSteps, filterAvailableTourSteps } from './steps';
+import {
+  buildCoreTourPlan,
+  filterAvailableTourSteps,
+  TOUR_JUMP_SECTIONS,
+  TOUR_SECTION_LABELS,
+  type TourSectionKey
+} from './steps';
 
 const LEGACY_TOUR_SEEN_KEY = 'loramaprTourSeen:v1';
 const TOUR_COMPLETED_KEY = 'tourCompleted';
@@ -99,6 +105,73 @@ function ensureSkipButton(popover: PopoverDOM, driverInstance: Driver): void {
   popover.footerButtons.prepend(skipButton);
 }
 
+function ensureSectionJumpControl(
+  popover: PopoverDOM,
+  driverInstance: Driver,
+  sectionStartIndexes: Partial<Record<TourSectionKey, number>>,
+  stepSections: TourSectionKey[]
+): void {
+  const availableSections = TOUR_JUMP_SECTIONS.flatMap((section) => {
+    const index = sectionStartIndexes[section];
+    if (typeof index !== 'number' || index < 0) {
+      return [];
+    }
+    return [{ section, index }];
+  });
+
+  const existing = popover.footer.querySelector<HTMLDivElement>('.lm-tour-section-jump');
+  if (availableSections.length < 2) {
+    existing?.remove();
+    return;
+  }
+
+  const wrapper = existing ?? document.createElement('div');
+  wrapper.className = 'lm-tour-section-jump';
+
+  let label = wrapper.querySelector<HTMLLabelElement>('.lm-tour-section-jump__label');
+  let select = wrapper.querySelector<HTMLSelectElement>('.lm-tour-section-jump__select');
+  if (!label || !select) {
+    wrapper.innerHTML = '';
+    label = document.createElement('label');
+    label.className = 'lm-tour-section-jump__label';
+    label.textContent = 'Jump to section';
+
+    select = document.createElement('select');
+    select.className = 'lm-tour-section-jump__select';
+    select.setAttribute('aria-label', 'Jump to tour section');
+
+    wrapper.append(label, select);
+  }
+
+  const optionsMarkup = availableSections
+    .map((entry) => {
+      const labelText = TOUR_SECTION_LABELS[entry.section];
+      return `<option value="${entry.section}">${labelText}</option>`;
+    })
+    .join('');
+  if (select.innerHTML !== optionsMarkup) {
+    select.innerHTML = optionsMarkup;
+  }
+
+  const activeIndex = driverInstance.getActiveIndex() ?? 0;
+  const activeSection = stepSections[activeIndex];
+  if (activeSection) {
+    select.value = activeSection;
+  }
+
+  select.onchange = () => {
+    const key = select?.value as TourSectionKey;
+    const nextIndex = sectionStartIndexes[key];
+    if (typeof nextIndex === 'number') {
+      driverInstance.moveTo(nextIndex);
+    }
+  };
+
+  if (!existing) {
+    popover.footer.prepend(wrapper);
+  }
+}
+
 export function AppTourProvider({ children }: { children: ReactNode }) {
   const [tourCompleted, setTourCompleted] = useState<boolean>(() => readTourCompleted());
   const [tourPromptDismissed, setTourPromptDismissed] = useState<boolean>(() =>
@@ -106,10 +179,22 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
   );
   const [isTourActive, setIsTourActive] = useState(false);
   const driverRef = useRef<Driver | null>(null);
+  const sectionStartIndexesRef = useRef<Partial<Record<TourSectionKey, number>>>({});
+  const stepSectionsRef = useRef<TourSectionKey[]>([]);
 
   const startTour = useCallback((steps?: DriveStep[]) => {
-    const requestedSteps = steps ?? buildCoreTourSteps();
-    const tourSteps = filterAvailableTourSteps(requestedSteps);
+    let tourSteps: DriveStep[];
+    if (steps) {
+      sectionStartIndexesRef.current = {};
+      stepSectionsRef.current = [];
+      tourSteps = filterAvailableTourSteps(steps);
+    } else {
+      const plan = buildCoreTourPlan();
+      sectionStartIndexesRef.current = plan.sectionStartIndexes;
+      stepSectionsRef.current = plan.stepSections;
+      tourSteps = plan.steps;
+    }
+
     if (tourSteps.length === 0) {
       return;
     }
@@ -133,6 +218,12 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
       doneBtnText: 'Done',
       onPopoverRender: (popover, options) => {
         ensureSkipButton(popover, options.driver);
+        ensureSectionJumpControl(
+          popover,
+          options.driver,
+          sectionStartIndexesRef.current,
+          stepSectionsRef.current
+        );
       },
       onDestroyed: () => {
         setIsTourActive(false);
