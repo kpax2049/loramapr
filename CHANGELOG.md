@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.9.11 - 2026-02-17
+
+### Title
+- Custom Device Markers (Leaflet DivIcon)
+
+### Added
+- Custom latest-location map markers now render via Leaflet `DivIcon` with registry-based device icon SVG, optional family badge, and online-status overlays.
+- New Device-tab toggle (`Show device markers`) with persisted preference to render one latest-location marker per device.
+- Multi-device marker rendering now supports marker click-to-select behavior for fast switching from map context.
+
+### Changed
+- Selected-device latest marker now uses the same custom `DivIcon` pipeline and popup presentation.
+- Device marker rendering is capped to 200 most-recent devices and excludes measurement-level marker fan-out for predictable performance.
+- Marker icon refresh is now deterministic across theme changes, icon override changes, and online-status transitions via memoized `DivIcon` caching and marker key invalidation.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.10 - 2026-02-17
 
 ### Title
