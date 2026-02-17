@@ -13,42 +13,46 @@ const CORE_TOUR_STEPS: CoreTourStepSpec[] = [
   {
     selector: '[data-tour="sidebar-tabs"]',
     title: 'Sidebar tabs',
-    description: 'Switch between Device, Sessions, Playback, and Coverage.',
+    description:
+      'Use these tabs to switch between Device, Sessions, Playback, and Coverage. Each tab shows controls for that area.',
     side: 'right',
     align: 'start'
   },
   {
     selector: '[data-tour="device-list"]',
     title: 'Device selector',
-    description: 'Choose the active device from the selector/list.',
+    description:
+      'Choose the active device here. Device status and latest details update from this selection.',
     side: 'right',
     align: 'start'
   },
   {
     selector: '[data-tour="start-session"]',
     title: 'Start session',
-    description: 'Start a new capture session for the selected device.',
+    description:
+      'Use Start session to begin recording for the selected device. After selecting a session, use Export GeoJSON to download it when available.',
     side: 'right',
     align: 'start'
   },
   {
     selector: '[data-tour="map"]',
     title: 'Map area',
-    description: 'Explore points, tracks, and device markers on the map.',
+    description:
+      'The map shows measurements, tracks, and device markers. Click a point or marker to see details.',
     side: 'left',
     align: 'start'
   },
   {
     selector: '[data-tour="fit-to-data"]',
     title: 'Fit to Data',
-    description: 'Recenter and fit the map to the currently visible dataset.',
+    description: 'Use Fit to Data to re-center the map on the data currently shown.',
     side: 'bottom',
     align: 'start'
   },
   {
     selector: '[data-tour="playback-controls"]',
     title: 'Playback controls',
-    description: 'Control replay speed, window size, and scrub through time.',
+    description: 'In Playback, use Play, speed, window, and the scrubber to move through time.',
     side: 'left',
     align: 'start',
     when: () => Boolean(document.querySelector('[data-tour="playback-controls"]'))
@@ -56,7 +60,8 @@ const CORE_TOUR_STEPS: CoreTourStepSpec[] = [
   {
     selector: '[data-tour="coverage-toggle"]',
     title: 'Coverage layer',
-    description: 'Toggle points vs coverage view and explore coverage metrics.',
+    description:
+      'Switch between Points and Coverage to compare raw data and coverage summaries. Coverage metrics can be changed when this view is active.',
     side: 'left',
     align: 'start',
     when: () => Boolean(document.querySelector('[data-tour="coverage-toggle"]'))
@@ -108,4 +113,3 @@ export function buildCoreTourSteps(): DriveStep[] {
     ];
   });
 }
-
