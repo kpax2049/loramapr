@@ -1,18 +1,260 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { StatsResponse } from '../api/endpoints';
+import type {
+  AutoSessionConfig,
+  Device,
+  Measurement,
+  Session,
+  SessionDetail,
+  SessionTimeline,
+  SessionWindowPoint
+} from '../api/types';
+import Controls from '../components/Controls';
+import Layout from '../components/Layout';
 import MapView from '../components/MapView';
+import PlaybackPanel from '../components/PlaybackPanel';
+import PointDetails from '../components/PointDetails';
+import SelectedDeviceHeader from '../components/SelectedDeviceHeader';
+import SessionsPanel from '../components/SessionsPanel';
+import StatsCard from '../components/StatsCard';
+import StatusStrip from '../components/StatusStrip';
 import '../App.css';
+import './UiKit.css';
+
+type UiKitTheme =
+  | 'default'
+  | 'yellow-black-sat'
+  | 'space-map'
+  | 'retro-future-gadget'
+  | 'white-grid-industrial';
+
+const DEMO_DEVICE_ID = 'ui-kit-device-1';
+const DEMO_SESSION_ACTIVE_ID = 'ui-kit-session-active';
+const DEMO_SESSION_ARCHIVED_ID = 'ui-kit-session-archived';
+
+const DEMO_DEVICE: Device = {
+  id: DEMO_DEVICE_ID,
+  deviceUid: 'dev-uikit-001',
+  name: 'UiKit Device',
+  longName: 'UI Kit Field Mapper',
+  hwModel: 'T-Beam',
+  iconKey: 'auto',
+  iconOverride: false,
+  notes: 'Preview-only demo device',
+  isArchived: false,
+  lastSeenAt: '2026-02-09T09:45:00.000Z',
+  latestMeasurementAt: '2026-02-09T09:45:00.000Z',
+  latestWebhookReceivedAt: '2026-02-09T09:45:30.000Z',
+  latestWebhookSource: 'lorawan'
+};
+
+const DEMO_SESSIONS: Session[] = [
+  {
+    id: DEMO_SESSION_ACTIVE_ID,
+    deviceId: DEMO_DEVICE_ID,
+    name: 'Morning drive',
+    startedAt: '2026-02-09T08:30:00.000Z',
+    endedAt: null,
+    notes: null,
+    isArchived: false
+  },
+  {
+    id: DEMO_SESSION_ARCHIVED_ID,
+    deviceId: DEMO_DEVICE_ID,
+    name: 'City center pass',
+    startedAt: '2026-02-09T06:10:00.000Z',
+    endedAt: '2026-02-09T07:00:00.000Z',
+    notes: null,
+    isArchived: true
+  }
+];
+
+const DEMO_SESSION_DETAILS: SessionDetail[] = [
+  {
+    id: DEMO_SESSION_ACTIVE_ID,
+    deviceId: DEMO_DEVICE_ID,
+    ownerId: null,
+    name: 'Morning drive',
+    startedAt: '2026-02-09T08:30:00.000Z',
+    endedAt: null,
+    notes: null,
+    isArchived: false,
+    archivedAt: null,
+    updatedAt: '2026-02-09T09:45:00.000Z',
+    measurementCount: 148
+  },
+  {
+    id: DEMO_SESSION_ARCHIVED_ID,
+    deviceId: DEMO_DEVICE_ID,
+    ownerId: null,
+    name: 'City center pass',
+    startedAt: '2026-02-09T06:10:00.000Z',
+    endedAt: '2026-02-09T07:00:00.000Z',
+    notes: null,
+    isArchived: true,
+    archivedAt: '2026-02-09T08:00:00.000Z',
+    updatedAt: '2026-02-09T08:00:00.000Z',
+    measurementCount: 92
+  }
+];
+
+const DEMO_AUTO_SESSION: AutoSessionConfig = {
+  enabled: true,
+  homeLat: 37.7749,
+  homeLon: -122.4194,
+  radiusMeters: 20,
+  minOutsideSeconds: 30,
+  minInsideSeconds: 120
+};
+
+const DEMO_MEASUREMENT: Measurement = {
+  id: 'ui-kit-point-1',
+  deviceId: DEMO_DEVICE_ID,
+  sessionId: DEMO_SESSION_ACTIVE_ID,
+  capturedAt: '2026-02-09T09:42:11.000Z',
+  lat: 37.77531,
+  lon: -122.41874,
+  alt: 21,
+  rssi: -84,
+  snr: 7.8,
+  sf: 7,
+  bw: 125,
+  freq: 868.3,
+  gatewayId: 'gw-ui-kit-01'
+};
+
+const DEMO_STATS: StatsResponse = {
+  count: 148,
+  minCapturedAt: '2026-02-09T08:30:05.000Z',
+  maxCapturedAt: '2026-02-09T09:45:00.000Z',
+  gatewayCount: 4
+};
+
+const DEMO_PLAYBACK_TIMELINE: SessionTimeline = {
+  sessionId: DEMO_SESSION_ACTIVE_ID,
+  deviceId: DEMO_DEVICE_ID,
+  startedAt: '2026-02-09T08:30:00.000Z',
+  endedAt: null,
+  minCapturedAt: '2026-02-09T08:30:05.000Z',
+  maxCapturedAt: '2026-02-09T09:45:00.000Z',
+  count: 148
+};
+
+const DEMO_PLAYBACK_WINDOW_ITEMS: SessionWindowPoint[] = [
+  {
+    id: 'window-1',
+    capturedAt: '2026-02-09T09:34:00.000Z',
+    lat: 37.7749,
+    lon: -122.4194,
+    rssi: -88,
+    snr: 5.1,
+    sf: 7,
+    bw: 125,
+    freq: 868.1,
+    gatewayId: 'gw-ui-kit-01'
+  },
+  {
+    id: 'window-2',
+    capturedAt: '2026-02-09T09:36:30.000Z',
+    lat: 37.77505,
+    lon: -122.4191,
+    rssi: -86,
+    snr: 6.8,
+    sf: 7,
+    bw: 125,
+    freq: 868.3,
+    gatewayId: 'gw-ui-kit-01'
+  },
+  {
+    id: 'window-3',
+    capturedAt: '2026-02-09T09:40:00.000Z',
+    lat: 37.7752,
+    lon: -122.4189,
+    rssi: -83,
+    snr: 8.4,
+    sf: 7,
+    bw: 125,
+    freq: 868.5,
+    gatewayId: 'gw-ui-kit-02'
+  }
+];
+
+function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
+}
 
 export default function UiKit() {
-  const [theme, setTheme] = useState<
-    'default' | 'yellow-black-sat' | 'space-map' | 'retro-future-gadget' | 'white-grid-industrial'
-  >('default');
-  const rootClassName =
-    theme === 'default' ? 'app' : `app theme-${theme}`;
+  const queryClient = useQueryClient();
+  const [theme, setTheme] = useState<UiKitTheme>('default');
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(DEMO_SESSION_ACTIVE_ID);
+  const [playbackSessionId, setPlaybackSessionId] = useState<string | null>(DEMO_SESSION_ACTIVE_ID);
+  const [playbackCursorMs, setPlaybackCursorMs] = useState(
+    new Date('2026-02-09T09:36:30.000Z').getTime()
+  );
+  const [playbackWindowMs, setPlaybackWindowMs] = useState(10 * 60 * 1000);
+  const [playbackIsPlaying, setPlaybackIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<0.25 | 0.5 | 1 | 2 | 4>(1);
+
+  const rootClassName = theme === 'default' ? 'app ui-kit-page' : `app ui-kit-page theme-${theme}`;
+  const demoWindowFrom = useMemo(() => new Date('2026-02-09T09:32:00.000Z'), []);
+  const demoWindowTo = useMemo(() => new Date('2026-02-09T09:42:00.000Z'), []);
+
+  useEffect(() => {
+    queryClient.setQueryDefaults(['sessions', DEMO_DEVICE_ID], { staleTime: Infinity, gcTime: Infinity });
+    queryClient.setQueryDefaults(['session'], { staleTime: Infinity, gcTime: Infinity });
+    queryClient.setQueryDefaults(['auto-session', DEMO_DEVICE_ID], {
+      staleTime: Infinity,
+      gcTime: Infinity
+    });
+
+    queryClient.setQueryData(['sessions', DEMO_DEVICE_ID, false], {
+      items: DEMO_SESSIONS.filter((session) => !session.isArchived),
+      count: DEMO_SESSIONS.filter((session) => !session.isArchived).length
+    });
+    queryClient.setQueryData(['sessions', DEMO_DEVICE_ID, true], {
+      items: DEMO_SESSIONS,
+      count: DEMO_SESSIONS.length
+    });
+    queryClient.setQueryData(['auto-session', DEMO_DEVICE_ID], DEMO_AUTO_SESSION);
+    for (const session of DEMO_SESSION_DETAILS) {
+      queryClient.setQueryData(['session', session.id], session);
+    }
+  }, [queryClient]);
 
   return (
     <div className={rootClassName}>
       <MapView showPoints={false} showTrack={false} />
-      <div className="controls">
+
+      <div className="ui-kit-status-stage">
+        <StatusStrip
+          device={DEMO_DEVICE}
+          deviceLabel={DEMO_DEVICE.name ?? DEMO_DEVICE.deviceUid}
+          latestMeasurementAt={DEMO_DEVICE.latestMeasurementAt}
+          latestWebhookSource={DEMO_DEVICE.latestWebhookSource}
+          latestWebhookReceivedAt={DEMO_DEVICE.latestWebhookReceivedAt}
+          activeSessionId={selectedSessionId}
+          formatRelativeTime={formatRelativeTime}
+          showThemeSwitcher={true}
+          themeMode="system"
+          onThemeModeChange={() => undefined}
+        />
+      </div>
+
+      <div className="controls ui-kit-primary-controls">
         <div className="playback-panel__header">
           <h3>UI Kit</h3>
         </div>
@@ -80,112 +322,142 @@ export default function UiKit() {
         </div>
 
         <div className="controls__group">
-          <span className="controls__label">Typography</span>
-          <div className="playback-panel__header">
-            <h3>Section Header</h3>
-          </div>
-          <span className="controls__label">Label</span>
-          <div className="sessions-panel__meta">Meta text for helper copy</div>
-          <dl className="stats-card__grid">
-            <div>
-              <dt>Body</dt>
-              <dd>Body copy in Space Grotesk.</dd>
-            </div>
-          </dl>
-          <div className="controls__device-meta">
-            <span>Mono body</span>
-            <span>IBM Plex Mono</span>
-          </div>
-        </div>
-
-        <div className="controls__group">
-          <span className="controls__label">Buttons</span>
-          <button type="button" className="controls__button">
-            Default
-          </button>
-          <button type="button" className="controls__button controls__button--compact">
-            Compact
-          </button>
-          <button type="button" className="sessions-panel__stop">
-            Stop / Destructive
-          </button>
-        </div>
-
-        <div className="controls__group">
-          <span className="controls__label">Segmented</span>
-          <div className="controls__segmented" role="radiogroup" aria-label="UI kit segmented">
-            <label className="controls__segment is-active">
-              <input type="radio" name="ui-kit-segment" defaultChecked />
-              Primary
-            </label>
-            <label className="controls__segment">
-              <input type="radio" name="ui-kit-segment" />
-              Secondary
-            </label>
-          </div>
-        </div>
-
-        <div className="controls__group">
-          <span className="controls__label">Pickers</span>
-          <label htmlFor="ui-kit-select">Select</label>
-          <select id="ui-kit-select">
-            <option>Option A</option>
-            <option>Option B</option>
-          </select>
-          <label htmlFor="ui-kit-datetime">Datetime</label>
-          <input
-            id="ui-kit-datetime"
-            type="datetime-local"
-            defaultValue="2026-02-08T09:30"
+          <span className="controls__label">Selected Device Header</span>
+          <SelectedDeviceHeader
+            device={DEMO_DEVICE}
+            latestMeasurementAt={DEMO_DEVICE.latestMeasurementAt}
+            latestWebhookReceivedAt={DEMO_DEVICE.latestWebhookReceivedAt}
+            latestWebhookSource={DEMO_DEVICE.latestWebhookSource}
+            fitFeedback="Map recentered to 148 points"
           />
         </div>
       </div>
 
       <div className="right-column">
+        <PlaybackPanel
+          deviceId={DEMO_DEVICE_ID}
+          sessionId={playbackSessionId}
+          onSelectSessionId={setPlaybackSessionId}
+          timeline={DEMO_PLAYBACK_TIMELINE}
+          timelineLoading={false}
+          timelineError={null}
+          windowFrom={demoWindowFrom}
+          windowTo={demoWindowTo}
+          windowCount={DEMO_PLAYBACK_WINDOW_ITEMS.length}
+          windowItems={DEMO_PLAYBACK_WINDOW_ITEMS}
+          sampleNote="Sampled at 1/3 density for performance"
+          emptyNote={null}
+          playbackCursorMs={playbackCursorMs}
+          onPlaybackCursorMsChange={setPlaybackCursorMs}
+          playbackWindowMs={playbackWindowMs}
+          onPlaybackWindowMsChange={setPlaybackWindowMs}
+          playbackIsPlaying={playbackIsPlaying}
+          onPlaybackIsPlayingChange={setPlaybackIsPlaying}
+          playbackSpeed={playbackSpeed}
+          onPlaybackSpeedChange={setPlaybackSpeed}
+        />
+
+        <SessionsPanel
+          deviceId={DEMO_DEVICE_ID}
+          selectedSessionId={selectedSessionId}
+          onSelectSessionId={setSelectedSessionId}
+          onStartSession={setSelectedSessionId}
+        />
+
+        <PointDetails measurement={DEMO_MEASUREMENT} />
+        <StatsCard stats={DEMO_STATS} isLoading={false} error={null} />
+
         <div className="playback-panel">
           <div className="playback-panel__header">
-            <h3>Right Column Panel</h3>
+            <h3>Layout Shell</h3>
           </div>
-          <div className="playback-panel__group">
-            <label htmlFor="ui-kit-playback-select">Playback select</label>
-            <select id="ui-kit-playback-select">
-              <option>Session A</option>
-              <option>Session B</option>
-            </select>
-          </div>
-          <div className="playback-panel__scrubber">
-            <input type="range" min="0" max="100" defaultValue="40" />
-            <div className="playback-panel__scrubber-meta">
-              <span>00:00</span>
-              <span>01:00</span>
-            </div>
-          </div>
-          <div className="playback-panel__controls">
-            <button type="button" className="playback-panel__button">
-              Play
-            </button>
+          <div className="ui-kit-layout-preview">
+            <Layout
+              sidebarHeader={<div className="sidebar-header">Sidebar Header</div>}
+              sidebar={
+                <section className="controls" aria-label="Layout preview controls">
+                  <div className="controls__group">
+                    <span className="controls__label">Preview Control</span>
+                    <button type="button" className="controls__button">
+                      Action
+                    </button>
+                  </div>
+                </section>
+              }
+              sidebarCollapsedContent={
+                <button type="button" className="layout__rail-icon is-active" aria-label="Device tab">
+                  D
+                </button>
+              }
+              sidebarHeaderActions={
+                <button type="button" className="layout__toggle-button" aria-label="Help">
+                  ?
+                </button>
+              }
+              sidebarHeaderBottomActions={
+                <select className="layout__sidebar-theme-select" aria-label="Theme mode">
+                  <option>System</option>
+                  <option>Light</option>
+                  <option>Dark</option>
+                </select>
+              }
+              sidebarFooter={<span className="layout__sidebar-footer-meta">v0.9.12</span>}
+              sidebarFooterCollapsed={<span className="layout__sidebar-footer-meta">SB</span>}
+            >
+              <div className="ui-kit-layout-main">Main Content Area</div>
+            </Layout>
           </div>
         </div>
 
-        <div className="sessions-panel">
-          <div className="sessions-panel__header">
-            <h3>Sessions Panel</h3>
-            <span className="sessions-panel__device">Device selected</span>
-          </div>
-          <div className="sessions-panel__actions">
-            <input type="text" placeholder="Session name" />
-            <div className="sessions-panel__buttons">
-              <button type="button">Start</button>
-              <button type="button">Create</button>
-            </div>
-          </div>
-          <div className="sessions-panel__active">
-            <span className="sessions-panel__meta">Active session</span>
-            <span className="sessions-panel__title">Morning drive</span>
-            <button type="button" className="sessions-panel__stop">
-              Stop
-            </button>
-          </div>
+        <div className="controls">
+          <Controls
+            activeTab="device"
+            deviceId={DEMO_DEVICE_ID}
+            onDeviceChange={() => undefined}
+            filterMode="time"
+            onFilterModeChange={() => undefined}
+            viewMode="explore"
+            onViewModeChange={() => undefined}
+            exploreRangePreset="last1h"
+            onExploreRangePresetChange={() => undefined}
+            useAdvancedRange={false}
+            onUseAdvancedRangeChange={() => undefined}
+            selectedSessionId={selectedSessionId}
+            onSelectSessionId={setSelectedSessionId}
+            onStartSession={setSelectedSessionId}
+            receiverSource="lorawan"
+            onReceiverSourceChange={() => undefined}
+            selectedReceiverId={null}
+            onSelectReceiverId={() => undefined}
+            compareReceiverId={null}
+            onSelectCompareReceiverId={() => undefined}
+            selectedGatewayId={null}
+            onSelectGatewayId={() => undefined}
+            compareGatewayId={null}
+            onSelectCompareGatewayId={() => undefined}
+            latest={null}
+            onFitToData={() => undefined}
+            onCenterOnLatestLocation={() => undefined}
+            mapLayerMode="points"
+            onMapLayerModeChange={() => undefined}
+            coverageMetric="count"
+            onCoverageMetricChange={() => undefined}
+            rangeFrom="2026-02-09T08:00:00.000Z"
+            rangeTo="2026-02-09T10:00:00.000Z"
+            from="2026-02-09T08:00"
+            to="2026-02-09T10:00"
+            onFromChange={() => undefined}
+            onToChange={() => undefined}
+            showPoints={true}
+            showTrack={true}
+            showDeviceMarkers={false}
+            onShowDeviceMarkersChange={() => undefined}
+            onShowPointsChange={() => undefined}
+            onShowTrackChange={() => undefined}
+            playbackControls={null}
+            fitFeedback={null}
+            sessionSelectionNotice={null}
+          />
         </div>
       </div>
     </div>

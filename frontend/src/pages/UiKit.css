@@ -1,0 +1,54 @@
+.ui-kit-page {
+  position: relative;
+  display: block;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.ui-kit-page .ui-kit-primary-controls.controls {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 1000;
+  width: min(340px, calc(100vw - 3rem));
+  max-height: calc(100% - 3rem);
+  overflow: auto;
+  min-height: 0;
+}
+
+.ui-kit-status-stage {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(760px, calc(100vw - 3rem));
+  height: 3.1rem;
+}
+
+.ui-kit-status-stage .status-strip {
+  left: 0;
+  top: 0;
+  max-width: 100%;
+  --map-controls-clearance-x: 0;
+}
+
+.ui-kit-layout-preview {
+  height: 270px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ui-kit-layout-main {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--panel-muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}

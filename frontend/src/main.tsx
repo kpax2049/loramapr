@@ -22,9 +22,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <AppTourProvider>
-        <App />
+        <RootComponent />
       </AppTourProvider>
-      <RootComponent />
     </QueryClientProvider>
   </React.StrictMode>,
 );
