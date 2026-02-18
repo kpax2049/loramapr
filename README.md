@@ -4,29 +4,70 @@
 > This project is under active development and is **not** a complete, production-ready app yet.  
 > The goal is to reach a more or less production‑ready **v1.0.0**; until then, expect breaking changes and evolving features.
 
-LoRaMapr is a hardware-backed mapping and visualization project focused on collecting, storing, and displaying LoRa-based field data on an interactive map.
+## What LoRaMapr is for
 
-The project combines portable LoRa devices (for example GPS-enabled trackers and mesh nodes) with a web backend and frontend to ingest telemetry such as location, signal strength, and timestamps, then render that data in a structured, explorable map UI.
+LoRaMapr is a self-hosted web app for **recording, replaying, and analyzing real-world radio coverage** using GPS-tagged telemetry. You collect measurements while walking/driving with a device, LoRaMapr groups them into **sessions**, and the UI lets you **visualize tracks, compare reception, and export data** (e.g., GeoJSON).
 
-The primary goals are:
-- Field data collection using LoRa / mesh-capable devices
-- Reliable ingestion and storage of time-series + geospatial data
-- Clear visualization of coverage, paths, and nodes on a map
-- A modular architecture that allows future expansion (users, auth, analytics, additional sensors)
+The key idea: LoRaMapr does not require your devices to talk to the web app directly. Instead, it ingests data through the system that already receives your radio packets.
 
-This repository serves as the main codebase for the backend and web application powering the LoRaMapr system.
+## How data gets into LoRaMapr (two common ingestion methods)
+
+### 1) LoRaWAN (The Things Stack webhook) — most common if you already use TTS/TTN
+
+**Real-world setup**
+
+- **You own**: a LoRaWAN end device (your sensor/tracker)
+- **Gateways**: can be yours or community/public gateways (any gateway that hears your device helps)
+- **The Things Stack (TTS/TTN)**: the network server that receives gateway traffic for your application
+- **LoRaMapr**: your backend + UI
+
+**How ingestion works**
+
+1. Your device transmits an uplink over LoRa.
+2. One or more gateways receive it and forward it to The Things Stack.
+3. You configure a **Webhook integration** in The Things Stack by entering LoRaMapr's **HTTPS URL** (and a secret).
+4. The Things Stack automatically **POSTs each uplink event** to LoRaMapr.
+5. LoRaMapr stores the event, extracts GPS + radio metadata (RSSI/SNR, gateway IDs when available), and attaches the data to your sessions for visualization.
+
+### 2) Meshtastic (Forwarder -> HTTP) — most common for local mesh + home node setups
+
+**Real-world setup (typical)**
+
+- **You own**: one or more Meshtastic field nodes you carry while walking/driving
+- **You own**: a receiver node at home (often configured with a standard preset like **LongFast**) plus a small computer (often a Raspberry Pi)
+- Field nodes and the home node commonly communicate on a **private channel** (so your test traffic stays scoped to your own devices)
+- **LoRaMapr**: your backend + UI
+
+**How ingestion works**
+
+1. Field node(s) transmit packets into the mesh.
+2. Your home node hears them.
+3. A small forwarder process (the **Pi Forwarder**) listens to Meshtastic packets locally and **POSTs them to LoRaMapr** over HTTP/HTTPS.
+4. LoRaMapr stores the events and normalizes GPS (and any available telemetry) into measurements attached to sessions.
+
+Important: Meshtastic is **not limited to a home node**. The forwarder can run on any machine that can read Meshtastic packets (Pi, laptop over USB, etc.). A home node is just the most convenient always-on receiver.
+
+## What users typically do with it
+
+- Record a "walk" or "drive" session and replay it later.
+- Compare coverage between antennas, device placement, or firmware settings by repeating the same route.
+- Inspect reception details (especially strong with LoRaWAN where gateways report RSSI/SNR).
+- Export session tracks/points (GeoJSON) for external tools like QGIS.
+- **Planned:** aggregate sessions into an area **coverage heat map** (fast, reusable coverage summaries across routes and date ranges).
 
 ## Tech stack
 
-- Node.js + TypeScript
-- NestJS (HTTP API backend)
-- RxJS, class-validator, class-transformer
+- Backend: Node.js + TypeScript + NestJS
+- Frontend: React + Vite + TypeScript
+- Data: PostgreSQL + Prisma
+- Supporting libs: RxJS, class-validator, class-transformer
 
 ## Documentation
 
 - Wiki source in repo: `docs/wiki/Home.md`
 - The `docs/wiki/` directory mirrors the GitHub Wiki content.
 - Sync guide: `docs/wiki/SYNC_TO_GITHUB_WIKI.md`
+- Wiki sync script: `./scripts/wiki/sync-wiki.sh` (use `--https` if SSH auth is not configured)
 
 ## Quickstart (first-time users, working UI)
 
@@ -51,18 +92,27 @@ The Vite dev server proxies `/api` to `VITE_API_BASE_URL`, so no extra CORS setu
 
 - Backend listens on `http://localhost:3000`
 - Postgres runs as the `postgres` service
-- Migrations are applied automatically on startup
+- Migrations are applied automatically in the Docker backend flow (`docker compose up --build`)
 
 ## Health check
 
 ```bash
 curl http://localhost:3000/health
+curl http://localhost:3000/readyz
 ```
+
+- `/health`: process-level liveness
+- `/readyz`: DB readiness (`503` when database is unreachable)
 
 ## Running locally (contributors)
 
 ```bash
 npm install
+cp .env.example .env
+docker compose up -d postgres
+# IMPORTANT: when backend runs on host (not in docker), edit .env and set:
+# DATABASE_URL=postgres://postgres:postgres@localhost:5432/loramapr
+npm run db:migrate
 npm run start:dev
 ```
 
