@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.9.13 - 2026-02-18
+
+### Title
+- Documentation Wiki Pack
+
+### Added
+- Added a structured docs wiki pack under `docs/wiki/` covering quickstart, architecture, data model, ingestion, pi-forwarder, hands-free sessions, playback, coverage, deployment, backup/restore, troubleshooting, API key scopes, and changelog.
+- Added reusable wiki sync automation via `scripts/wiki/sync-wiki.sh` supporting SSH-first or HTTPS modes, delete-sync behavior, and commit message override flags.
+- Added sync workflow guidance and failure troubleshooting in `docs/wiki/SYNC_TO_GITHUB_WIKI.md`.
+
+### Changed
+- Updated wiki navigation to GitHub Wiki-native links (`[[Page]]`) in `docs/wiki/_Sidebar.md` to avoid raw markdown rendering behavior.
+- Replaced placeholder wiki home content with a usable index page in `docs/wiki/Home.md`.
+- Added `.tmp/` to `.gitignore` for local wiki clone and sync workspace hygiene.
+
+### Acceptance
+- `docs/wiki/` pages are mirrored and render correctly in the GitHub Wiki.
+- Sidebar links navigate to rendered wiki pages instead of `raw.githubusercontent.com/wiki/...`.
+- Running `./scripts/wiki/sync-wiki.sh` performs clone/refresh, delete-sync, and push only when changes exist.
+
+### Notes
+- Core backend/frontend runtime behavior is unchanged; this release focuses on documentation and wiki operations.
+
 ## v0.9.12 - 2026-02-17
 
 ### Title

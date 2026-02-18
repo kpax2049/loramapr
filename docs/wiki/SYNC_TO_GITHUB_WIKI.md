@@ -1,39 +1,94 @@
 # Sync to GitHub Wiki
 
-Use these steps to mirror `docs/wiki/*` into your GitHub Wiki repository.
+Use the helper script to mirror `docs/wiki/*` into the GitHub Wiki git repository.
 
-## 1) Clone wiki repository
+## One-time prerequisites
 
-```bash
-git clone <YOUR_WIKI_GIT_URL>
-cd <YOUR_WIKI_REPO_DIR>
-```
+- You have push access to the main repo and its Wiki.
+- Authentication is configured:
+- SSH option: your SSH key is added to your GitHub account.
+- HTTPS option: you can authenticate with a Personal Access Token (PAT) when prompted.
 
-## 2) Copy wiki markdown from this repo
+Wiki remote placeholders:
 
-From the main repo root, sync files into the wiki repo root:
+- SSH: `<YOUR_WIKI_GIT_URL>` (for this repo, typically `git@github.com:...wiki.git`)
+- HTTPS: `<YOUR_WIKI_GIT_URL>` (for this repo, typically `https://github.com/...wiki.git`)
 
-```bash
-rsync -av --delete docs/wiki/ <YOUR_WIKI_REPO_DIR>/
-```
+## Run the sync script
 
-If `rsync` is unavailable, use `cp`:
-
-```bash
-cp -f docs/wiki/* <YOUR_WIKI_REPO_DIR>/
-```
-
-## 3) Commit and push wiki changes
+From repo root:
 
 ```bash
-cd <YOUR_WIKI_REPO_DIR>
-git add .
-git commit -m "Sync wiki from docs/wiki"
-git push
+./scripts/wiki/sync-wiki.sh
 ```
 
-## Notes
+Options:
 
-- GitHub Wiki uses file names as page names.
-- Keep `_Sidebar.md`, `_Header.md`, and `_Footer.md` in the wiki repo root.
-- Re-run this sync after updating `docs/wiki/*` in the main repository.
+```bash
+# force HTTPS instead of default SSH-first behavior
+./scripts/wiki/sync-wiki.sh --https
+
+# custom commit message
+./scripts/wiki/sync-wiki.sh --message "Sync wiki docs"
+```
+
+What the script does:
+
+1. Verifies `docs/wiki/` exists and contains markdown files.
+2. Clones/refreshes the wiki repo under `.tmp/wiki`.
+3. Syncs `docs/wiki/` into wiki root with delete semantics to avoid drift.
+4. Commits and pushes only when changes exist.
+
+## Common failures
+
+### Authentication failed (SSH)
+
+Symptoms:
+
+- `Permission denied (publickey)` during clone/fetch/push.
+
+Fixes:
+
+- Ensure your SSH key is loaded and linked to GitHub.
+- Re-run with HTTPS mode:
+
+```bash
+./scripts/wiki/sync-wiki.sh --https
+```
+
+### HTTPS + 2FA issues
+
+Symptoms:
+
+- Username/password auth rejected.
+
+Fixes:
+
+- Use a PAT when prompted by Git for HTTPS operations.
+- Ensure PAT has repo/wiki write access as required by your GitHub policy.
+
+### Detached HEAD or branch state issues in `.tmp/wiki`
+
+Symptoms:
+
+- Push rejected or git reports detached HEAD.
+
+Fixes:
+
+- Re-run the script; it refreshes `.tmp/wiki` against remote default branch.
+- If needed, remove temp clone and retry:
+
+```bash
+rm -rf .tmp/wiki
+./scripts/wiki/sync-wiki.sh
+```
+
+### No changes pushed
+
+Symptoms:
+
+- Script reports wiki already up to date.
+
+Fix:
+
+- This is expected when `docs/wiki/*` and wiki repo content are identical.

@@ -8,6 +8,12 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.9.13 (2026-02-18)
+
+- Documentation Wiki Pack release: full `docs/wiki/` content rollout plus GitHub Wiki-native sidebar/home navigation fixes.
+- Automated wiki sync added via `scripts/wiki/sync-wiki.sh` (`--ssh` / `--https`, delete-sync semantics, optional commit message).
+- Release notes: `docs/release-v0.9.13.md`.
+
 ## v0.9.12 (2026-02-17)
 
 - Guided onboarding tour release: sectioned tour flow across key UI tabs and panels with stable `data-tour` anchors.
