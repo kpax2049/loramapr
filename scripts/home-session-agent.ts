@@ -59,7 +59,11 @@ async function tick() {
   isTickRunning = true;
   try {
     for (const deviceUid of DEVICE_UIDS) {
-      await handleDevice(deviceUid);
+      try {
+        await handleDevice(deviceUid);
+      } catch (error) {
+        log(deviceUid, `tick error: ${formatError(error)}`);
+      }
     }
   } finally {
     isTickRunning = false;
@@ -266,11 +270,17 @@ async function fetchAutoSessionConfig(
   deviceUid: string
 ): Promise<AutoSessionConfigResponse | null> {
   const url = `${API_BASE}/api/agent/devices/${encodeURIComponent(deviceUid)}/auto-session`;
-  const response = await fetch(url, {
-    headers: {
-      'X-API-Key': INGEST_API_KEY
-    }
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        'X-API-Key': INGEST_API_KEY
+      }
+    });
+  } catch (error) {
+    log(deviceUid, `Auto-session config fetch error: ${formatError(error)}`);
+    return null;
+  }
   if (response.status === 404) {
     log(deviceUid, 'Auto-session config: device not found.');
     return null;
@@ -284,11 +294,17 @@ async function fetchAutoSessionConfig(
 
 async function fetchLatestPosition(deviceUid: string): Promise<LatestPositionResponse | null> {
   const url = `${API_BASE}/api/agent/devices/${encodeURIComponent(deviceUid)}/latest-position`;
-  const response = await fetch(url, {
-    headers: {
-      'X-API-Key': INGEST_API_KEY
-    }
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        'X-API-Key': INGEST_API_KEY
+      }
+    });
+  } catch (error) {
+    log(deviceUid, `Latest position fetch error: ${formatError(error)}`);
+    return null;
+  }
   if (response.status === 404) {
     log(deviceUid, 'Device not found.');
     return null;
@@ -307,14 +323,25 @@ async function startSession(
   capturedAt: string
 ) {
   const url = `${API_BASE}/api/agent/sessions/start`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': INGEST_API_KEY
-    },
-    body: JSON.stringify({ deviceUid })
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': INGEST_API_KEY
+      },
+      body: JSON.stringify({ deviceUid })
+    });
+  } catch (error) {
+    log(
+      deviceUid,
+      `action=start error distanceM=${formatDistance(distanceM)} inside=${formatInside(
+        inside
+      )} capturedAt=${capturedAt} error=${formatError(error)}`
+    );
+    return;
+  }
   if (!response.ok) {
     log(
       deviceUid,
@@ -348,14 +375,25 @@ async function stopSession(
   capturedAt: string
 ) {
   const url = `${API_BASE}/api/agent/sessions/stop`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': INGEST_API_KEY
-    },
-    body: JSON.stringify({ deviceUid })
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': INGEST_API_KEY
+      },
+      body: JSON.stringify({ deviceUid })
+    });
+  } catch (error) {
+    log(
+      deviceUid,
+      `action=stop error distanceM=${formatDistance(distanceM)} inside=${formatInside(
+        inside
+      )} capturedAt=${capturedAt} error=${formatError(error)}`
+    );
+    return;
+  }
   if (!response.ok) {
     log(
       deviceUid,
@@ -407,14 +445,25 @@ async function postAgentDecision(input: {
     payload.capturedAt = input.capturedAt;
   }
 
-  const response = await fetch(`${API_BASE}/api/agent/decisions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': INGEST_API_KEY
-    },
-    body: JSON.stringify(payload)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/agent/decisions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': INGEST_API_KEY
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    log(
+      input.deviceUid,
+      `decision post error decision=${input.decision} reason=${input.reason ?? 'na'} error=${formatError(
+        error
+      )}`
+    );
+    return;
+  }
 
   if (!response.ok) {
     log(
@@ -462,6 +511,13 @@ function formatInside(value: boolean | null): string {
     return 'na';
   }
   return value ? 'true' : 'false';
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 void main();
