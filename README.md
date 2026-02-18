@@ -68,26 +68,27 @@ Important: Meshtastic is **not limited to a home node**. The forwarder can run o
 
 ## Quickstart (first-time users, working UI)
 
-Start the backend + database:
+Start the dev stack (postgres + backend + frontend):
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up -d --build
 ```
 
-Start the frontend dev server in a second terminal:
-```bash
-cp frontend/.env.example frontend/.env
-# edit frontend/.env and set VITE_API_BASE_URL=http://localhost:3000
-npm --prefix frontend install
-npm --prefix frontend run dev
-```
+No manual `npm install` is required for runtime; containers install and run dependencies.
 
-Open the UI at `http://localhost:5173`.
-The Vite dev server proxies `/api` to `VITE_API_BASE_URL`, so no extra CORS setup is required for local dev.
+Default URLs/ports after startup:
+
+- Frontend UI: `http://localhost:5173`
+- Backend API: `http://localhost:3000`
+- Health: `http://localhost:3000/health`
+- Readiness: `http://localhost:3000/readyz`
+
+These values are controlled by `.env` (`FRONTEND_PORT`, `API_PORT`).
 
 ## What to expect
 
 - Backend listens on `http://localhost:3000`
+- Frontend listens on `http://localhost:5173`
 - Postgres runs as the `postgres` service
 - Migrations are applied automatically in the Docker backend flow (`docker compose up --build`)
 

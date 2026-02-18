@@ -19,8 +19,8 @@ services:
   migrate:
     build: .
     command: npm run db:migrate:deploy
-    env_file:
-      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-loramapr}
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,14 +30,32 @@ services:
     build: .
     command: npm run start:prod
     environment:
+      API_PORT: ${API_PORT:-3000}
+      PORT: ${API_PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-loramapr}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       NODE_ENV: production
-    env_file:
-      - .env
     ports:
-      - "${API_PORT:-3000}:3000"
+      - "${API_PORT:-3000}:${API_PORT:-3000}"
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      args:
+        FRONTEND_PORT: ${FRONTEND_PORT:-5173}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://backend:3000}
+    environment:
+      FRONTEND_PORT: ${FRONTEND_PORT:-5173}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://backend:3000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:${FRONTEND_PORT:-5173}"
+    depends_on:
+      backend:
+        condition: service_started
 
 volumes:
   postgres_data:

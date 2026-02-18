@@ -27,6 +27,20 @@ Commands:
 EOF
 }
 
+read_env_value() {
+  local key="$1"
+  local default_value="$2"
+  if [[ -f .env ]]; then
+    local line
+    line="$(grep -E "^${key}=" .env | tail -n 1 || true)"
+    if [[ -n "$line" ]]; then
+      echo "${line#*=}"
+      return
+    fi
+  fi
+  echo "$default_value"
+}
+
 require_compose() {
   command -v docker >/dev/null 2>&1 || die "docker is required"
   "${COMPOSE[@]}" version >/dev/null 2>&1 || die "docker compose (v2) is required"
@@ -49,12 +63,16 @@ cmd_up() {
   require_compose
   ensure_env_file
   "${COMPOSE[@]}" up -d --build
+  local api_port
+  local frontend_port
+  api_port="$(read_env_value API_PORT 3000)"
+  frontend_port="$(read_env_value FRONTEND_PORT 5173)"
   echo ""
   echo "Stack is up."
-  echo "Backend API:  http://localhost:3000"
-  echo "Health:       http://localhost:3000/health"
-  echo "Readiness:    http://localhost:3000/readyz"
-  echo "Frontend dev: http://localhost:5173 (run: npm --prefix frontend run dev)"
+  echo "Backend API:  http://localhost:${api_port}"
+  echo "Health:       http://localhost:${api_port}/health"
+  echo "Readiness:    http://localhost:${api_port}/readyz"
+  echo "Frontend UI:  http://localhost:${frontend_port}"
 }
 
 cmd_down() {
