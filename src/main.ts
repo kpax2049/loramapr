@@ -6,10 +6,12 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  const originEnv = process.env.FRONTEND_ORIGIN ?? process.env.CORS_ORIGIN;
+  const originEnv =
+    process.env.CORS_ORIGINS ?? process.env.FRONTEND_ORIGIN ?? process.env.CORS_ORIGIN;
+  const frontendPort = Number(process.env.FRONTEND_PORT ?? 5173);
   const corsOrigin = originEnv
     ? originEnv.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+    : [`http://localhost:${frontendPort}`, `http://127.0.0.1:${frontendPort}`];
 
   app.enableCors({
     origin: corsOrigin,
@@ -29,7 +31,7 @@ async function bootstrap(): Promise<void> {
   const httpAdapterHost = app.get(HttpAdapterHost);
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+  const port = Number(process.env.API_PORT ?? process.env.PORT ?? 3000);
   await app.listen(port);
 }
 

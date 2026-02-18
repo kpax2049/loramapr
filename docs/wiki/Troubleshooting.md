@@ -153,3 +153,40 @@ If you suspect local dev DB drift:
 ```bash
 npx prisma migrate status
 ```
+
+## P1001 on docker compose up (localhost vs postgres host)
+
+Symptoms:
+
+- `migrate` service exits with code 1 during `docker compose up -d`
+- Prisma error: `P1001: Can't reach database server at localhost:5432`
+
+Why this happens:
+
+- Inside docker compose, `localhost` points to the container itself, not the Postgres service container.
+
+Checks:
+
+```bash
+docker compose logs migrate --no-log-prefix --tail=200
+grep '^DATABASE_URL=' .env
+```
+
+Fixes:
+
+- For docker compose backend/migrate, use service host `postgres`:
+
+```bash
+# macOS
+sed -i '' 's#^DATABASE_URL=.*#DATABASE_URL=postgresql://postgres:postgres@postgres:5432/loramapr#' .env
+
+docker compose down
+docker compose up -d --build
+docker compose logs migrate --no-log-prefix --tail=80
+```
+
+- For host-run backend (`npm run start:dev`), use `localhost` instead:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/loramapr
+```
