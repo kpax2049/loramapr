@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+COMPOSE=(docker compose)
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./bin/loramapr up|down|logs|ps|reset|demo|keys
+
+Commands:
+  up      Start docker compose stack
+  down    Stop docker compose stack
+  logs    Tail docker compose logs
+  ps      Show docker compose services
+  reset   Stop stack and remove volumes (destructive)
+  demo    Seed demo data if available
+  keys    Mint API keys and persist in .env
+EOF
+}
+
+require_compose() {
+  command -v docker >/dev/null 2>&1 || die "docker is required"
+  "${COMPOSE[@]}" version >/dev/null 2>&1 || die "docker compose (v2) is required"
+}
+
+ensure_env_file() {
+  if [[ -f .env ]]; then
+    return
+  fi
+  if [[ -f .env.example ]]; then
+    cp .env.example .env
+    echo "Created .env from .env.example"
+  else
+    touch .env
+    echo "Created empty .env"
+  fi
+}
+
+mint_key() {
+  local scope="$1"
+  local label="$2"
+  local output=""
+  local key=""
+
+  output="$("${COMPOSE[@]}" run --rm backend npm run apikey:mint -- --scopes "$scope" --label "$label" 2>&1 || true)"
+  key="$(printf '%s\n' "$output" | sed -n 's/^API key: //p' | tail -n1)"
+
+  if [[ -z "$key" ]]; then
+    printf '%s\n' "$output" >&2
+    die "failed to mint $scope API key"
+  fi
+
+  printf '%s' "$key"
+}
+
+cmd_up() {
+  require_compose
+  ensure_env_file
+  "${COMPOSE[@]}" up -d --build
+  echo ""
+  echo "Stack is up."
+  echo "Backend API:  http://localhost:3000"
+  echo "Health:       http://localhost:3000/health"
+  echo "Readiness:    http://localhost:3000/readyz"
+  echo "Frontend dev: http://localhost:5173 (run: npm --prefix frontend run dev)"
+}
+
+cmd_down() {
+  require_compose
+  "${COMPOSE[@]}" down
+}
+
+cmd_logs() {
+  require_compose
+  "${COMPOSE[@]}" logs -f --tail=200
+}
+
+cmd_ps() {
+  require_compose
+  "${COMPOSE[@]}" ps
+}
+
+cmd_reset() {
+  require_compose
+  echo "Resetting stack (containers + volumes)..."
+  "${COMPOSE[@]}" down -v
+}
+
+cmd_demo() {
+  require_compose
+  ensure_env_file
+
+  if [[ -f scripts/seed-data.ts ]]; then
+    "${COMPOSE[@]}" up -d --build postgres migrate
+    echo "Seeding demo data with scripts/seed-data.ts ..."
+    "${COMPOSE[@]}" run --rm -e NODE_ENV=development backend npx ts-node scripts/seed-data.ts --db
+    echo "Demo seed complete."
+    return
+  fi
+
+  if [[ -f scripts/simulate-walk.ts ]]; then
+    echo "Found scripts/simulate-walk.ts (requires an INGEST API key)."
+    echo "Run: npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --baseLon -122.43 --minutes 15 --intervalSec 5 --seed demo"
+    return
+  fi
+
+  die "no demo/seed script found"
+}
+
+cmd_keys() {
+  require_compose
+  ensure_env_file
+  "${COMPOSE[@]}" up -d --build postgres migrate
+
+  local ts
+  ts="$(date +%Y%m%d%H%M%S)"
+
+  if grep -Eq '^INGEST_API_KEY=' .env; then
+    echo "INGEST_API_KEY already exists in .env"
+  else
+    local ingest_key
+    ingest_key="$(mint_key "INGEST" "local-ingest-${ts}")"
+    printf '\nINGEST_API_KEY=%s\n' "$ingest_key" >> .env
+    echo "Added INGEST_API_KEY to .env"
+  fi
+
+  if grep -Eq '^QUERY_API_KEY=' .env; then
+    echo "QUERY_API_KEY already exists in .env"
+  else
+    local query_key
+    query_key="$(mint_key "QUERY" "local-query-${ts}")"
+    printf 'QUERY_API_KEY=%s\n' "$query_key" >> .env
+    echo "Added QUERY_API_KEY to .env"
+  fi
+
+  echo "Current API key vars in .env:"
+  grep -E '^(INGEST_API_KEY|QUERY_API_KEY)=' .env || true
+}
+
+main() {
+  local cmd="${1:-help}"
+  case "$cmd" in
+    up) cmd_up ;;
+    down) cmd_down ;;
+    logs) cmd_logs ;;
+    ps) cmd_ps ;;
+    reset) cmd_reset ;;
+    demo) cmd_demo ;;
+    keys) cmd_keys ;;
+    help|-h|--help) usage ;;
+    *) usage; die "unknown command: $cmd" ;;
+  esac
+}
+
+main "$@"
