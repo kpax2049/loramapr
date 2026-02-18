@@ -2,87 +2,76 @@
 
 ## Prerequisites
 
-- Node.js + npm
 - Docker
 - Docker Compose (`docker compose`)
+- `make` (or use `./bin/loramapr` with the same subcommands)
 
-## First Run (Backend + Frontend)
+## First Run (Clean Clone)
 
-### 1) Install dependencies
+### 1) Clone
 
 ```bash
-npm install
-npm --prefix frontend install
+git clone https://github.com/kpax2049/loramapr.git
+cd loramapr
 ```
 
-### 2) Create env files
+### 2) Create env
 
 ```bash
 cp .env.example .env
-cp frontend/.env.example frontend/.env
 ```
 
-Required variables for local contributor flow:
+Alternative: `make keys` also creates `.env` automatically if missing.
 
-- Backend (`.env`)
-  - `DATABASE_URL` (required by backend config validation)
-- Frontend (`frontend/.env`)
-  - `VITE_API_BASE_URL` (set to `http://localhost:3000` for local backend)
-
-Commonly used backend variables from `.env.example`:
-
-- `PORT` (default `3000`)
-- `FRONTEND_ORIGIN` (default `http://localhost:5173`)
-
-### 3) Start Postgres + run migrations
+### 3) Generate local keys (optional but recommended)
 
 ```bash
-docker compose up -d postgres
-npm run db:migrate
+make keys
 ```
 
-Schema-development migration command used in this repo:
+### 4) Start stack
+
+`make up` starts `postgres`, `migrate`, `backend`, and `frontend`.
 
 ```bash
-npm run db:migrate:dev
+make up
 ```
 
-Optional seed script present in repo:
+### 5) Open app
+
+- Frontend UI: `http://localhost:5173`
+- Backend API: `http://localhost:3000`
+- Health: `http://localhost:3000/health`
+- Readiness: `http://localhost:3000/readyz`
+
+## Common Operations
+
+### Stop
 
 ```bash
-npx ts-node scripts/seed-data.ts --db
+make down
 ```
 
-### 4) Run backend + frontend
-
-One command:
+### Reset data (destructive)
 
 ```bash
-npm run dev:all
+make reset
 ```
 
-Or separate terminals:
+### Seed demo data
+
+If `scripts/seed-data.ts` exists, this seeds demo records:
 
 ```bash
-npm run start:dev
+make demo
 ```
 
-```bash
-npm --prefix frontend run dev
-```
-
-Open: `http://localhost:5173`
-
-## Simulate a Walk (Optional)
-
-Mint an ingest key:
+If `make` is unavailable, use equivalent commands:
 
 ```bash
-npm run apikey:mint -- --scopes INGEST --label "dev ingest key"
-```
-
-Send synthetic measurements:
-
-```bash
-npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --baseLon -122.43 --minutes 15 --intervalSec 5 --seed demo
+./bin/loramapr up
+./bin/loramapr down
+./bin/loramapr reset
+./bin/loramapr demo
+./bin/loramapr keys
 ```
