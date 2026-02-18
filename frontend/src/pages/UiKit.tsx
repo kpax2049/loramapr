@@ -27,7 +27,11 @@ type UiKitTheme =
   | 'yellow-black-sat'
   | 'space-map'
   | 'retro-future-gadget'
-  | 'white-grid-industrial';
+  | 'white-grid-industrial'
+  | 'white-cyber-hud'
+  | 'mono-tech-frame'
+  | 'lrm-mono-dark'
+  | 'lrm-mono-light';
 
 const DEMO_DEVICE_ID = 'ui-kit-device-1';
 const DEMO_SESSION_ACTIVE_ID = 'ui-kit-session-active';
@@ -209,7 +213,11 @@ export default function UiKit() {
   const [playbackIsPlaying, setPlaybackIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<0.25 | 0.5 | 1 | 2 | 4>(1);
 
-  const rootClassName = theme === 'default' ? 'app ui-kit-page' : `app ui-kit-page theme-${theme}`;
+  const themeRootClassName = `theme-${theme}`;
+  const rootClassName =
+    theme === 'default'
+      ? 'app ui-kit-page ui-kit-root'
+      : `app ui-kit-page ui-kit-root ${themeRootClassName}`;
   const demoWindowFrom = useMemo(() => new Date('2026-02-09T09:32:00.000Z'), []);
   const demoWindowTo = useMemo(() => new Date('2026-02-09T09:42:00.000Z'), []);
 
@@ -259,7 +267,7 @@ export default function UiKit() {
           <h3>UI Kit</h3>
         </div>
 
-        <div className="controls__group">
+        <div className="controls__group ui-kit-theme-picker">
           <span className="controls__label">Theme</span>
           <div className="controls__segmented" role="radiogroup" aria-label="UI kit theme">
             <label className={`controls__segment ${theme === 'default' ? 'is-active' : ''}`}>
@@ -317,6 +325,46 @@ export default function UiKit() {
                 onChange={() => setTheme('white-grid-industrial')}
               />
               white-grid-industrial
+            </label>
+            <label className={`controls__segment ${theme === 'white-cyber-hud' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="ui-kit-theme"
+                value="white-cyber-hud"
+                checked={theme === 'white-cyber-hud'}
+                onChange={() => setTheme('white-cyber-hud')}
+              />
+              white-cyber-hud
+            </label>
+            <label className={`controls__segment ${theme === 'mono-tech-frame' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="ui-kit-theme"
+                value="mono-tech-frame"
+                checked={theme === 'mono-tech-frame'}
+                onChange={() => setTheme('mono-tech-frame')}
+              />
+              mono-tech-frame
+            </label>
+            <label className={`controls__segment ${theme === 'lrm-mono-dark' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="ui-kit-theme"
+                value="lrm-mono-dark"
+                checked={theme === 'lrm-mono-dark'}
+                onChange={() => setTheme('lrm-mono-dark')}
+              />
+              lrm-mono-dark
+            </label>
+            <label className={`controls__segment ${theme === 'lrm-mono-light' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="ui-kit-theme"
+                value="lrm-mono-light"
+                checked={theme === 'lrm-mono-light'}
+                onChange={() => setTheme('lrm-mono-light')}
+              />
+              lrm-mono-light
             </label>
           </div>
         </div>
