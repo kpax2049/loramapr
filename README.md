@@ -22,6 +22,12 @@ This repository serves as the main codebase for the backend and web application 
 - NestJS (HTTP API backend)
 - RxJS, class-validator, class-transformer
 
+## Documentation
+
+- Wiki source in repo: `docs/wiki/Home.md`
+- The `docs/wiki/` directory mirrors the GitHub Wiki content.
+- Sync guide: `docs/wiki/SYNC_TO_GITHUB_WIKI.md`
+
 ## Quickstart (first-time users, working UI)
 
 Start the backend + database:
