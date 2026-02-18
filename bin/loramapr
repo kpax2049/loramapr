@@ -23,7 +23,7 @@ Commands:
   ps      Show docker compose services
   reset   Stop stack and remove volumes (destructive)
   demo    Seed demo data if available
-  keys    Mint API keys and persist in .env
+  keys    Generate QUERY/INGEST secrets in .env if missing
 EOF
 }
 
@@ -43,23 +43,6 @@ ensure_env_file() {
     touch .env
     echo "Created empty .env"
   fi
-}
-
-mint_key() {
-  local scope="$1"
-  local label="$2"
-  local output=""
-  local key=""
-
-  output="$("${COMPOSE[@]}" run --rm backend npm run apikey:mint -- --scopes "$scope" --label "$label" 2>&1 || true)"
-  key="$(printf '%s\n' "$output" | sed -n 's/^API key: //p' | tail -n1)"
-
-  if [[ -z "$key" ]]; then
-    printf '%s\n' "$output" >&2
-    die "failed to mint $scope API key"
-  fi
-
-  printf '%s' "$key"
 }
 
 cmd_up() {
@@ -117,33 +100,15 @@ cmd_demo() {
 }
 
 cmd_keys() {
-  require_compose
-  ensure_env_file
-  "${COMPOSE[@]}" up -d --build postgres migrate
-
-  local ts
-  ts="$(date +%Y%m%d%H%M%S)"
-
-  if grep -Eq '^INGEST_API_KEY=' .env; then
-    echo "INGEST_API_KEY already exists in .env"
-  else
-    local ingest_key
-    ingest_key="$(mint_key "INGEST" "local-ingest-${ts}")"
-    printf '\nINGEST_API_KEY=%s\n' "$ingest_key" >> .env
-    echo "Added INGEST_API_KEY to .env"
+  if [[ -x "$ROOT_DIR/scripts/setup/generate-secrets.sh" ]]; then
+    "$ROOT_DIR/scripts/setup/generate-secrets.sh"
+    return
   fi
-
-  if grep -Eq '^QUERY_API_KEY=' .env; then
-    echo "QUERY_API_KEY already exists in .env"
-  else
-    local query_key
-    query_key="$(mint_key "QUERY" "local-query-${ts}")"
-    printf 'QUERY_API_KEY=%s\n' "$query_key" >> .env
-    echo "Added QUERY_API_KEY to .env"
+  if [[ -f "$ROOT_DIR/scripts/setup/generate-secrets.js" ]]; then
+    node "$ROOT_DIR/scripts/setup/generate-secrets.js"
+    return
   fi
-
-  echo "Current API key vars in .env:"
-  grep -E '^(INGEST_API_KEY|QUERY_API_KEY)=' .env || true
+  die "missing scripts/setup/generate-secrets script"
 }
 
 main() {

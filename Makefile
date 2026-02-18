@@ -13,7 +13,7 @@ help:
 	@echo "  ps      Show docker compose services"
 	@echo "  reset   Stop stack and remove volumes (destructive)"
 	@echo "  demo    Seed demo data if available"
-	@echo "  keys    Mint API keys and persist in .env"
+	@echo "  keys    Generate QUERY/INGEST secrets in .env if missing"
 
 up:
 	@./bin/loramapr up
