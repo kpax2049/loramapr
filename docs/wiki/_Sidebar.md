@@ -1,16 +1,16 @@
 # LoraMapr Wiki
 
-- [Home](./Home.md)
-- [Quickstart](./Quickstart.md)
-- [Architecture](./Architecture.md)
-- [Data Model](./Data-Model.md)
-- [Ingestion](./Ingestion.md)
-- [Pi Forwarder](./Pi-Forwarder.md)
-- [Hands-Free Sessions](./Hands-Free-Sessions.md)
-- [Playback and Time](./Playback-and-Time.md)
-- [Coverage and Heatmaps](./Coverage-and-Heatmaps.md)
-- [API Keys and Scopes](./API-Keys-and-Scopes.md)
-- [Deploy Self Hosted](./Deploy-Self-Hosted.md)
-- [Backup Restore](./Backup-Restore.md)
-- [Troubleshooting](./Troubleshooting.md)
-- [Changelog](./Changelog.md)
+- [[Home]]
+- [[Quickstart]]
+- [[Architecture]]
+- [[Data-Model|Data Model]]
+- [[Ingestion]]
+- [[Pi-Forwarder|Pi Forwarder]]
+- [[Hands-Free-Sessions|Hands-Free Sessions]]
+- [[Playback-and-Time|Playback and Time]]
+- [[Coverage-and-Heatmaps|Coverage and Heatmaps]]
+- [[API-Keys-and-Scopes|API Keys and Scopes]]
+- [[Deploy-Self-Hosted|Deploy Self Hosted]]
+- [[Backup-Restore|Backup Restore]]
+- [[Troubleshooting]]
+- [[Changelog]]
