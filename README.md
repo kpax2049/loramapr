@@ -64,10 +64,7 @@ Important: Meshtastic is **not limited to a home node**. The forwarder can run o
 
 ## Documentation
 
-- Wiki source in repo: `docs/wiki/Home.md`
-- The `docs/wiki/` directory mirrors the GitHub Wiki content.
-- Sync guide: `docs/wiki/SYNC_TO_GITHUB_WIKI.md`
-- Wiki sync script: `./scripts/wiki/sync-wiki.sh` (use `--https` if SSH auth is not configured)
+- GitHub Wiki: https://github.com/kpax2049/loramapr/wiki
 
 ## Quickstart (first-time users, working UI)
 
@@ -172,6 +169,33 @@ Use the printed key in the `X-API-Key` header.
 Generate and ingest a synthetic walk (posts to `POST /api/measurements` in batches):
 ```bash
 npm run simulate:walk -- --apiKey YOUR_KEY --deviceUid dev-1 --baseLat 37.77 --baseLon -122.43 --minutes 15 --intervalSec 5 --seed demo
+```
+
+## Seed richer demo data (DB)
+
+Use the seed script when you want more than a single walk. It writes a larger test dataset directly to Postgres, including:
+
+- multiple devices and sessions
+- many measurements across several days
+- per-gateway Rx metadata
+- precomputed coverage bins
+
+Run:
+
+```bash
+npx ts-node scripts/seed-data.ts --db
+```
+
+Optional controls:
+
+```bash
+SEED=1337 CENTER_LAT=37.7749 CENTER_LON=-122.4194 OWNER_USER_ID=<uuid> npx ts-node scripts/seed-data.ts --db
+```
+
+If you only want the generated payload (no DB writes):
+
+```bash
+npx ts-node scripts/seed-data.ts --json > tmp/dummy.json
 ```
 
 ## Build and run
