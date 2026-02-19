@@ -18,6 +18,8 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
   private readonly logger = new Logger(RetentionService.name);
   private timer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private lastRunAt: Date | null = null;
+  private lastRunError: string | null = null;
   private schedule: DailySchedule = resolveDailySchedule(
     process.env.RETENTION_SCHEDULE_CRON,
     this.logger
@@ -40,6 +42,18 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
       clearTimeout(this.timer);
       this.timer = null;
     }
+  }
+
+  getWorkerStatus(): {
+    ok: boolean;
+    lastRunAt?: Date;
+    lastError?: string;
+  } {
+    return {
+      ok: this.lastRunError === null,
+      lastRunAt: this.lastRunAt ?? undefined,
+      lastError: this.lastRunError ?? undefined
+    };
   }
 
   private scheduleNextRun(): void {
@@ -70,6 +84,7 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
     }
 
     this.isRunning = true;
+    const runStartedAt = new Date();
     try {
       const webhookDays = readPositiveIntEnv(
         'RETENTION_WEBHOOKEVENT_DAYS',
@@ -98,10 +113,13 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
       this.logger.log(
         `Retention run (${source}) complete: WebhookEvent deleted=${webhookDeleted.count} older_than_days=${webhookDays}, AgentDecision deleted=${agentDeleted.count} older_than_days=${agentDecisionDays}`
       );
+      this.lastRunError = null;
     } catch (error) {
       const message = error instanceof Error ? error.stack ?? error.message : String(error);
+      this.lastRunError = message;
       this.logger.error(`Retention run (${source}) failed: ${message}`);
     } finally {
+      this.lastRunAt = runStartedAt;
       this.isRunning = false;
     }
   }

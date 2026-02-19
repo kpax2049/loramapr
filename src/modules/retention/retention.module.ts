@@ -4,6 +4,7 @@ import { RetentionService } from './retention.service';
 
 @Module({
   imports: [PrismaModule],
-  providers: [RetentionService]
+  providers: [RetentionService],
+  exports: [RetentionService]
 })
 export class RetentionModule {}

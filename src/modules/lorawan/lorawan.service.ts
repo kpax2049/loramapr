@@ -13,6 +13,9 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
   private workerTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private readonly workerId = randomUUID();
+  private readonly workerEnabled = isWorkerEnabled();
+  private lastWorkerRunAt: Date | null = null;
+  private lastWorkerError: string | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -20,7 +23,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    if (!isWorkerEnabled()) {
+    if (!this.workerEnabled) {
       return;
     }
     await this.prisma.$queryRaw`SELECT 1`;
@@ -37,6 +40,25 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       clearInterval(this.workerTimer);
       this.workerTimer = null;
     }
+  }
+
+  getWorkerStatus(): {
+    ok: boolean;
+    lastRunAt?: Date;
+    lastError?: string;
+  } {
+    if (!this.workerEnabled) {
+      return {
+        ok: false,
+        lastError: 'disabled'
+      };
+    }
+
+    return {
+      ok: this.lastWorkerError === null,
+      lastRunAt: this.lastWorkerRunAt ?? undefined,
+      lastError: this.lastWorkerError ?? undefined
+    };
   }
 
   async enqueueUplink(parsed: TtsUplink): Promise<void> {
@@ -229,6 +251,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       return;
     }
     this.isProcessing = true;
+    const runStartedAt = new Date();
     try {
       const now = new Date();
       const staleBefore = new Date(now.getTime() - 5 * 60 * 1000);
@@ -292,7 +315,16 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           event.receivedAt
         );
       }
+      this.lastWorkerError = null;
+    } catch (error) {
+      const message = getErrorMessage(error);
+      this.lastWorkerError = message;
+      logError('webhook.worker.failed', {
+        source: 'lorawan',
+        reason: message
+      });
     } finally {
+      this.lastWorkerRunAt = runStartedAt;
       this.isProcessing = false;
     }
   }

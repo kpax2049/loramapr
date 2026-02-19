@@ -8,6 +8,7 @@ import { LorawanService } from './lorawan.service';
 @Module({
   imports: [MeasurementsModule],
   controllers: [LorawanController],
-  providers: [LorawanService, LorawanWebhookGuard, LorawanRateLimitGuard]
+  providers: [LorawanService, LorawanWebhookGuard, LorawanRateLimitGuard],
+  exports: [LorawanService]
 })
 export class LorawanModule {}
