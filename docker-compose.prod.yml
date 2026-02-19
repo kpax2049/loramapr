@@ -19,6 +19,7 @@ services:
   api:
     build: .
     restart: unless-stopped
+    command: sh scripts/docker/api-entrypoint.sh
     env_file:
       - .env
     environment:

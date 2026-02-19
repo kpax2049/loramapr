@@ -105,7 +105,7 @@ cmd_demo() {
   ensure_env_file
 
   if [[ -f scripts/seed-data.ts ]]; then
-    "${COMPOSE[@]}" up -d --build postgres migrate
+    "${COMPOSE[@]}" up -d --build postgres backend
     echo "Seeding demo data with scripts/seed-data.ts ..."
     "${COMPOSE[@]}" run --rm -e NODE_ENV=development backend npx ts-node scripts/seed-data.ts --db
     echo "Demo seed complete."
