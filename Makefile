@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: help up down logs ps reset demo keys prod-up prod-down prod-logs
+.PHONY: help up down logs ps reset demo keys prod-up prod-down prod-logs wait-ready check
 
 help:
 	@echo "Usage: make <target>"
@@ -17,6 +17,8 @@ help:
 	@echo "  prod-up    Start production compose stack"
 	@echo "  prod-down  Stop production compose stack"
 	@echo "  prod-logs  Tail production compose logs"
+	@echo "  wait-ready Wait until API readiness is healthy"
+	@echo "  check      Fast non-destructive stack health check"
 
 up:
 	@./bin/loramapr up
@@ -47,3 +49,9 @@ prod-down:
 
 prod-logs:
 	@./bin/loramapr prod-logs
+
+wait-ready:
+	@./bin/loramapr wait-ready
+
+check:
+	@./bin/loramapr check

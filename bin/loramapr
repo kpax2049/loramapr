@@ -15,7 +15,7 @@ die() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./bin/loramapr up|down|logs|ps|reset|demo|keys|prod-up|prod-down|prod-logs
+  ./bin/loramapr up|down|logs|ps|reset|demo|keys|prod-up|prod-down|prod-logs|wait-ready|check
 
 Commands:
   up      Start docker compose stack
@@ -28,6 +28,8 @@ Commands:
   prod-up    Start production compose stack
   prod-down  Stop production compose stack
   prod-logs  Tail production compose logs
+  wait-ready Wait for API readiness endpoint to return HTTP 200
+  check      Fast non-destructive local stack health check
 EOF
 }
 
@@ -48,6 +50,10 @@ read_env_value() {
 require_compose() {
   command -v docker >/dev/null 2>&1 || die "docker is required"
   "${COMPOSE[@]}" version >/dev/null 2>&1 || die "docker compose (v2) is required"
+}
+
+require_curl() {
+  command -v curl >/dev/null 2>&1 || die "curl is required"
 }
 
 ensure_env_file() {
@@ -149,6 +155,110 @@ cmd_prod_logs() {
   "${COMPOSE_PROD[@]}" logs -f --tail=200
 }
 
+http_code() {
+  local url="$1"
+  local code
+  code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || true)"
+  if [[ -z "$code" ]]; then
+    echo "000"
+    return
+  fi
+  echo "$code"
+}
+
+cmd_wait_ready() {
+  require_curl
+  ensure_env_file
+
+  local api_port
+  local base_url
+  local timeout_seconds
+  local start_ts
+  local now
+  local elapsed
+  local code_api
+  local code_root
+
+  api_port="$(read_env_value API_PORT 3000)"
+  base_url="http://localhost:${api_port}"
+  timeout_seconds="${WAIT_READY_TIMEOUT_SECONDS:-90}"
+  start_ts="$(date +%s)"
+
+  while true; do
+    code_api="$(http_code "${base_url}/api/readyz")"
+    if [[ "$code_api" == "200" ]]; then
+      echo "ready"
+      return
+    fi
+
+    code_root="$(http_code "${base_url}/readyz")"
+    if [[ "$code_root" == "200" ]]; then
+      echo "ready"
+      return
+    fi
+
+    now="$(date +%s)"
+    elapsed="$((now - start_ts))"
+    if (( elapsed >= timeout_seconds )); then
+      die "timed out waiting for readiness after ${timeout_seconds}s (last /api/readyz=${code_api}, /readyz=${code_root})"
+    fi
+
+    sleep 2
+  done
+}
+
+cmd_check() {
+  require_compose
+  require_curl
+  ensure_env_file
+
+  local api_port
+  local base_url
+  local health_path
+  local ready_path
+  local health_code
+  local ready_code
+  local devices_code
+  local devices_summary
+
+  api_port="$(read_env_value API_PORT 3000)"
+  base_url="http://localhost:${api_port}"
+
+  "${COMPOSE[@]}" up -d
+  cmd_wait_ready
+
+  health_path="/api/healthz"
+  ready_path="/api/readyz"
+  health_code="$(http_code "${base_url}${health_path}")"
+  ready_code="$(http_code "${base_url}${ready_path}")"
+
+  if [[ "$health_code" == "404" ]]; then
+    health_path="/healthz"
+    health_code="$(http_code "${base_url}${health_path}")"
+  fi
+
+  if [[ "$ready_code" == "404" ]]; then
+    ready_path="/readyz"
+    ready_code="$(http_code "${base_url}${ready_path}")"
+  fi
+
+  devices_code="$(http_code "${base_url}/api/devices")"
+  case "$devices_code" in
+    200) devices_summary="ok (200)" ;;
+    401|403) devices_summary="auth-protected (${devices_code})" ;;
+    *) devices_summary="unexpected (${devices_code})" ;;
+  esac
+
+  echo "check summary"
+  echo "- ${health_path}: ${health_code}"
+  echo "- ${ready_path}: ${ready_code}"
+  echo "- /api/devices: ${devices_summary}"
+
+  if [[ "$health_code" != "200" || "$ready_code" != "200" ]]; then
+    die "health check failed"
+  fi
+}
+
 main() {
   local cmd="${1:-help}"
   case "$cmd" in
@@ -162,6 +272,8 @@ main() {
     prod-up) cmd_prod_up ;;
     prod-down) cmd_prod_down ;;
     prod-logs) cmd_prod_logs ;;
+    wait-ready) cmd_wait_ready ;;
+    check) cmd_check ;;
     help|-h|--help) usage ;;
     *) usage; die "unknown command: $cmd" ;;
   esac
