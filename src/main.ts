@@ -4,20 +4,44 @@ import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
+function parseCorsOrigins(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+  return [...new Set(value.split(',').map((origin) => origin.trim()).filter(Boolean))];
+}
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  const originEnv =
-    process.env.CORS_ORIGINS ?? process.env.FRONTEND_ORIGIN ?? process.env.CORS_ORIGIN;
-  const frontendPort = Number(process.env.FRONTEND_PORT ?? 5173);
-  const corsOrigin = originEnv
-    ? originEnv.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : [`http://localhost:${frontendPort}`, `http://127.0.0.1:${frontendPort}`];
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const isProduction = nodeEnv === 'production';
+  const corsAllowlist = parseCorsOrigins(process.env.CORS_ORIGINS);
 
   app.enableCors({
-    origin: corsOrigin,
-    credentials: true,
-    allowedHeaders: ['X-API-Key', 'Content-Type'],
-    methods: ['GET', 'POST', 'PATCH', 'OPTIONS']
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Non-browser requests (no Origin header) are not subject to CORS.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (!isProduction) {
+        // Keep development permissive for local tooling/frontends.
+        callback(null, true);
+        return;
+      }
+
+      if (corsAllowlist.length === 0) {
+        callback(null, false);
+        return;
+      }
+
+      callback(null, corsAllowlist.includes(origin));
+    },
+    credentials: false,
+    allowedHeaders: ['X-API-Key', 'Content-Type', 'Authorization'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    optionsSuccessStatus: 204
   });
 
   app.useGlobalPipes(
