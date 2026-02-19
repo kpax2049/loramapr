@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { AutoSessionConfig, DeviceLatest } from '../api/types';
+import { useApiDiagnosticsEntries } from '../api/diagnostics';
 import { getApiBaseUrl } from '../api/http';
 import { ApiError } from '../api/http';
 import {
@@ -361,6 +362,7 @@ export default function Controls({
   const selectedReceiver =
     receiverOptions.find((receiver) => receiver.id === selectedReceiverId) ?? null;
   const debugProbeEnabled = showDebugTab && hasQueryApiKey;
+  const diagnosticsEntries = useApiDiagnosticsEntries();
   const systemStatusQuery = useSystemStatus({
     enabled: showDebugTab && hasQueryApiKey,
     refetchInterval: showDebugTab && hasQueryApiKey ? 15_000 : false
@@ -1462,6 +1464,30 @@ export default function Controls({
             ) : (
               <div className="controls__status">No status available.</div>
             )}
+            <details className="controls__status-details">
+              <summary>
+                Recent API calls
+                <span className="controls__status-details-count">{diagnosticsEntries.length}</span>
+              </summary>
+              <div className="controls__status-details-list">
+                {diagnosticsEntries.length === 0 ? (
+                  <div className="controls__status-details-empty">No recent calls.</div>
+                ) : (
+                  diagnosticsEntries.map((entry) => (
+                    <div key={entry.id} className="controls__status-details-row">
+                      <div className="controls__status-details-main">
+                        <strong>{entry.statusCode}</strong>
+                        <span>{entry.endpointPath}</span>
+                      </div>
+                      <div className="controls__status-details-meta">
+                        <span>{formatRelativeTime(entry.timestamp)}</span>
+                        {entry.requestId ? <span>id: {entry.requestId}</span> : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </details>
           </div>
           {debugAuthError ? (
             <div className="controls__debug-message">Debug requires QUERY key</div>

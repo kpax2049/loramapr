@@ -1,3 +1,5 @@
+import { recordApiDiagnostics } from './diagnostics';
+
 // Frontend always calls same-origin /api/* at runtime.
 // Dev routing to backend is handled by Vite proxy (configured with VITE_API_BASE_URL).
 const baseUrl = '';
@@ -85,6 +87,7 @@ async function parseBody(response: Response): Promise<unknown> {
 
 export async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { json, headers, signal, ...init } = options;
+  const endpointPath = buildUrl(path);
 
   const requestHeaders: HeadersInit = {
     ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -115,14 +118,24 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
     if (typeof error === 'object' && error && 'name' in error && (error as { name?: string }).name === 'AbortError') {
       throw error;
     }
+    recordApiDiagnostics({
+      endpointPath,
+      statusCode: 0
+    });
     throw new ApiError('Network request failed', 0, error);
   }
 
   const payload = await parseBody(response);
+  const requestId = extractRequestId(payload, response) ?? null;
+  recordApiDiagnostics({
+    endpointPath,
+    statusCode: response.status,
+    requestId
+  });
 
   if (!response.ok) {
     const message = normalizeErrorMessage(payload, response.statusText);
-    throw new ApiError(message, response.status, payload, extractRequestId(payload, response));
+    throw new ApiError(message, response.status, payload, requestId ?? undefined);
   }
 
   return payload as T;
