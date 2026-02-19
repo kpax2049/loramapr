@@ -2,6 +2,49 @@
 
 This page covers common runtime issues and quick fixes using commands already used in this repo.
 
+## Health endpoints and status endpoint (what each means)
+
+- `GET /healthz`: liveness check only. Returns `200` with `{ "status": "ok" }` if the API process is running.
+- `GET /readyz`: readiness check with a DB probe (`SELECT 1`). Returns `200` with `{ "status": "ready" }` when DB is reachable, otherwise `503` with `{ "status": "not_ready", "error": "..." }`.
+- `GET /api/status`: operational status (version, DB latency, worker state, latest ingest info). Requires `X-API-Key` with `QUERY` scope.
+
+Quick checks:
+
+```bash
+curl -i http://localhost:3000/healthz
+curl -i http://localhost:3000/readyz
+curl -i -H "X-API-Key: $QUERY_API_KEY" http://localhost:3000/api/status
+```
+
+## Correlate UI errors with backend logs using X-Request-Id
+
+Where to find it in UI:
+
+- Open the **Debug** tab in the right-side controls panel.
+- In the **System status** panel, failed status calls show an `X-Request-Id`.
+- In **Recent API calls**, each row may include `id: <requestId>`.
+
+How to use it:
+
+```bash
+# Example: search backend container logs for one request ID
+docker compose logs backend --since=30m --no-log-prefix | rg "req-12345"
+```
+
+If you run backend locally with `npm run start:dev`, search your terminal output for the same request id.
+
+curl example that injects your own request id:
+
+```bash
+curl -i \
+  -H "X-API-Key: $QUERY_API_KEY" \
+  -H "X-Request-Id: req-troubleshoot-001" \
+  http://localhost:3000/api/status
+```
+
+You should see `X-Request-Id: req-troubleshoot-001` in the response headers.  
+If you omit the header, backend generates one and returns it in both response headers and error JSON bodies.
+
 ## 401 / 403 errors (API key or scope)
 
 Symptoms:
