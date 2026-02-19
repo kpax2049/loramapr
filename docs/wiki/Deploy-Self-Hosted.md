@@ -42,6 +42,12 @@ cp deploy/Caddyfile.example deploy/Caddyfile
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+On API container startup, migrations run automatically:
+
+1. wait for DB connectivity,
+2. run `prisma migrate deploy`,
+3. start the Nest server.
+
 ## DNS note (for real HTTPS mode)
 
 Before enabling the domain block, point DNS `A`/`AAAA` records for your domain to your server IP.
@@ -53,14 +59,36 @@ Caddy can only obtain and renew certificates when the domain resolves publicly t
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs reverse-proxy -n 200 --no-log-prefix
 docker compose -f docker-compose.prod.yml logs api -n 200 --no-log-prefix
-curl -i http://localhost/readyz
+curl -i http://localhost/api/healthz
+curl -i http://localhost/api/readyz
 ```
 
 Expected:
 
-- `curl http://localhost/readyz` returns `200` when DB is reachable.
+- `curl http://localhost/api/healthz` returns `200` if API process is running.
+- `curl http://localhost/api/readyz` returns `200` when DB is reachable.
 - Browser app is served from `http://<server-ip-or-domain>/`.
 - API is reachable behind proxy at `/api/*`.
+
+## Health endpoints
+
+- `/api/healthz`: liveness only, no DB probe.
+- `/api/readyz`: readiness with DB probe (`SELECT 1`), returns `503` when not ready.
+
+## Diagnose "not ready"
+
+If `/api/readyz` returns `503`, check API and Postgres logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs api -n 200 --no-log-prefix
+docker compose -f docker-compose.prod.yml logs postgres -n 200 --no-log-prefix
+```
+
+Common indicators:
+
+- API stuck at DB wait (`[api-entrypoint] Waiting for database availability...`)
+- migration failure (`[api-entrypoint] Running prisma migrate deploy...` followed by Prisma errors)
+- Postgres readiness failures (`pg_isready`/auth/network errors)
 
 ## Production smoke test
 
