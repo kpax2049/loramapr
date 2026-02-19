@@ -8,6 +8,14 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.9.15 (2026-02-19)
+
+- Prod compose + reverse proxy baseline release: added `docker-compose.prod.yml` for internal-network deployment with reverse-proxy-only public ingress.
+- Added Caddy templates (`deploy/Caddyfile.example`, `deploy/Caddyfile`) with local HTTP and domain HTTPS modes plus TLS notes.
+- Hardened backend CORS to strict production allowlist behavior via `CORS_ORIGINS`.
+- Added production convenience commands (`make/bin` prod-up/down/logs) and deploy smoke-test checklist.
+- Release notes: `docs/release-v0.9.15.md`.
+
 ## v0.9.14 (2026-02-19)
 
 - One-command bootstrap release: root `Makefile` + `bin/loramapr` now provide `up/down/logs/ps/reset/demo/keys` for consistent local orchestration.

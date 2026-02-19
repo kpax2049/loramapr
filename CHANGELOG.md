@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.9.15 - 2026-02-19
+
+### Title
+- Prod compose + reverse proxy baseline
+
+### Added
+- Added production-style deployment stack in `docker-compose.prod.yml` with `postgres`, `api`, `web`, and `reverse-proxy` services.
+- Added reverse proxy templates via `deploy/Caddyfile.example` and `deploy/Caddyfile`, including local HTTP mode, real-domain HTTPS template, compression, and baseline security headers.
+- Added production compose command shortcuts in local tooling (`make prod-up`, `make prod-down`, `make prod-logs` and matching `bin/loramapr` commands).
+
+### Changed
+- Hardened backend CORS behavior: production now enforces config-driven `CORS_ORIGINS` allowlist and denies cross-origin requests when allowlist is empty; development remains permissive for local workflows.
+- Updated deployment runbook in `docs/wiki/Deploy-Self-Hosted.md` with Caddyfile copy/setup flow, DNS/TLS notes, and production smoke-test checklist.
+- Updated `.env.example` with explicit `CORS_ORIGINS` examples for localhost and domain-based deployments.
+
+### Milestone
+- Prod-like compose deployment now runs both locally and on a VPS behind reverse proxy with internal-only service networking.
+
+### Acceptance
+- `docker compose -f docker-compose.prod.yml up -d --build` starts the full production-style stack with only proxy ports publicly exposed.
+- UI and API are reachable through proxy routing (`/` and `/api/*`) and readiness endpoint is available at `/api/readyz`.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.14 - 2026-02-19
 
 ### Title
