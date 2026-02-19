@@ -12,6 +12,7 @@ import { ExportModule } from './modules/export/export.module';
 import { GatewaysModule } from './modules/gateways/gateways.module';
 import { MeshtasticModule } from './modules/meshtastic/meshtastic.module';
 import { ReceiversModule } from './modules/receivers/receivers.module';
+import { RetentionModule } from './modules/retention/retention.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -31,7 +32,8 @@ import { PrismaModule } from './prisma/prisma.module';
     GatewaysModule,
     MeshtasticModule,
     ReceiversModule,
-    PrismaModule
+    PrismaModule,
+    RetentionModule
   ]
 })
 export class AppModule {}

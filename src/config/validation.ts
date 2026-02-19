@@ -17,7 +17,20 @@ const envSchema = Joi.object({
   INGEST_API_KEY: Joi.string().optional(),
   TTS_WEBHOOK_API_KEY: Joi.string().optional(),
   TTS_WEBHOOK_BASIC_USER: Joi.string().optional(),
-  TTS_WEBHOOK_BASIC_PASS: Joi.string().optional()
+  TTS_WEBHOOK_BASIC_PASS: Joi.string().optional(),
+  RETENTION_WEBHOOKEVENT_DAYS: Joi.number().integer().min(1).optional(),
+  RETENTION_AGENTDECISION_DAYS: Joi.number().integer().min(1).optional(),
+  RETENTION_RUN_AT_STARTUP: Joi.boolean()
+    .truthy('true')
+    .truthy('1')
+    .truthy('yes')
+    .truthy('on')
+    .falsy('false')
+    .falsy('0')
+    .falsy('no')
+    .falsy('off')
+    .optional(),
+  RETENTION_SCHEDULE_CRON: Joi.string().optional()
 });
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
