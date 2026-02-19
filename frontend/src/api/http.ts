@@ -1,5 +1,6 @@
-const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
-const baseUrl = import.meta.env.DEV ? '' : rawBaseUrl;
+// Frontend always calls same-origin /api/* at runtime.
+// Dev routing to backend is handled by Vite proxy (configured with VITE_API_BASE_URL).
+const baseUrl = '';
 
 type RequestOptions = Omit<RequestInit, 'body' | 'signal' | 'headers'> & {
   json?: unknown;
@@ -50,6 +51,10 @@ function buildUrl(path: string): string {
     return path;
   }
   return new URL(path, baseUrl).toString();
+}
+
+export function getApiBaseUrl(): string {
+  return baseUrl;
 }
 
 async function parseBody(response: Response): Promise<unknown> {

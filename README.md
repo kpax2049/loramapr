@@ -236,7 +236,7 @@ Common ports:
 - Frontend dev server: 5173
 - Postgres: 5432
 
-If API requests fail in the browser, check that `frontend/.env` has `VITE_API_BASE_URL=http://localhost:3000` and restart the Vite dev server.
+If API requests fail in dev, check that `frontend/.env` has `VITE_API_BASE_URL=http://localhost:3000` and restart the Vite dev server. In production, frontend requests use same-origin `/api/*` by default (leave `VITE_API_BASE_URL` empty).
 
 ## Contributor note
 

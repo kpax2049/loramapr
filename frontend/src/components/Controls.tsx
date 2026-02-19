@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { AutoSessionConfig, DeviceLatest } from '../api/types';
+import { getApiBaseUrl } from '../api/http';
 import {
   useAgentDecisions,
   useAutoSession,
@@ -1503,11 +1504,6 @@ export default function Controls({
       ) : null}
     </section>
   );
-}
-
-function getApiBaseUrl(): string {
-  const raw = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
-  return raw;
 }
 
 function isDeviceIconPickerValue(value: string): value is DeviceIconKey {
