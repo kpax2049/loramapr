@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.9.18 - 2026-02-19
+
+### Title
+- Observability + system status UI
+
+### Added
+- Added request-id propagation end to end in frontend API error handling and diagnostics surfaces, including `X-Request-Id` visibility in status-call failure states.
+- Added a minimal System Status panel in the Debug tab with QUERY-gated access, showing app version, backend time, DB health/latency, worker runtime flags, and latest webhook ingest status.
+- Added lightweight client API diagnostics history (last 20 calls) with endpoint path, status code, timestamp, and request id for fast troubleshooting context.
+
+### Changed
+- Stabilized frontend/client observability output so status and diagnostics views present consistent operational signals without exposing sensitive key material.
+
+### Milestone
+- Operator can diagnose issues without tailing logs.
+
+### Acceptance
+- Failed status calls surface `X-Request-Id`, enabling direct correlation with backend logs.
+- Debug > System Status provides enough signal for DB health, worker state, and latest ingest health checks.
+- Recent API call history in UI gives immediate endpoint/status/request-id context for the most recent requests.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.16 - 2026-02-19
 
 ### Title
