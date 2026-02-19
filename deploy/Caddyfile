@@ -1,0 +1,40 @@
+{
+  # Local mode defaults to plain HTTP.
+  auto_https off
+}
+
+# A) Local/VPS HTTP (no domain yet)
+:80 {
+  encode zstd gzip
+
+  header {
+    -Server
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+
+  reverse_proxy /api/* api:{env.API_PORT}
+  reverse_proxy web:{env.WEB_PORT}
+}
+
+# B) Real domain with automatic HTTPS
+# - remove or comment "auto_https off" in the global block above
+# - replace "yourdomain.com" with your real domain
+#
+# yourdomain.com {
+#   encode zstd gzip
+#
+#   header {
+#     -Server
+#     X-Content-Type-Options "nosniff"
+#     X-Frame-Options "SAMEORIGIN"
+#     Referrer-Policy "strict-origin-when-cross-origin"
+#     Permissions-Policy "geolocation=(), microphone=(), camera=()"
+#     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#   }
+#
+#   reverse_proxy /api/* api:{env.API_PORT}
+#   reverse_proxy web:{env.WEB_PORT}
+# }

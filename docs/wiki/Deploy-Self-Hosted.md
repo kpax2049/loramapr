@@ -1,112 +1,72 @@
 # Deploy (Self-Hosted)
 
-This page documents the current best self-hosted deployment path for this repo.
-It reflects what is implemented now: backend + Postgres via `docker compose`, with frontend typically served separately.
+This page documents the production-style compose deployment in `docker-compose.prod.yml`.
 
-## What this deploys today
+## What this deploys
 
-- `postgres` service (PostgreSQL 16)
-- `migrate` service (runs `prisma migrate deploy` once)
-- `backend` service (Nest API on port `3000`)
+- `postgres` (internal only, no host port exposure)
+- `api` (internal only, healthchecked via `/readyz`)
+- `web` (frontend production build served by nginx, internal only)
+- `reverse-proxy` (Caddy, public entrypoint on `80/443`)
 
-Defined in `docker-compose.yml`.
+Only the reverse proxy publishes host ports.
 
 ## Prerequisites
 
 - Docker Engine with `docker compose`
-- Git + repo checkout on target host
-- Host ports available:
-- `3000` (backend API)
-- `5432` (Postgres, currently mapped in compose)
+- A checked-out repo on your server
+- Root `.env` configured (`cp .env.example .env`)
 
-## 1) Prepare environment
+## Minimal setup
 
-From repo root on host:
+1. Create/edit env:
 
 ```bash
 cp .env.example .env
 ```
 
-Minimum required env (validated by backend):
-
-- `DATABASE_URL`
-
-Commonly used env in this repo:
-
-- `PORT` (default `3000`)
-- `FRONTEND_ORIGIN` (or `CORS_ORIGIN`) for browser access/CORS
-
-For compose in this repo, `DATABASE_URL` should target service host `postgres`, for example:
-
-```dotenv
-DATABASE_URL=postgres://postgres:postgres@postgres:5432/loramapr
-PORT=3000
-FRONTEND_ORIGIN=https://your-frontend.example.com
-```
-
-## 2) Start stack (prod-like compose run)
+2. Copy proxy config template:
 
 ```bash
-docker compose up -d --build
+cp deploy/Caddyfile.example deploy/Caddyfile
 ```
 
-This starts `postgres`, runs `migrate`, then starts `backend` (per compose dependencies).
+3. Choose routing mode in `deploy/Caddyfile`:
 
-## 3) Verify deployment
+- Local/VPS HTTP: keep `:80 { ... }` block and keep `auto_https off`
+- Real domain HTTPS: set `yourdomain.com { ... }`, then remove/comment `auto_https off`
+
+4. Start stack:
 
 ```bash
-docker compose ps
-docker compose logs backend -n 200 --no-log-prefix
-curl -i http://localhost:3000/health
-curl -i http://localhost:3000/readyz
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+## DNS note (for real HTTPS mode)
+
+Before enabling the domain block, point DNS `A`/`AAAA` records for your domain to your server IP.
+Caddy can only obtain and renew certificates when the domain resolves publicly to this host.
+
+## Verify
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs reverse-proxy -n 200 --no-log-prefix
+docker compose -f docker-compose.prod.yml logs api -n 200 --no-log-prefix
+curl -i http://localhost/readyz
 ```
 
 Expected:
 
-- `health` returns `200 {"status":"ok"}`
-- `readyz` returns `200` when DB is reachable
+- `curl http://localhost/readyz` returns `200` when DB is reachable.
+- Browser app is served from `http://<server-ip-or-domain>/`.
+- API is reachable behind proxy at `/api/*`.
 
-## Ports and network notes
+## Related files
 
-- API is exposed on host `:3000` (`backend` -> `3000:3000`)
-- Postgres is exposed on host `:5432` (`postgres` -> `5432:5432`)
-
-For internet-facing deployments, do not leave Postgres (`5432`) publicly reachable.
-Restrict with firewall/security groups or remove host port mapping if not needed externally.
-
-## Frontend serving (current repo model)
-
-The compose file here does not include a frontend web server container.
-
-Typical options:
-
-- Dev/LAN: run Vite from `frontend/` (`npm --prefix frontend run dev`)
-- Production-style: build frontend (`npm --prefix frontend run build`) and serve `frontend/dist` via your web server/CDN
-
-Set `VITE_API_BASE_URL` in frontend env to the public API URL.
-
-## Reverse proxy and TLS
-
-No reverse-proxy config is bundled in this repo today.
-In cloud/public deployments, place a reverse proxy (Nginx/Caddy/Traefik/etc.) in front of backend:
-
-- terminate HTTPS/TLS at proxy
-- route API traffic to backend `:3000`
-- optionally serve frontend static assets from the same domain
-
-Also set `FRONTEND_ORIGIN` (or `CORS_ORIGIN`) to your frontend origin(s) so browser calls are allowed.
-If multiple origins are needed, use comma-separated values.
-
-## Updates
-
-When updating:
-
-```bash
-git pull
-docker compose up -d --build
-docker compose logs migrate -n 100 --no-log-prefix
-docker compose logs backend -n 100 --no-log-prefix
-```
+- `docker-compose.prod.yml`
+- `deploy/Caddyfile.example`
+- `deploy/Caddyfile`
 
 ## Related pages
 
