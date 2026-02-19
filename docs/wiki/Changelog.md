@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.9.17 (2026-02-19)
+
+- Data safety + retention defaults release: added configurable backend raw-event retention scheduling with documented defaults (`WebhookEvent` 30d, `AgentDecision` 90d) and daily cron execution.
+- Hot-path DB index pass for measurement/event workloads and bounded list-response hardening (`MAX_LIMIT=5000`, cursor pagination on debug event feeds, consistent `limit` metadata on list responses).
+- Verified safe delete behavior through e2e coverage to ensure session hard delete detaches measurements and archive remains the default safety path.
+- Release notes: `docs/release-v0.9.17.md`.
+
 ## v0.9.16 (2026-02-19)
 
 - Health/readiness + startup ordering release: added `/healthz`, standardized `/readyz` readiness contract, and added readiness-path test coverage.
