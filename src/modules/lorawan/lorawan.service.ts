@@ -66,6 +66,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     processingError?: string;
     processed?: boolean;
     limit: number;
+    cursor?: Date;
   }) {
     const where: Record<string, unknown> = {};
     if (params.deviceUid) {
@@ -77,9 +78,12 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     if (params.processed !== undefined) {
       where.processedAt = params.processed ? { not: null } : null;
     }
+    if (params.cursor) {
+      where.receivedAt = { lt: params.cursor };
+    }
     return this.prisma.webhookEvent.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
-      orderBy: { receivedAt: 'desc' },
+      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
       take: params.limit,
       select: {
         id: true,

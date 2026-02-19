@@ -69,7 +69,7 @@ For `GET /api/sessions/:id/window`:
 For `GET /api/measurements` and `GET /api/tracks`:
 
 - default `limit=500`
-- max effective `limit=2000`
+- max effective `limit=5000`
 - optional `sample` must be positive integer
 
 ### Map polyline simplification
@@ -106,6 +106,7 @@ This affects rendering density, not stored/query data.
     - `limit`, `sample`
     - `gatewayId`, `receiverId`, `rxGatewayId`
   - note: if both `gatewayId` and `receiverId` are sent, they must match
+  - response shape: `items`, `count`, `limit`, `totalBeforeSample`, `returnedAfterSample`
 
 ### Measurement endpoint
 
@@ -117,6 +118,7 @@ This affects rendering density, not stored/query data.
     - `limit`, `sample`
     - `gatewayId`, `receiverId`, `rxGatewayId`
   - note: if both `gatewayId` and `receiverId` are sent, they must match
+  - response shape: `items`, `count`, `limit`, `totalBeforeSample`, `returnedAfterSample`
 
 ### Stats endpoint
 

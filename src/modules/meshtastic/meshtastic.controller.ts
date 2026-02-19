@@ -39,16 +39,26 @@ export class MeshtasticController {
     @Query('deviceUid') deviceUid?: string,
     @Query('processingError') processingError?: string,
     @Query('processed') processed?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string
   ) {
     const parsedLimit = parseLimit(limit);
+    const parsedCursor = parseCursor(cursor);
     const items = await this.meshtasticService.listEvents({
       deviceUid: deviceUid || undefined,
       processingError: processingError || undefined,
       processed: parseOptionalBoolean(processed, 'processed'),
-      limit: parsedLimit
+      limit: parsedLimit,
+      cursor: parsedCursor
     });
-    return { items, count: items.length };
+    const nextCursor =
+      items.length === parsedLimit ? items[items.length - 1].receivedAt.toISOString() : null;
+    return {
+      items,
+      count: items.length,
+      limit: parsedLimit,
+      nextCursor
+    };
   }
 
   @Get('events/:id')
@@ -81,14 +91,18 @@ export class MeshtasticController {
       throw new BadRequestException('from must be before to');
     }
 
+    const requestedLimit = parseListLimit(getSingleValue(query.limit, 'limit'));
+    const limit = Math.min(requestedLimit, MAX_LIST_LIMIT);
+
     const items = await this.meshtasticService.listReceivers({
       deviceId: deviceId ?? undefined,
       sessionId: sessionId ?? undefined,
       from,
-      to
+      to,
+      limit
     });
 
-    return { items, count: items.length };
+    return { items, count: items.length, limit };
   }
 }
 
@@ -97,17 +111,45 @@ type MeshtasticReceiversQuery = {
   sessionId?: string | string[];
   from?: string | string[];
   to?: string | string[];
+  limit?: string | string[];
 };
+
+const DEFAULT_EVENTS_LIMIT = 50;
+const MAX_EVENTS_LIMIT = 5000;
+const DEFAULT_LIST_LIMIT = 500;
+const MAX_LIST_LIMIT = 5000;
 
 function parseLimit(value?: string): number {
   if (!value) {
-    return 50;
+    return DEFAULT_EVENTS_LIMIT;
   }
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new BadRequestException('limit must be a positive integer');
   }
-  return Math.min(parsed, 200);
+  return Math.min(parsed, MAX_EVENTS_LIMIT);
+}
+
+function parseListLimit(value?: string): number {
+  if (!value) {
+    return DEFAULT_LIST_LIMIT;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  return parsed;
+}
+
+function parseCursor(value?: string): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('cursor must be a valid timestamp');
+  }
+  return parsed;
 }
 
 function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {

@@ -9,6 +9,7 @@ type ReceiverQueryParams = {
   sessionId?: string;
   from?: Date;
   to?: Date;
+  limit: number;
 };
 
 @Injectable()
@@ -27,7 +28,9 @@ export class ReceiversService {
       this.listLorawan(params),
       this.listMeshtastic(params)
     ]);
-    return [...lorawan, ...meshtastic];
+    return [...lorawan, ...meshtastic]
+      .sort((left, right) => right.count - left.count)
+      .slice(0, params.limit);
   }
 
   private async listLorawan(params: Omit<ReceiverQueryParams, 'source'>) {
@@ -41,12 +44,15 @@ export class ReceiversService {
       _max: { receivedAt: true }
     });
 
-    return rows.map((row) => ({
+    return rows
+      .sort((left, right) => right._count._all - left._count._all)
+      .slice(0, params.limit)
+      .map((row) => ({
       id: row.gatewayId,
       source: 'lorawan' as const,
       count: row._count._all,
       lastSeenAt: row._max.receivedAt ?? null
-    }));
+      }));
   }
 
   private async listMeshtastic(params: Omit<ReceiverQueryParams, 'source'>) {
@@ -60,12 +66,15 @@ export class ReceiversService {
       _max: { capturedAt: true }
     });
 
-    return rows.map((row) => ({
+    return rows
+      .sort((left, right) => right._count._all - left._count._all)
+      .slice(0, params.limit)
+      .map((row) => ({
       id: row.gatewayId as string,
       source: 'meshtastic' as const,
       count: row._count._all,
       lastSeenAt: row._max.capturedAt ?? null
-    }));
+      }));
   }
 }
 

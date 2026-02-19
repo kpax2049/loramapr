@@ -6,6 +6,7 @@ type GatewayQueryParams = {
   sessionId?: string;
   from?: Date;
   to?: Date;
+  limit?: number;
 };
 
 @Injectable()
@@ -40,11 +41,14 @@ export class GatewaysService {
       _max: { receivedAt: true }
     });
 
-    return rows.map((row) => ({
+    return rows
+      .sort((left, right) => right._count._all - left._count._all)
+      .slice(0, params.limit ?? rows.length)
+      .map((row) => ({
       gatewayId: row.gatewayId,
       count: row._count._all,
       lastSeenAt: row._max.receivedAt ?? null
-    }));
+      }));
   }
 
   async stats(params: GatewayQueryParams & { gatewayId: string }) {

@@ -178,14 +178,14 @@ export class DevicesController {
   async getAgentDecisions(
     @Param('id') id: string,
     @Query('limit') limitParam?: string
-  ): Promise<{ items: AgentDecisionResponse[]; count: number }> {
+  ): Promise<{ items: AgentDecisionResponse[]; count: number; limit: number }> {
     const limit = parseLimit(limitParam);
     const decisions = await this.devicesService.listAgentDecisions(id, limit);
     if (!decisions) {
       throw new NotFoundException('Device not found');
     }
     const items = decisions.map(formatAgentDecision);
-    return { items, count: items.length };
+    return { items, count: items.length, limit };
   }
 }
 
@@ -287,7 +287,7 @@ const DEFAULT_RADIUS_METERS = 20;
 const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
 const DEFAULT_AGENT_DECISIONS_LIMIT = 200;
-const MAX_AGENT_DECISIONS_LIMIT = 1000;
+const MAX_AGENT_DECISIONS_LIMIT = 5000;
 const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_DEVICE_NOTES_LENGTH = 2000;
 const DELETE_CONFIRMATION_VALUE = 'DELETE';

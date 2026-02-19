@@ -113,6 +113,31 @@ Meshtastic panel:
 - `GET /api/meshtastic/events`
 - `GET /api/meshtastic/events/:id`
 
+List endpoint pagination and limits:
+
+- `GET /api/lorawan/events`
+  - query: `deviceUid`, `processingError`, `processed`, `limit`, `cursor`
+  - defaults/max: default `limit=50`, max `limit=5000`
+  - cursor: pass prior `nextCursor` to fetch older rows (`receivedAt < cursor`)
+  - response: `{ items, count, limit, nextCursor }`
+- `GET /api/meshtastic/events`
+  - query: `deviceUid`, `processingError`, `processed`, `limit`, `cursor`
+  - defaults/max: default `limit=50`, max `limit=5000`
+  - cursor: pass prior `nextCursor` to fetch older rows (`receivedAt < cursor`)
+  - response: `{ items, count, limit, nextCursor }`
+
+RxMetadata-derived receiver/gateway lists (QUERY scope):
+
+- `GET /api/gateways`
+  - defaults/max: default `limit=500`, max `limit=5000`
+  - response: `{ items, count, limit }`
+- `GET /api/receivers`
+  - defaults/max: default `limit=500`, max `limit=5000`
+  - response: `{ items, count, limit }`
+- `GET /api/meshtastic/receivers`
+  - defaults/max: default `limit=500`, max `limit=5000`
+  - response: `{ items, count, limit }`
+
 These debug endpoints require `X-API-Key` with `QUERY` scope (frontend typically via `VITE_QUERY_API_KEY`).
 
 ### Common failure modes

@@ -9,7 +9,11 @@ type GatewaysQuery = {
   sessionId?: string | string[];
   from?: string | string[];
   to?: string | string[];
+  limit?: string | string[];
 };
+
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 5000;
 
 @Controller('api/gateways')
 @UseGuards(ApiKeyGuard)
@@ -33,14 +37,17 @@ export class GatewaysController {
     if (from && to && from > to) {
       throw new BadRequestException('from must be before to');
     }
+    const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
+    const limit = Math.min(requestedLimit, MAX_LIMIT);
 
     const items = await this.gatewaysService.list({
       deviceId: deviceId ?? undefined,
       sessionId: sessionId ?? undefined,
       from,
-      to
+      to,
+      limit
     });
-    return { items, count: items.length };
+    return { items, count: items.length, limit };
   }
 
   @Get(':gatewayId/stats')
@@ -90,6 +97,17 @@ function parseDate(value: string | undefined, name: string): Date | undefined {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     throw new BadRequestException(`Invalid ${name} timestamp`);
+  }
+  return parsed;
+}
+
+function parseLimit(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_LIMIT;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('limit must be a positive integer');
   }
   return parsed;
 }

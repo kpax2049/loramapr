@@ -30,16 +30,26 @@ export class LorawanController {
     @Query('deviceUid') deviceUid?: string,
     @Query('processingError') processingError?: string,
     @Query('processed') processed?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string
   ) {
     const parsedLimit = parseLimit(limit);
+    const parsedCursor = parseCursor(cursor);
     const items = await this.lorawanService.listEvents({
       deviceUid: deviceUid || undefined,
       processingError: processingError || undefined,
       processed: parseOptionalBoolean(processed, 'processed'),
-      limit: parsedLimit
+      limit: parsedLimit,
+      cursor: parsedCursor
     });
-    return { items, count: items.length };
+    const nextCursor =
+      items.length === parsedLimit ? items[items.length - 1].receivedAt.toISOString() : null;
+    return {
+      items,
+      count: items.length,
+      limit: parsedLimit,
+      nextCursor
+    };
   }
 
   @Get('events/:id')
@@ -101,14 +111,27 @@ export class LorawanController {
 }
 
 function parseLimit(value?: string): number {
+  const DEFAULT_LIMIT = 50;
+  const MAX_LIMIT = 5000;
   if (!value) {
-    return 50;
+    return DEFAULT_LIMIT;
   }
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new BadRequestException('limit must be a positive integer');
   }
-  return Math.min(parsed, 200);
+  return Math.min(parsed, MAX_LIMIT);
+}
+
+function parseCursor(value?: string): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('cursor must be a valid timestamp');
+  }
+  return parsed;
 }
 
 function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {

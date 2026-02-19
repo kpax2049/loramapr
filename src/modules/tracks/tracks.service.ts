@@ -21,6 +21,7 @@ export type TrackQueryParams = {
 
 export type TrackResult = {
   count: number;
+  limit: number;
   totalBeforeSample: number;
   returnedAfterSample: number;
   items: Array<{
@@ -83,6 +84,7 @@ export class TracksService {
 
     return {
       count: sampled.length,
+      limit: params.limit,
       totalBeforeSample,
       returnedAfterSample: sampled.length,
       items: sampled

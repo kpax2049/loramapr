@@ -34,6 +34,7 @@ export class MeshtasticService {
     processingError?: string;
     processed?: boolean;
     limit: number;
+    cursor?: Date;
   }) {
     const where: Record<string, unknown> = {
       source: 'meshtastic'
@@ -47,10 +48,13 @@ export class MeshtasticService {
     if (params.processed !== undefined) {
       where.processedAt = params.processed ? { not: null } : null;
     }
+    if (params.cursor) {
+      where.receivedAt = { lt: params.cursor };
+    }
 
     return this.prisma.webhookEvent.findMany({
       where,
-      orderBy: { receivedAt: 'desc' },
+      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
       take: params.limit,
       select: {
         id: true,
@@ -83,6 +87,7 @@ export class MeshtasticService {
     sessionId?: string;
     from?: Date;
     to?: Date;
+    limit: number;
   }) {
     const where: Record<string, unknown> = {
       gatewayId: { not: null }
@@ -111,11 +116,14 @@ export class MeshtasticService {
       _max: { capturedAt: true }
     });
 
-    return rows.map((row) => ({
+    return rows
+      .sort((left, right) => right._count._all - left._count._all)
+      .slice(0, params.limit)
+      .map((row) => ({
       receiverId: row.gatewayId as string,
       count: row._count._all,
       lastSeenAt: row._max.capturedAt ?? null
-    }));
+      }));
   }
 }
 
