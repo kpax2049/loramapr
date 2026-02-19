@@ -62,6 +62,20 @@ Expected:
 - Browser app is served from `http://<server-ip-or-domain>/`.
 - API is reachable behind proxy at `/api/*`.
 
+## Production smoke test
+
+Use this quick checklist after each deployment:
+
+1. Open the UI in browser (`http://<server-ip-or-domain>/`) and confirm the app shell loads.
+2. Hit readiness through the proxy and confirm success:
+
+```bash
+curl -i http://<server-ip-or-domain>/api/readyz
+```
+
+3. Create a session from the UI (Start Session action) and verify it appears in the sessions panel.
+4. Open the devices list in the UI and confirm devices are returned.
+
 ## Related files
 
 - `docker-compose.prod.yml`

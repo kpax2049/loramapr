@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 COMPOSE=(docker compose)
+COMPOSE_PROD=(docker compose -f docker-compose.prod.yml)
 
 die() {
   echo "ERROR: $*" >&2
@@ -14,7 +15,7 @@ die() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./bin/loramapr up|down|logs|ps|reset|demo|keys
+  ./bin/loramapr up|down|logs|ps|reset|demo|keys|prod-up|prod-down|prod-logs
 
 Commands:
   up      Start docker compose stack
@@ -24,6 +25,9 @@ Commands:
   reset   Stop stack and remove volumes (destructive)
   demo    Seed demo data if available
   keys    Generate QUERY/INGEST secrets in .env if missing
+  prod-up    Start production compose stack
+  prod-down  Stop production compose stack
+  prod-logs  Tail production compose logs
 EOF
 }
 
@@ -129,6 +133,22 @@ cmd_keys() {
   die "missing scripts/setup/generate-secrets script"
 }
 
+cmd_prod_up() {
+  require_compose
+  ensure_env_file
+  "${COMPOSE_PROD[@]}" up -d --build
+}
+
+cmd_prod_down() {
+  require_compose
+  "${COMPOSE_PROD[@]}" down
+}
+
+cmd_prod_logs() {
+  require_compose
+  "${COMPOSE_PROD[@]}" logs -f --tail=200
+}
+
 main() {
   local cmd="${1:-help}"
   case "$cmd" in
@@ -139,6 +159,9 @@ main() {
     reset) cmd_reset ;;
     demo) cmd_demo ;;
     keys) cmd_keys ;;
+    prod-up) cmd_prod_up ;;
+    prod-down) cmd_prod_down ;;
+    prod-logs) cmd_prod_logs ;;
     help|-h|--help) usage ;;
     *) usage; die "unknown command: $cmd" ;;
   esac
