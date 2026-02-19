@@ -152,3 +152,4 @@ npx prisma migrate status
 For expanded operational guidance (including safer restore to new host then cutover), see:
 
 - `docs/backup-restore.md`
+- `docs/wiki/Data-Retention.md` for backend raw-event retention behavior

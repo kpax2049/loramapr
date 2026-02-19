@@ -12,5 +12,6 @@
 - [[API-Keys-and-Scopes|API Keys and Scopes]]
 - [[Deploy-Self-Hosted|Deploy Self Hosted]]
 - [[Backup-Restore|Backup Restore]]
+- [[Data-Retention|Data Retention]]
 - [[Troubleshooting]]
 - [[Changelog]]
