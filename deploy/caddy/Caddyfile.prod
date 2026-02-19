@@ -1,0 +1,35 @@
+{
+  # Local/default mode: plain HTTP on 80/443.
+  auto_https off
+
+  # For real domains/TLS:
+  # - remove "auto_https off"
+  # - uncomment and adapt the domain block below
+}
+
+http://:80, http://:443 {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy api:{env.API_PORT}
+  }
+
+  handle {
+    reverse_proxy web:80
+  }
+}
+
+# Example domain/TLS block:
+# loramapr.example.com {
+#   encode zstd gzip
+#
+#   handle /api/* {
+#     reverse_proxy api:{env.API_PORT}
+#   }
+#
+#   handle {
+#     reverse_proxy web:80
+#   }
+#
+#   tls you@example.com
+# }
