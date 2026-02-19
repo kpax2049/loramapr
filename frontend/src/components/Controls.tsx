@@ -73,6 +73,9 @@ type ControlsProps = {
   showPoints: boolean;
   showTrack: boolean;
   showDeviceMarkers: boolean;
+  showHomeGeofence: boolean;
+  homeGeofenceConfigured: boolean;
+  onShowHomeGeofenceChange: (value: boolean) => void;
   onShowDeviceMarkersChange: (value: boolean) => void;
   onShowPointsChange: (value: boolean) => void;
   onShowTrackChange: (value: boolean) => void;
@@ -122,6 +125,9 @@ export default function Controls({
   showPoints,
   showTrack,
   showDeviceMarkers,
+  showHomeGeofence,
+  homeGeofenceConfigured,
+  onShowHomeGeofenceChange,
   onShowDeviceMarkersChange,
   onShowPointsChange,
   onShowTrackChange,
@@ -968,6 +974,18 @@ export default function Controls({
           >
             {updateAutoSessionMutation.isPending ? 'Saving…' : 'Save'}
           </button>
+          <label
+            className="controls__toggle"
+            title={homeGeofenceConfigured ? 'Show home geofence on map' : 'Home geofence not configured'}
+          >
+            <input
+              type="checkbox"
+              checked={homeGeofenceConfigured ? showHomeGeofence : false}
+              onChange={(event) => onShowHomeGeofenceChange(event.target.checked)}
+              disabled={!homeGeofenceConfigured}
+            />
+            Show Home Geofence
+          </label>
           {autoSessionAuthError ? (
             <div className="controls__gateway-error">
               Auto session requires QUERY key

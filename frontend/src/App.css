@@ -3366,6 +3366,36 @@
   border: none;
 }
 
+.lm-home-geofence-divicon {
+  background: transparent;
+  border: none;
+}
+
+.lm-home-geofence-marker {
+  --lm-home-geofence-size: 28px;
+  width: var(--lm-home-geofence-size);
+  height: var(--lm-home-geofence-size);
+  border-radius: 999px;
+  border: 1px solid var(--map-home-geofence-marker-border);
+  background: var(--map-home-geofence-marker-bg);
+  color: var(--map-home-geofence-marker-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  box-shadow: 0 1px 3px var(--overlay-scrim);
+}
+
+.lm-home-geofence-marker__icon {
+  width: 60%;
+  height: 60%;
+  display: block;
+}
+
+.map-home-geofence-circle {
+  pointer-events: none;
+}
+
 .lm-device-marker {
   --lm-device-marker-size: 32px;
   position: relative;

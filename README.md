@@ -1,5 +1,15 @@
 # LoRaMapr
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/src/assets/branding/loramapr-logo-light.png">
+    <source media="(prefers-color-scheme: light)" srcset="frontend/src/assets/branding/loramapr-logo-dark.png">
+    <img alt="LoRaMapr" src="frontend/src/assets/branding/loramapr-logo-dark.png" width="520">
+  </picture>
+</p>
+
+<p align="center"><sub>Self-hosted mapping, playback, and analysis for LoRa telemetry coverage.</sub></p>
+
 > ⚠️ **Active development notice**  
 > This project is under active development and is **not** a complete, production-ready app yet.  
 > The goal is to reach a more or less production‑ready **v1.0.0**; until then, expect breaking changes and evolving features.

@@ -17,6 +17,7 @@ import markLight from './assets/branding/loramapr-mark-light.png';
 import logoDark from './assets/branding/loramapr-logo-dark.png';
 import logoLight from './assets/branding/loramapr-logo-light.png';
 import {
+  useAutoSession,
   useCoverageBins,
   useDevice,
   useDeviceDetail,
@@ -44,6 +45,7 @@ const SIDEBAR_TAB_KEY = 'sidebarTab';
 const ZEN_MODE_KEY = 'zenMode';
 const THEME_MODE_KEY = 'themeMode';
 const SHOW_DEVICE_MARKERS_KEY = 'showDeviceMarkers';
+const SHOW_HOME_GEOFENCE_PREFIX = 'showHomeGeofence:';
 const APP_NAME = __APP_NAME__;
 const APP_VERSION = __APP_VERSION__;
 const DEVICE_ICON_GALLERY_ROUTE = '/dev/device-icons';
@@ -189,6 +191,17 @@ function readStoredShowDeviceMarkers(): boolean {
     return false;
   }
   return window.localStorage.getItem(SHOW_DEVICE_MARKERS_KEY) === 'true';
+}
+
+function buildHomeGeofenceStorageKey(deviceId: string): string {
+  return `${SHOW_HOME_GEOFENCE_PREFIX}${deviceId}`;
+}
+
+function readStoredShowHomeGeofence(deviceId: string | null): boolean {
+  if (typeof window === 'undefined' || !deviceId) {
+    return false;
+  }
+  return window.localStorage.getItem(buildHomeGeofenceStorageKey(deviceId)) === 'true';
 }
 
 function readSystemTheme(): EffectiveTheme {
@@ -541,6 +554,9 @@ function App() {
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
   const [showDeviceMarkers, setShowDeviceMarkers] = useState<boolean>(() => readStoredShowDeviceMarkers());
+  const [showHomeGeofence, setShowHomeGeofence] = useState<boolean>(() =>
+    readStoredShowHomeGeofence(initial.deviceId)
+  );
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [receiverSource, setReceiverSource] = useState<'lorawan' | 'meshtastic'>('lorawan');
   const [receiverSourceOverridden, setReceiverSourceOverridden] = useState(false);
@@ -650,6 +666,20 @@ function App() {
     }
     window.localStorage.setItem(SHOW_DEVICE_MARKERS_KEY, showDeviceMarkers ? 'true' : 'false');
   }, [showDeviceMarkers]);
+
+  useEffect(() => {
+    setShowHomeGeofence(readStoredShowHomeGeofence(deviceId));
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !deviceId) {
+      return;
+    }
+    window.localStorage.setItem(
+      buildHomeGeofenceStorageKey(deviceId),
+      showHomeGeofence ? 'true' : 'false'
+    );
+  }, [deviceId, showHomeGeofence]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -1526,6 +1556,7 @@ function App() {
   const { device: selectedDevice } = useDevice(deviceId);
   const deviceDetailQuery = useDeviceDetail(deviceId, { enabled: Boolean(deviceId) });
   const latestDeviceQuery = useDeviceLatest(deviceId ?? undefined);
+  const autoSessionQuery = useAutoSession(deviceId, { enabled: Boolean(deviceId) });
   const deviceMarkerDevicesQuery = useDevices(false, { enabled: showDeviceMarkers });
   const markerCandidateDevices = useMemo(() => {
     const items = deviceMarkerDevicesQuery.data?.items ?? [];
@@ -1596,6 +1627,36 @@ function App() {
   ]);
   const latestMeasurementAt =
     latestDeviceQuery.data?.latestMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
+  const homeGeofenceConfig = useMemo(() => {
+    const config = autoSessionQuery.data;
+    if (!config) {
+      return null;
+    }
+    const { homeLat, homeLon, radiusMeters } = config;
+    const hasHomeLat = typeof homeLat === 'number' && Number.isFinite(homeLat);
+    const hasHomeLon = typeof homeLon === 'number' && Number.isFinite(homeLon);
+    const hasRadius = typeof radiusMeters === 'number' && Number.isFinite(radiusMeters);
+    if (
+      !hasHomeLat ||
+      !hasHomeLon ||
+      !hasRadius ||
+      radiusMeters <= 0
+    ) {
+      return null;
+    }
+    return {
+      lat: homeLat,
+      lon: homeLon,
+      radiusMeters
+    };
+  }, [
+    autoSessionQuery.data?.homeLat,
+    autoSessionQuery.data?.homeLon,
+    autoSessionQuery.data?.radiusMeters
+  ]);
+  const isHomeGeofenceConfigured = homeGeofenceConfig !== null;
+  const visibleHomeGeofenceOverlay =
+    showHomeGeofence && homeGeofenceConfig ? homeGeofenceConfig : null;
   const selectedDeviceUid = selectedDevice?.deviceUid;
   const latestLocationMarker = useMemo(() => {
     if (!selectedDevice) {
@@ -2218,6 +2279,9 @@ function App() {
       showTrack={showTrack}
       showDeviceMarkers={showDeviceMarkers}
       onShowDeviceMarkersChange={setShowDeviceMarkers}
+      showHomeGeofence={showHomeGeofence}
+      homeGeofenceConfigured={isHomeGeofenceConfigured}
+      onShowHomeGeofenceChange={setShowHomeGeofence}
       onShowPointsChange={setShowPoints}
       onShowTrackChange={setShowTrack}
       playbackControls={playbackControls}
@@ -2262,6 +2326,7 @@ function App() {
           latestLocationMarker={latestLocationMarker}
           showLatestLocationMarker={!isPlaybackMode}
           deviceLocationMarkers={!isPlaybackMode && showDeviceMarkers ? deviceLocationMarkers : []}
+          homeGeofenceOverlay={visibleHomeGeofenceOverlay}
           onSelectDeviceMarker={setDeviceId}
           onBoundsChange={setBbox}
           onSelectPoint={setSelectedPointId}

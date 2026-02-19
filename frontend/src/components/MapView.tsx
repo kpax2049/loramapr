@@ -9,6 +9,7 @@ import {
   useState
 } from 'react';
 import {
+  Circle,
   CircleMarker,
   MapContainer,
   Marker,
@@ -37,6 +38,7 @@ import {
   getDeviceOnlineStatuses,
   type DeviceStatusBucket
 } from '../utils/deviceOnlineStatus';
+import { createHomeGeofenceDivIcon } from '../map/homeGeofenceMarkerIcon';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -71,6 +73,7 @@ type MapViewProps = {
   latestLocationMarker?: LatestLocationMarker | null;
   showLatestLocationMarker?: boolean;
   deviceLocationMarkers?: DeviceLocationMarker[];
+  homeGeofenceOverlay?: HomeGeofenceOverlay | null;
   onSelectDeviceMarker?: (deviceId: string) => void;
   onBoundsChange?: (bbox: [number, number, number, number]) => void;
   onZoomChange?: (zoom: number) => void;
@@ -117,6 +120,12 @@ type LatestLocationMarker = {
 type DeviceLocationMarker = LatestLocationMarker & {
   deviceId: string;
   latestWebhookSource?: string | null;
+};
+
+type HomeGeofenceOverlay = {
+  lat: number;
+  lon: number;
+  radiusMeters: number;
 };
 
 type DeviceMarkerStatus = {
@@ -394,6 +403,11 @@ type PointPalette = Record<RssiBucket, string> & {
   cursor: string;
 };
 
+type HomeGeofencePalette = {
+  stroke: string;
+  fill: string;
+};
+
 function readPalette(): PointPalette {
   if (typeof window === 'undefined') {
     return {
@@ -415,6 +429,26 @@ function readPalette(): PointPalette {
     unknown: read('--map-point-unknown'),
     default: read('--map-point-default'),
     cursor: read('--map-point-cursor')
+  };
+}
+
+function readHomeGeofencePalette(): HomeGeofencePalette {
+  if (typeof window === 'undefined') {
+    return {
+      stroke: 'rgba(14, 165, 233, 0.62)',
+      fill: 'rgba(14, 165, 233, 0.16)'
+    };
+  }
+
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string) => {
+    const value = styles.getPropertyValue(name).trim();
+    return value.length > 0 ? value : fallback;
+  };
+
+  return {
+    stroke: read('--map-home-geofence-stroke', 'rgba(14, 165, 233, 0.62)'),
+    fill: read('--map-home-geofence-fill', 'rgba(14, 165, 233, 0.16)')
   };
 }
 
@@ -446,6 +480,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   latestLocationMarker = null,
   showLatestLocationMarker = true,
   deviceLocationMarkers = [],
+  homeGeofenceOverlay = null,
   onSelectDeviceMarker,
   onBoundsChange,
   onZoomChange,
@@ -672,6 +707,32 @@ ref
     const documentTheme = typeof document !== 'undefined' ? document.documentElement.dataset.theme : null;
     return documentTheme === 'light' || documentTheme === 'dark' ? documentTheme : theme;
   }, [theme]);
+  const homeGeofencePalette = useMemo(
+    () => readHomeGeofencePalette(),
+    [resolvedMarkerTheme]
+  );
+  const homeGeofenceDivIcon = useMemo(
+    () =>
+      createHomeGeofenceDivIcon({
+        theme: resolvedMarkerTheme,
+        size: 28
+      }),
+    [resolvedMarkerTheme]
+  );
+  const hasHomeGeofenceOverlay = useMemo(() => {
+    if (!homeGeofenceOverlay) {
+      return false;
+    }
+    return (
+      Number.isFinite(homeGeofenceOverlay.lat) &&
+      Number.isFinite(homeGeofenceOverlay.lon) &&
+      Number.isFinite(homeGeofenceOverlay.radiusMeters) &&
+      homeGeofenceOverlay.radiusMeters > 0
+    );
+  }, [homeGeofenceOverlay]);
+  const homeGeofenceCenter = hasHomeGeofenceOverlay
+    ? ([homeGeofenceOverlay?.lat ?? 0, homeGeofenceOverlay?.lon ?? 0] as [number, number])
+    : null;
   const latestLocationStatuses = useMemo(() => {
     if (!latestLocationMarker) {
       return { measurementStatus: 'unknown', webhookStatus: 'unknown' } as const;
@@ -1065,6 +1126,25 @@ ref
             </Popup>
           </Marker>
         ) : null
+      ) : null}
+      {hasHomeGeofenceOverlay && homeGeofenceCenter ? (
+        <>
+          <Circle
+            center={homeGeofenceCenter}
+            radius={homeGeofenceOverlay?.radiusMeters ?? 0}
+            pathOptions={{
+              className: 'map-home-geofence-circle',
+              color: homeGeofencePalette.stroke,
+              fill: true,
+              fillColor: homeGeofencePalette.fill,
+              fillOpacity: 0.16,
+              opacity: 0.72,
+              weight: 1.4
+            }}
+            interactive={false}
+          />
+          <Marker position={homeGeofenceCenter} icon={homeGeofenceDivIcon} interactive={false} />
+        </>
       ) : null}
     </MapContainer>
   );

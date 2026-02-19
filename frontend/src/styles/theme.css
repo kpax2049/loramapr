@@ -52,6 +52,11 @@
   --map-point-cursor: var(--panel-accent);
   --map-point-latest: #22d3ee;
   --map-point-latest-halo: rgba(34, 211, 238, 0.3);
+  --map-home-geofence-stroke: rgba(56, 189, 248, 0.62);
+  --map-home-geofence-fill: rgb(56, 189, 248);
+  --map-home-geofence-marker-bg: rgba(36, 38, 43, 0.9);
+  --map-home-geofence-marker-border: rgba(56, 189, 248, 0.7);
+  --map-home-geofence-marker-icon: #7dd3fc;
   --device-online-online: #39ff88;
   --device-online-recent: #ffd54a;
   --device-online-stale: #ff9b4a;
@@ -157,6 +162,11 @@
   --accent-bg-strong: rgba(167, 188, 33, 0.34);
   --map-point-latest: #0284c7;
   --map-point-latest-halo: rgba(2, 132, 199, 0.28);
+  --map-home-geofence-stroke: rgba(3, 105, 161, 0.62);
+  --map-home-geofence-fill: rgb(14, 165, 233);
+  --map-home-geofence-marker-bg: rgba(247, 248, 251, 0.94);
+  --map-home-geofence-marker-border: rgba(2, 132, 199, 0.7);
+  --map-home-geofence-marker-icon: #0369a1;
   --device-online-online: #16b85b;
   --device-online-recent: #f59e0b;
   --device-online-stale: #f97316;
