@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,7 +8,7 @@ import type { TtsUplink } from './tts-uplink.schema';
 import { deriveUplinkId } from './uplink-id';
 
 @Injectable()
-export class LorawanService implements OnModuleInit, OnModuleDestroy {
+export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
   private workerTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private readonly workerId = randomUUID();
@@ -18,8 +18,12 @@ export class LorawanService implements OnModuleInit, OnModuleDestroy {
     private readonly measurementsService: MeasurementsService
   ) {}
 
-  onModuleInit(): void {
+  async onApplicationBootstrap(): Promise<void> {
     if (!isWorkerEnabled()) {
+      return;
+    }
+    await this.prisma.$queryRaw`SELECT 1`;
+    if (this.workerTimer) {
       return;
     }
     this.workerTimer = setInterval(() => {

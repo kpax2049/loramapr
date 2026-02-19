@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const BIN_SIZE_DEG = 0.001;
@@ -20,15 +20,19 @@ type CoverageQueryParams = {
 };
 
 @Injectable()
-export class CoverageService implements OnModuleInit, OnModuleDestroy {
+export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private cursor: { ingestedAt: Date; id: string } | null = null;
 
   constructor(private readonly prisma: PrismaService) {}
 
-  onModuleInit(): void {
+  async onApplicationBootstrap(): Promise<void> {
     if (!isCoverageWorkerEnabled()) {
+      return;
+    }
+    await this.prisma.$queryRaw`SELECT 1`;
+    if (this.timer) {
       return;
     }
     this.timer = setInterval(() => {
