@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.9.14 (2026-02-19)
+
+- One-command bootstrap release: root `Makefile` + `bin/loramapr` now provide `up/down/logs/ps/reset/demo/keys` for consistent local orchestration.
+- Added setup secret generation (`scripts/setup/generate-secrets.js` + wrapper) to create `.env` from `.env.example` and fill missing `QUERY_API_KEY` / `INGEST_API_KEY` values.
+- Quickstart docs now match the real first-run flow; milestone marker is a clean-clone boot path with env setup plus one command.
+- Release notes: `docs/release-v0.9.14.md`.
+
 ## v0.9.13 (2026-02-18)
 
 - Documentation Wiki Pack release: full `docs/wiki/` content rollout plus GitHub Wiki-native sidebar/home navigation fixes.

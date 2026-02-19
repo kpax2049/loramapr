@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.9.14 - 2026-02-19
+
+### Title
+- One-command bootstrap
+
+### Added
+- Added one-command local orchestration with `Makefile` and `bin/loramapr` (`up`, `down`, `logs`, `ps`, `reset`, `demo`, `keys`) so clean clones can be brought up consistently without ad hoc command sequences.
+- Added bootstrap secret generation via `scripts/setup/generate-secrets.js` plus shell wrapper, creating `.env` from `.env.example` when missing and filling only missing `QUERY_API_KEY` / `INGEST_API_KEY` values with high-entropy random keys.
+- Added `make keys` integration to call the setup generator directly from the root developer workflow.
+
+### Changed
+- Updated root `.env.example` to be complete and minimal for backend startup in current docker-compose dev flow.
+- Updated `docs/wiki/Quickstart.md` to match the real first-run command path (`make keys`, `make up`, `make down`, `make reset`, `make demo`).
+
+### Milestone
+- First tagged release where a clean clone can be started with one command after environment setup (`cp .env.example .env` or `make keys`, then `make up`).
+
+### Acceptance
+- A new developer can clone, initialize env/keys, and boot the stack with the documented single-command workflow.
+- Bootstrap tooling preserves existing keys and does not auto-rotate secrets unexpectedly.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.13 - 2026-02-18
 
 ### Title
