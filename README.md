@@ -20,6 +20,14 @@ The key idea: LoRaMapr does not require your devices to talk to the web app dire
 
 ## How data gets into LoRaMapr (two common ingestion methods)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/LoRaMapr_LoRaWAN_ingest_diagram_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/LoRaMapr_LoRaWAN_ingest_diagram_light.png">
+    <img alt="LoRaMapr LoRaWAN ingestion flow" src="docs/assets/readme/LoRaMapr_LoRaWAN_ingest_diagram_light.png" width="980">
+  </picture>
+</p>
+
 ### 1) LoRaWAN (The Things Stack webhook) — most common if you already use TTS/TTN
 
 **Real-world setup**
@@ -38,6 +46,14 @@ The key idea: LoRaMapr does not require your devices to talk to the web app dire
 5. LoRaMapr stores the event, extracts GPS + radio metadata (RSSI/SNR, gateway IDs when available), and attaches the data to your sessions for visualization.
 
 ### 2) Meshtastic (Forwarder -> HTTP) — most common for local mesh + home node setups
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_light.png">
+    <img alt="LoRaMapr Meshtastic ingestion flow" src="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_light.png" width="980">
+  </picture>
+</p>
 
 **Real-world setup (typical)**
 
