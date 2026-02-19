@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.9.16 - 2026-02-19
+
+### Title
+- Health/readiness + start ordering
+
+### Added
+- Added explicit health semantics with `GET /healthz` (liveness) while keeping `GET /health` compatibility and standardizing `GET /readyz` readiness behavior.
+- Added readiness-focused test coverage for healthy and DB-unreachable paths in `test/health.e2e-spec.ts`.
+- Added fast local validation helpers via `make/bin wait-ready` and `make/bin check`.
+
+### Changed
+- Updated compose startup ordering in both dev and prod stacks with healthcheck-gated dependencies (`postgres` health before API startup, API/web ordering for proxy startup).
+- Added container-safe API bootstrap flow (`scripts/docker/api-entrypoint.sh`) that waits for DB availability, runs `prisma migrate deploy`, then starts Nest.
+- Moved background worker startup to application bootstrap with explicit DB readiness probes before timer loops begin.
+- Updated deployment/quickstart docs for `/healthz` vs `/readyz`, startup migration behavior, and not-ready diagnostics.
+
+### Milestone
+- No race conditions during startup; `docker compose up` is now reliable with deterministic DB/readiness gating.
+
+### Acceptance
+- API container start is idempotent and safe to repeat: DB wait + `prisma migrate deploy` + app start.
+- `readyz` reflects DB readiness (`200` when ready, `503` when not ready), and compose waits for healthy dependencies before bringing up dependent services.
+
+### Notes
+- No breaking API changes.
+
 ## v0.9.15 - 2026-02-19
 
 ### Title

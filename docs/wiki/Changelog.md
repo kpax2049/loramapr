@@ -8,6 +8,14 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.9.16 (2026-02-19)
+
+- Health/readiness + startup ordering release: added `/healthz`, standardized `/readyz` readiness contract, and added readiness-path test coverage.
+- Compose startup is now healthcheck-gated across dev/prod with DB-first dependency ordering and worker startup deferred until DB-ready application bootstrap.
+- API container startup now runs deterministic idempotent bootstrap (`wait-for-db` + `prisma migrate deploy` + server start).
+- Added `wait-ready` / `check` commands for fast non-destructive stack verification and updated docs for readiness diagnostics.
+- Release notes: `docs/release-v0.9.16.md`.
+
 ## v0.9.15 (2026-02-19)
 
 - Prod compose + reverse proxy baseline release: added `docker-compose.prod.yml` for internal-network deployment with reverse-proxy-only public ingress.
