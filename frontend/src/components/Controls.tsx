@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { AutoSessionConfig, DeviceLatest } from '../api/types';
 import { getApiBaseUrl } from '../api/http';
+import { ApiError } from '../api/http';
 import {
   useAgentDecisions,
   useAutoSession,
@@ -8,6 +9,7 @@ import {
   useDevices,
   useGateways,
   useReceivers,
+  useSystemStatus,
   useUpdateAutoSession,
   useUpdateDevice
 } from '../query/hooks';
@@ -359,6 +361,10 @@ export default function Controls({
   const selectedReceiver =
     receiverOptions.find((receiver) => receiver.id === selectedReceiverId) ?? null;
   const debugProbeEnabled = showDebugTab && hasQueryApiKey;
+  const systemStatusQuery = useSystemStatus({
+    enabled: showDebugTab && hasQueryApiKey,
+    refetchInterval: showDebugTab && hasQueryApiKey ? 15_000 : false
+  });
   const lorawanDebugProbe = useLorawanEvents(selectedDevice?.deviceUid, 1, debugProbeEnabled);
   const meshtasticDebugProbe = useMeshtasticEvents(selectedDevice?.deviceUid, 1, debugProbeEnabled);
   const lorawanDebugStatus = getErrorStatus(lorawanDebugProbe.error);
@@ -373,6 +379,7 @@ export default function Controls({
     gatewayErrorStatus === 403 ||
     receiverErrorStatus === 401 ||
     receiverErrorStatus === 403;
+  const systemStatusErrorRequestId = getRequestIdFromError(systemStatusQuery.error);
 
   const latestLocation = deviceDetail?.latestMeasurement ?? null;
   const latestMeasurementTimestamp = latest?.latestMeasurementAt ?? latestLocation?.capturedAt ?? null;
@@ -1371,6 +1378,91 @@ export default function Controls({
 
       {showDebugTab ? (
         <>
+          <div className="controls__group controls__system-status-panel">
+            <span className="controls__label">System status</span>
+            {!hasQueryApiKey ? (
+              <div className="controls__debug-message">
+                System status requires QUERY key
+              </div>
+            ) : systemStatusQuery.isLoading ? (
+              <div className="controls__status">Loading status…</div>
+            ) : systemStatusQuery.error ? (
+              <div className="controls__status">
+                <div className="controls__status-row controls__status-error">
+                  <span>Status call failed:</span>
+                  <strong>{systemStatusQuery.error.message}</strong>
+                </div>
+                {systemStatusErrorRequestId ? (
+                  <div className="controls__status-row">
+                    <span>X-Request-Id:</span>
+                    <strong>{systemStatusErrorRequestId}</strong>
+                  </div>
+                ) : null}
+              </div>
+            ) : systemStatusQuery.data ? (
+              <div className="controls__status">
+                <div className="controls__status-row">
+                  <span>App version:</span>
+                  <strong>{systemStatusQuery.data.version || 'unknown'}</strong>
+                </div>
+                <div className="controls__status-row">
+                  <span>Backend time:</span>
+                  <strong>{formatRelativeTime(systemStatusQuery.data.now)}</strong>
+                </div>
+                <div className="controls__status-row">
+                  <span>DB:</span>
+                  <strong>
+                    {systemStatusQuery.data.db.ok ? 'ok' : 'error'}
+                    {systemStatusQuery.data.db.ok &&
+                    typeof systemStatusQuery.data.db.latencyMs === 'number'
+                      ? ` (${systemStatusQuery.data.db.latencyMs.toFixed(2)}ms)`
+                      : ''}
+                  </strong>
+                </div>
+                <div className="controls__status-row">
+                  <span>Worker webhook:</span>
+                  <strong>
+                    {systemStatusQuery.data.workers.webhookProcessor.lastRunAt
+                      ? formatRelativeTime(systemStatusQuery.data.workers.webhookProcessor.lastRunAt)
+                      : 'never'}
+                    {systemStatusQuery.data.workers.webhookProcessor.lastError
+                      ? ` (${systemStatusQuery.data.workers.webhookProcessor.lastError})`
+                      : ''}
+                  </strong>
+                </div>
+                <div className="controls__status-row">
+                  <span>Worker retention:</span>
+                  <strong>
+                    {systemStatusQuery.data.workers.retention.lastRunAt
+                      ? formatRelativeTime(systemStatusQuery.data.workers.retention.lastRunAt)
+                      : 'never'}
+                    {systemStatusQuery.data.workers.retention.lastError
+                      ? ` (${systemStatusQuery.data.workers.retention.lastError})`
+                      : ''}
+                  </strong>
+                </div>
+                <div
+                  className={`controls__status-row ${
+                    systemStatusQuery.data.ingest.latestWebhookError
+                      ? 'controls__status-error'
+                      : ''
+                  }`}
+                >
+                  <span>Latest webhook:</span>
+                  <strong>
+                    {systemStatusQuery.data.ingest.latestWebhookReceivedAt
+                      ? formatRelativeTime(systemStatusQuery.data.ingest.latestWebhookReceivedAt)
+                      : '—'}
+                    {systemStatusQuery.data.ingest.latestWebhookError
+                      ? ` (${systemStatusQuery.data.ingest.latestWebhookError})`
+                      : ''}
+                  </strong>
+                </div>
+              </div>
+            ) : (
+              <div className="controls__status">No status available.</div>
+            )}
+          </div>
           {debugAuthError ? (
             <div className="controls__debug-message">Debug requires QUERY key</div>
           ) : (
@@ -1655,6 +1747,23 @@ function getErrorStatus(error: unknown): number | null {
   if (typeof error === 'object' && error && 'status' in error) {
     const status = (error as { status?: number }).status;
     return typeof status === 'number' ? status : null;
+  }
+  return null;
+}
+
+function getRequestIdFromError(error: unknown): string | null {
+  if (error instanceof ApiError && error.requestId) {
+    return error.requestId;
+  }
+  if (
+    typeof error === 'object' &&
+    error &&
+    'details' in error &&
+    typeof (error as { details?: unknown }).details === 'object' &&
+    (error as { details?: { requestId?: unknown } }).details &&
+    typeof (error as { details?: { requestId?: unknown } }).details?.requestId === 'string'
+  ) {
+    return (error as { details?: { requestId?: string } }).details?.requestId ?? null;
   }
   return null;
 }

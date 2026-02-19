@@ -21,7 +21,8 @@ import type {
   SessionTimeline,
   SessionDetail,
   Session,
-  TrackPoint
+  TrackPoint,
+  SystemStatus
 } from './types';
 
 export type Bbox = {
@@ -573,4 +574,8 @@ export async function getAgentDecisions(
     ? `/api/devices/${deviceId}/agent-decisions?${suffix}`
     : `/api/devices/${deviceId}/agent-decisions`;
   return getJson<ListResponse<AgentDecision>>(path, withQueryApiKey(options));
+}
+
+export async function getSystemStatus(options?: RequestOptions): Promise<SystemStatus> {
+  return getJson<SystemStatus>('/api/status', withQueryApiKey(options));
 }

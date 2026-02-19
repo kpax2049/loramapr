@@ -205,6 +205,31 @@ export type AutoSessionConfig = {
   minInsideSeconds: number | null;
 };
 
+export type SystemStatus = {
+  version: string;
+  now: string;
+  db: {
+    ok: boolean;
+    latencyMs?: number;
+  };
+  workers: {
+    webhookProcessor: {
+      ok: boolean;
+      lastRunAt?: string;
+      lastError?: string;
+    };
+    retention: {
+      ok: boolean;
+      lastRunAt?: string;
+      lastError?: string;
+    };
+  };
+  ingest: {
+    latestWebhookReceivedAt: string | null;
+    latestWebhookError: string | null;
+  };
+};
+
 export type AgentDecision = {
   id: string;
   deviceId: string;

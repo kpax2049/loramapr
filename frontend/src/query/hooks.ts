@@ -13,6 +13,7 @@ import {
   getGatewayStats,
   getMeasurements,
   getStats,
+  getSystemStatus,
   getTrack,
   updateDevice,
   updateAutoSession,
@@ -41,7 +42,8 @@ import type {
   GatewayStats,
   GatewaySummary,
   ReceiverSummary,
-  ListResponse
+  ListResponse,
+  SystemStatus
 } from '../api/types';
 
 type MeasurementKeyParams = {
@@ -318,6 +320,16 @@ export function useAgentDecisions(
   return useQuery<ListResponse<AgentDecision>>({
     queryKey: ['agent-decisions', deviceId ?? 'none', limit],
     queryFn: ({ signal }) => getAgentDecisions(deviceId as string, limit, { signal }),
+    ...options,
+    enabled
+  });
+}
+
+export function useSystemStatus(options?: QueryOptions<SystemStatus>) {
+  const enabled = options?.enabled ?? true;
+  return useQuery<SystemStatus>({
+    queryKey: ['system-status'],
+    queryFn: ({ signal }) => getSystemStatus({ signal }),
     ...options,
     enabled
   });

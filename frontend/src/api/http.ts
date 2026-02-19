@@ -11,12 +11,14 @@ type RequestOptions = Omit<RequestInit, 'body' | 'signal' | 'headers'> & {
 export class ApiError extends Error {
   status: number;
   details?: unknown;
+  requestId?: string;
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(message: string, status: number, details?: unknown, requestId?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.details = details;
+    this.requestId = requestId;
   }
 }
 
@@ -44,6 +46,18 @@ function normalizeErrorMessage(payload: unknown, fallback: string): string {
     }
   }
   return fallback || 'Request failed';
+}
+
+function extractRequestId(payload: unknown, response?: Response): string | undefined {
+  const headerValue = response?.headers.get('x-request-id')?.trim();
+  if (headerValue) {
+    return headerValue;
+  }
+  if (isRecord(payload) && typeof payload.requestId === 'string') {
+    const bodyValue = payload.requestId.trim();
+    return bodyValue.length > 0 ? bodyValue : undefined;
+  }
+  return undefined;
 }
 
 function buildUrl(path: string): string {
@@ -108,7 +122,7 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
 
   if (!response.ok) {
     const message = normalizeErrorMessage(payload, response.statusText);
-    throw new ApiError(message, response.status, payload);
+    throw new ApiError(message, response.status, payload, extractRequestId(payload, response));
   }
 
   return payload as T;
