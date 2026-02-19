@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
+import { logError, logInfo, logWarn } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementsService } from '../measurements/measurements.service';
 import { normalizeTtsUplinkToMeasurement } from './tts-normalize';
@@ -53,10 +54,26 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           payload: parsed as Prisma.InputJsonValue
         }
       });
+      logInfo('webhook.ingest.accepted', {
+        source: 'lorawan',
+        deviceUid: deviceUid ?? null,
+        uplinkId
+      });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
+        logInfo('webhook.ingest.duplicate', {
+          source: 'lorawan',
+          deviceUid: deviceUid ?? null,
+          uplinkId
+        });
         return;
       }
+      logError('webhook.ingest.failed', {
+        source: 'lorawan',
+        deviceUid: deviceUid ?? null,
+        uplinkId,
+        reason: getErrorMessage(error)
+      });
       throw error;
     }
   }
@@ -304,6 +321,12 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           processingError: message
         }
       });
+      logError('webhook.normalize.failed', {
+        source: normalizeSource(source),
+        webhookEventId: id,
+        deviceUid: deviceUid ?? null,
+        reason: message
+      });
     }
   }
 
@@ -323,6 +346,13 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           processingError: normalized.reason
         }
       });
+      logWarn('webhook.normalize.rejected', {
+        source: 'lorawan',
+        webhookEventId: id,
+        deviceUid: deviceUid ?? null,
+        normalizedToMeasurement: false,
+        reason: normalized.reason
+      });
       return;
     }
 
@@ -336,6 +366,12 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         processedAt,
         processingError: null
       }
+    });
+    logInfo('webhook.normalize.accepted', {
+      source: 'lorawan',
+      webhookEventId: id,
+      deviceUid: deviceUid ?? normalized.item.deviceUid,
+      normalizedToMeasurement: true
     });
   }
 
@@ -355,6 +391,13 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           processedAt,
           processingError: 'missing_gps'
         }
+      });
+      logWarn('webhook.normalize.rejected', {
+        source: 'meshtastic',
+        webhookEventId: id,
+        deviceUid: deviceUid ?? null,
+        normalizedToMeasurement: false,
+        reason: 'missing_gps'
       });
       return;
     }
@@ -386,6 +429,13 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         processedAt,
         processingError: null
       }
+    });
+    logInfo('webhook.normalize.accepted', {
+      source: 'meshtastic',
+      webhookEventId: id,
+      deviceUid: effectiveDeviceUid,
+      normalizedToMeasurement: Boolean(normalized),
+      reason: normalized ? undefined : 'node_info_only'
     });
   }
 
@@ -924,4 +974,21 @@ function isWorkerEnabled(): boolean {
     return true;
   }
   return flag.toLowerCase() === 'true';
+}
+
+function normalizeSource(source: string): 'lorawan' | 'meshtastic' | 'agent' {
+  if (source === 'meshtastic') {
+    return 'meshtastic';
+  }
+  if (source === 'agent') {
+    return 'agent';
+  }
+  return 'lorawan';
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }

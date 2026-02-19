@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, HttpCode, NotFoundException, Pos
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { logInfo, logWarn } from '../../common/logging/structured-logger';
 import { DevicesService } from './devices.service';
 
 type DecisionBody = {
@@ -27,8 +28,18 @@ export class AgentDecisionsController {
     const payload = parseBody(body);
     const inserted = await this.devicesService.recordAgentDecisionByUid(payload);
     if (!inserted) {
+      logWarn('webhook.ingest.rejected', {
+        source: 'agent',
+        deviceUid: payload.deviceUid,
+        reason: 'device_not_found'
+      });
       throw new NotFoundException('Device not found');
     }
+    logInfo('webhook.ingest.accepted', {
+      source: 'agent',
+      deviceUid: payload.deviceUid,
+      decision: payload.decision
+    });
     return { ok: true };
   }
 }

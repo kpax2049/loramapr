@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
+import { logError, logInfo } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -21,10 +22,26 @@ export class MeshtasticService {
           payload: body as Prisma.InputJsonValue
         }
       });
+      logInfo('webhook.ingest.accepted', {
+        source: 'meshtastic',
+        deviceUid,
+        uplinkId: eventId
+      });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
+        logInfo('webhook.ingest.duplicate', {
+          source: 'meshtastic',
+          deviceUid,
+          uplinkId: eventId
+        });
         return;
       }
+      logError('webhook.ingest.failed', {
+        source: 'meshtastic',
+        deviceUid,
+        uplinkId: eventId,
+        reason: getErrorMessage(error)
+      });
       throw error;
     }
   }
@@ -196,4 +213,11 @@ function isUniqueConstraintError(error: unknown): boolean {
     'code' in error &&
     (error as { code?: string }).code === 'P2002'
   );
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }

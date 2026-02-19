@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, NotFoundException, Post, UseGuar
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { logInfo, logWarn } from '../../common/logging/structured-logger';
 import { SessionsService } from './sessions.service';
 
 type AgentStartSessionBody = {
@@ -24,8 +25,20 @@ export class AgentSessionsController {
     const deviceUid = parseDeviceUid(body?.deviceUid);
     const session = await this.sessionsService.startForDeviceUid(deviceUid, body?.name);
     if (!session) {
+      logWarn('webhook.ingest.rejected', {
+        source: 'agent',
+        deviceUid,
+        action: 'start_session',
+        reason: 'device_not_found'
+      });
       throw new NotFoundException('Device not found');
     }
+    logInfo('webhook.ingest.accepted', {
+      source: 'agent',
+      deviceUid,
+      action: 'start_session',
+      sessionId: session.id
+    });
     return session;
   }
 
@@ -34,8 +47,21 @@ export class AgentSessionsController {
     const deviceUid = parseDeviceUid(body?.deviceUid);
     const result = await this.sessionsService.stopForDeviceUid(deviceUid);
     if (!result) {
+      logWarn('webhook.ingest.rejected', {
+        source: 'agent',
+        deviceUid,
+        action: 'stop_session',
+        reason: 'device_not_found'
+      });
       throw new NotFoundException('Device not found');
     }
+    logInfo('webhook.ingest.accepted', {
+      source: 'agent',
+      deviceUid,
+      action: 'stop_session',
+      sessionId: result.session?.id ?? null,
+      stopped: result.stopped
+    });
     return result;
   }
 }

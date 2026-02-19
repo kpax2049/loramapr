@@ -3,22 +3,33 @@ import {
   Catch,
   ExceptionFilter,
   HttpException,
-  HttpStatus,
-  Logger
+  HttpStatus
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
+import { extractRequestLogContext } from '../logging/http-log-context';
+import { logWarn, logError } from '../logging/structured-logger';
 import { ensureRequestId, REQUEST_ID_HEADER } from '../request-id';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  private readonly logger = new Logger(AllExceptionsFilter.name);
-
   constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
-    const request = ctx.getRequest<{ headers?: Record<string, string | string[] | undefined>; requestId?: string }>();
+    const request = ctx.getRequest<{
+      method?: string;
+      originalUrl?: string;
+      url?: string;
+      params?: Record<string, unknown>;
+      query?: Record<string, unknown>;
+      body?: unknown;
+      ownerId?: unknown;
+      user?: { id?: unknown };
+      headers?: Record<string, string | string[] | undefined>;
+      requestId?: string;
+      requestStartedAtNs?: bigint;
+    }>();
     const response = ctx.getResponse<{ setHeader: (name: string, value: string) => void }>();
     const requestId = ensureRequestId(request);
     response.setHeader(REQUEST_ID_HEADER, requestId);
@@ -34,16 +45,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: httpAdapter.getRequestUrl(request),
       requestId
     };
-
-    this.logger.error(
-      JSON.stringify({
-        event: 'request.error',
-        requestId,
-        statusCode: httpStatus,
-        path: baseResponse.path,
-        message: getExceptionMessage(exception)
-      })
-    );
+    const startedAt = request.requestStartedAtNs;
+    const durationMs =
+      typeof startedAt === 'bigint'
+        ? Number(process.hrtime.bigint() - startedAt) / 1_000_000
+        : undefined;
+    const context = extractRequestLogContext(request);
+    const logFields = {
+      method: request.method ?? 'UNKNOWN',
+      path: baseResponse.path,
+      statusCode: httpStatus,
+      durationMs: durationMs !== undefined ? Number(durationMs.toFixed(2)) : undefined,
+      message: getExceptionMessage(exception),
+      ...context
+    };
+    if (httpStatus >= 500) {
+      logError('http.request.error', logFields);
+    } else {
+      logWarn('http.request.error', logFields);
+    }
 
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
