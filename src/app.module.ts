@@ -1,5 +1,8 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { validateEnv } from './config/validation';
 import { HealthModule } from './modules/health/health.module';
 import { MeasurementsModule } from './modules/measurements/measurements.module';
@@ -34,6 +37,16 @@ import { PrismaModule } from './prisma/prisma.module';
     ReceiversModule,
     PrismaModule,
     RetentionModule
+  ],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter
+    }
   ]
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(requestIdMiddleware).forRoutes('*');
+  }
+}

@@ -1,8 +1,7 @@
 import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
-import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 function parseCorsOrigins(value: string | undefined): string[] {
   if (!value) {
@@ -51,9 +50,6 @@ async function bootstrap(): Promise<void> {
       transform: true
     })
   );
-
-  const httpAdapterHost = app.get(HttpAdapterHost);
-  app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
   const port = Number(process.env.API_PORT ?? process.env.PORT ?? 3000);
   await app.listen(port);
