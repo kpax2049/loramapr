@@ -32,6 +32,7 @@ import DeviceIcon, {
 } from './DeviceIcon';
 import DeviceOnlineDot from './DeviceOnlineDot';
 import DevicesManager from './DevicesManager';
+import type { EventsNavigationInput } from '../utils/eventsNavigation';
 
 const DEVICE_ICON_PICKER_OPTIONS = DEVICE_ICON_CATALOG;
 
@@ -87,6 +88,9 @@ type ControlsProps = {
   playbackControls?: ReactNode;
   fitFeedback?: string | null;
   sessionSelectionNotice?: string | null;
+  eventsNavigationNonce: number;
+  eventsNavigationRequest: EventsNavigationInput | null;
+  onOpenEvents: (input: EventsNavigationInput) => void;
 };
 
 export default function Controls({
@@ -138,7 +142,10 @@ export default function Controls({
   onShowTrackChange,
   playbackControls,
   fitFeedback,
-  sessionSelectionNotice
+  sessionSelectionNotice,
+  eventsNavigationNonce,
+  eventsNavigationRequest,
+  onOpenEvents
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = devicesData?.items ?? [];
@@ -768,6 +775,20 @@ export default function Controls({
                     <strong>{deviceDetail.lastSeenAt ? formatRelativeTime(deviceDetail.lastSeenAt) : '—'}</strong>
                   </div>
                   <div className="device-details__row">
+                    <span>Raw events</span>
+                    <button
+                      type="button"
+                      className="device-details__events-link"
+                      onClick={() =>
+                        onOpenEvents({
+                          deviceUid: deviceDetail.deviceUid
+                        })
+                      }
+                    >
+                      View raw event(s)
+                    </button>
+                  </div>
+                  <div className="device-details__row">
                     <span>Status</span>
                     <div className="device-details__status">
                       <strong
@@ -1381,7 +1402,12 @@ export default function Controls({
 
       {showDebugTab ? (
         <>
-          <EventsExplorerPanel isActive={showDebugTab} hasQueryApiKey={hasQueryApiKey} />
+          <EventsExplorerPanel
+            isActive={showDebugTab}
+            hasQueryApiKey={hasQueryApiKey}
+            navigationNonce={eventsNavigationNonce}
+            navigationRequest={eventsNavigationRequest}
+          />
           <div className="controls__group controls__system-status-panel">
             <span className="controls__label">System status</span>
             {!hasQueryApiKey ? (

@@ -1471,7 +1471,8 @@
 }
 
 .device-details__name-edit button,
-.device-details__notes button {
+.device-details__notes button,
+.device-details__events-link {
   border: 1px solid var(--border-strong);
   border-radius: 7px;
   background: var(--panel-bg);
@@ -1485,13 +1486,15 @@
 }
 
 .device-details__name-edit button:hover,
-.device-details__notes button:hover {
+.device-details__notes button:hover,
+.device-details__events-link:hover {
   border-color: var(--border-hover);
   background: var(--surface-hover);
 }
 
 .device-details__name-edit button:disabled,
-.device-details__notes button:disabled {
+.device-details__notes button:disabled,
+.device-details__events-link:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -2314,6 +2317,14 @@
   padding: 0.48rem 0.55rem;
 }
 
+.events-explorer__drawer-note {
+  color: var(--panel-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
 .events-explorer__detail-list {
   margin: 0;
   display: grid;
@@ -3068,6 +3079,23 @@
   margin: 0;
   font-size: 0.95rem;
   color: var(--panel-text);
+}
+
+.point-details__events-link {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  padding: 0.28rem 0.48rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+}
+
+.point-details__events-link:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
 }
 
 .point-details__empty {

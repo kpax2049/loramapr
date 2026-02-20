@@ -75,6 +75,8 @@ export type Measurement = {
   bw: number | null;
   freq: number | null;
   gatewayId: string | null;
+  deviceUid?: string | null;
+  eventId?: string | null;
 };
 
 export type Session = {

@@ -72,6 +72,7 @@ export function useUnifiedEvent(id?: string | null, enabled = true) {
   return useQuery<UnifiedEventDetail>({
     queryKey: ['events-detail', id ?? 'none'],
     enabled: Boolean(id) && enabled,
+    placeholderData: (previous) => previous,
     queryFn: ({ signal }) => getUnifiedEventById(id as string, { signal })
   });
 }

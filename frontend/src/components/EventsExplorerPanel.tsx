@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getUnifiedEventById } from '../api/endpoints';
 import { ApiError } from '../api/http';
 import { useDevices } from '../query/hooks';
 import { useUnifiedEvent, useUnifiedEvents } from '../query/events';
-import type { UnifiedEventListItem, UnifiedEventSource } from '../api/types';
+import type { UnifiedEventDetail, UnifiedEventListItem, UnifiedEventSource } from '../api/types';
+import { applyEventsNavigationParams, readEventsNavigationParams } from '../utils/eventsNavigation';
+import type { EventsNavigationInput } from '../utils/eventsNavigation';
 
 type EventsExplorerPanelProps = {
   isActive: boolean;
   hasQueryApiKey: boolean;
+  navigationNonce: number;
+  navigationRequest: EventsNavigationInput | null;
 };
 
 type TimePreset = 'last15m' | 'last1h' | 'last24h' | 'custom';
@@ -42,6 +48,22 @@ function trimOptional(value: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function normalizeInputText(value: string | null | undefined): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : '';
+}
+
+function formatDevicePickerLabel(name: string | null, longName: string | null, deviceUid: string): string {
+  const preferred = normalizeInputText(name) || normalizeInputText(longName);
+  if (preferred && preferred !== deviceUid) {
+    return `${preferred} (${deviceUid})`;
+  }
+  return deviceUid;
+}
+
 function parseLocalDateTime(value: string): Date | null {
   if (!value) {
     return null;
@@ -59,6 +81,20 @@ function formatTimestamp(value: string | null | undefined): string {
     return value;
   }
   return parsed.toLocaleString();
+}
+
+function toDateTimeLocalValue(value: string | undefined): string {
+  if (!value) {
+    return '';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(
+    parsed.getHours()
+  )}:${pad(parsed.getMinutes())}`;
 }
 
 function buildSummary(item: UnifiedEventListItem): string {
@@ -489,7 +525,13 @@ function JsonTreeViewer({ value, serializedPayload, defaultCollapsed }: JsonTree
   );
 }
 
-export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: EventsExplorerPanelProps) {
+export default function EventsExplorerPanel({
+  isActive,
+  hasQueryApiKey,
+  navigationNonce,
+  navigationRequest
+}: EventsExplorerPanelProps) {
+  const queryClient = useQueryClient();
   const [source, setSource] = useState<'' | UnifiedEventSource>('');
   const [deviceUidInput, setDeviceUidInput] = useState('');
   const [portnumInput, setPortnumInput] = useState('');
@@ -498,10 +540,45 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
   const [customSince, setCustomSince] = useState('');
   const [customUntil, setCustomUntil] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [detailEventId, setDetailEventId] = useState<string | null>(null);
+  const [detailSwapPending, setDetailSwapPending] = useState(false);
   const [allowHugePayloadRender, setAllowHugePayloadRender] = useState(false);
 
-  const devicesQuery = useDevices(false, { enabled: isActive && hasQueryApiKey });
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isActive) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const parsed = readEventsNavigationParams(params);
+    const requestedSource = navigationRequest?.source ?? parsed.source;
+    const requestedDeviceUid = normalizeInputText(navigationRequest?.deviceUid ?? parsed.deviceUid ?? '');
+    const requestedPortnum = normalizeInputText(navigationRequest?.portnum ?? parsed.portnum ?? '');
+    const requestedSearch = normalizeInputText(navigationRequest?.q ?? parsed.q ?? '');
+    const requestedFrom = normalizeInputText(navigationRequest?.from ?? parsed.from ?? '');
+    const requestedTo = normalizeInputText(navigationRequest?.to ?? parsed.to ?? '');
+    const requestedEventId = normalizeInputText(navigationRequest?.eventId ?? parsed.eventId ?? '');
+
+    setSource(requestedSource ?? '');
+    setDeviceUidInput(requestedDeviceUid);
+    setPortnumInput(requestedPortnum);
+    setSearchQuery(requestedSearch);
+    if (requestedFrom || requestedTo) {
+      setTimePreset('custom');
+      setCustomSince(toDateTimeLocalValue(requestedFrom));
+      setCustomUntil(toDateTimeLocalValue(requestedTo));
+    } else {
+      setTimePreset('last1h');
+      setCustomSince('');
+      setCustomUntil('');
+    }
+    setSelectedEventId(requestedEventId || null);
+    setDetailEventId(requestedEventId || null);
+    setDetailSwapPending(false);
+  }, [navigationNonce, navigationRequest, isActive]);
+
+  const devicesQuery = useDevices(true, { enabled: isActive && hasQueryApiKey });
   const knownDevices = devicesQuery.data?.items ?? [];
+  const normalizedDeviceUidFilter = normalizeInputText(deviceUidInput);
   const isSmallRange = timePreset === 'last15m' || timePreset === 'last1h';
   const refreshInterval = isActive && hasQueryApiKey && isSmallRange ? AUTO_REFRESH_MS : false;
   const refreshEnabled = typeof refreshInterval === 'number';
@@ -549,8 +626,8 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
   });
 
   const detailQuery = useUnifiedEvent(
-    selectedEventId,
-    isActive && hasQueryApiKey && Boolean(selectedEventId)
+    detailEventId,
+    isActive && hasQueryApiKey && Boolean(detailEventId)
   );
 
   const events = useMemo(
@@ -568,26 +645,173 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
     return Array.from(values.values()).sort((a, b) => a.localeCompare(b));
   }, [events]);
 
+  const deviceOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+    for (const device of knownDevices) {
+      optionMap.set(
+        device.deviceUid,
+        formatDevicePickerLabel(device.name ?? null, device.longName ?? null, device.deviceUid)
+      );
+    }
+    for (const event of events) {
+      if (!event.deviceUid) {
+        continue;
+      }
+      if (!optionMap.has(event.deviceUid)) {
+        optionMap.set(event.deviceUid, event.deviceUid);
+      }
+    }
+    if (normalizedDeviceUidFilter && !optionMap.has(normalizedDeviceUidFilter)) {
+      optionMap.set(normalizedDeviceUidFilter, `${normalizedDeviceUidFilter} (from link)`);
+    }
+    return Array.from(optionMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [knownDevices, events, normalizedDeviceUidFilter]);
+
   const requestId = buildRequestId(eventsQuery.error);
   const selectedEvent = detailQuery.data;
-  const detailRequestId = buildRequestId(detailQuery.error);
+  const selectedEventListItem = useMemo(
+    () => events.find((item) => item.id === selectedEventId) ?? null,
+    [events, selectedEventId]
+  );
+  const selectedEventDetail =
+    selectedEvent && detailEventId && selectedEvent.id === detailEventId ? selectedEvent : null;
+  const selectedEventHeader = useMemo(() => {
+    if (selectedEventListItem) {
+      return {
+        source: selectedEventListItem.source,
+        deviceUid: selectedEventListItem.deviceUid,
+        portnum: selectedEventListItem.portnum,
+        receivedAt: selectedEventListItem.receivedAt
+      };
+    }
+    if (selectedEventDetail) {
+      return {
+        source: selectedEventDetail.source,
+        deviceUid: selectedEventDetail.deviceUid,
+        portnum: selectedEventDetail.portnum,
+        receivedAt: selectedEventDetail.receivedAt
+      };
+    }
+    return null;
+  }, [selectedEventDetail, selectedEventListItem]);
+  const detailIsLoadingSelection =
+    Boolean(selectedEventId) &&
+    (detailSwapPending || (detailEventId === selectedEventId && detailQuery.isFetching));
+  const isShowingPreviousDetailWhileLoading =
+    detailIsLoadingSelection &&
+    Boolean(selectedEventDetail) &&
+    selectedEventDetail?.id !== selectedEventId;
+  const detailError = detailEventId === selectedEventId ? detailQuery.error : null;
+  const detailRequestId = buildRequestId(detailError);
 
   const payloadSerialization = useMemo(
-    () => serializePayload(selectedEvent?.payloadJson),
-    [selectedEvent?.id, selectedEvent?.payloadJson]
+    () => serializePayload(selectedEventDetail?.payloadJson),
+    [selectedEventDetail?.id, selectedEventDetail?.payloadJson]
   );
 
   const payloadIsLarge = payloadSerialization.bytes >= LARGE_PAYLOAD_BYTES;
   const payloadIsHuge = payloadSerialization.bytes >= HUGE_PAYLOAD_BYTES;
   const payloadShouldRenderTree = !payloadIsHuge || allowHugePayloadRender;
   const highlights = useMemo(
-    () => extractHighlights(selectedEvent?.payloadJson),
-    [selectedEvent?.id, selectedEvent?.payloadJson]
+    () => extractHighlights(selectedEventDetail?.payloadJson),
+    [selectedEventDetail?.id, selectedEventDetail?.payloadJson]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const sinceIso =
+      timePreset === 'custom' ? parseLocalDateTime(customSince)?.toISOString() ?? null : null;
+    const untilIso =
+      timePreset === 'custom' ? parseLocalDateTime(customUntil)?.toISOString() ?? null : null;
+
+    applyEventsNavigationParams(params, {
+      source: source || null,
+      deviceUid: trimOptional(deviceUidInput) ?? null,
+      portnum: trimOptional(portnumInput) ?? null,
+      q: trimOptional(searchQuery) ?? null,
+      from: sinceIso,
+      to: untilIso,
+      eventId: selectedEventId
+    });
+
+    const search = params.toString();
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    window.history.replaceState(null, '', nextUrl);
+  }, [
+    source,
+    deviceUidInput,
+    portnumInput,
+    searchQuery,
+    timePreset,
+    customSince,
+    customUntil,
+    selectedEventId
+  ]);
+
+  useEffect(() => {
+    if (selectedEventId) {
+      return;
+    }
+    setDetailEventId(null);
+    setDetailSwapPending(false);
+  }, [selectedEventId]);
 
   useEffect(() => {
     setAllowHugePayloadRender(false);
   }, [selectedEventId]);
+
+  const handlePrefetchDetail = (eventId: string) => {
+    if (!hasQueryApiKey) {
+      return;
+    }
+    void queryClient.prefetchQuery({
+      queryKey: ['events-detail', eventId],
+      queryFn: ({ signal }) => getUnifiedEventById(eventId, { signal }),
+      staleTime: 30_000
+    });
+  };
+
+  const handleSelectEvent = (eventId: string) => {
+    setSelectedEventId(eventId);
+    if (!hasQueryApiKey) {
+      return;
+    }
+    if (!detailEventId) {
+      setDetailEventId(eventId);
+      setDetailSwapPending(false);
+      return;
+    }
+    if (detailEventId === eventId) {
+      setDetailSwapPending(false);
+      return;
+    }
+
+    const cachedDetail = queryClient.getQueryData<UnifiedEventDetail>(['events-detail', eventId]);
+    if (cachedDetail) {
+      setDetailEventId(eventId);
+      setDetailSwapPending(false);
+      return;
+    }
+
+    setDetailSwapPending(true);
+    void queryClient
+      .fetchQuery({
+        queryKey: ['events-detail', eventId],
+        queryFn: ({ signal }) => getUnifiedEventById(eventId, { signal }),
+        staleTime: 30_000
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setDetailEventId(eventId);
+        setDetailSwapPending(false);
+      });
+  };
 
   return (
     <section className="events-explorer" aria-label="Unified events explorer">
@@ -615,12 +839,18 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
             </label>
             <label>
               Device
-              <input
-                list="events-device-options"
-                value={deviceUidInput}
+              <select
+                value={normalizedDeviceUidFilter}
                 onChange={(event) => setDeviceUidInput(event.target.value)}
-                placeholder="deviceUid"
-              />
+                aria-label="Device UID filter"
+              >
+                <option value="">All devices</option>
+                {deviceOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Portnum
@@ -704,11 +934,13 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
                   <tr
                     key={item.id}
                     className={`events-explorer__row ${selectedEventId === item.id ? 'is-selected' : ''}`}
-                    onClick={() => setSelectedEventId(item.id)}
+                    onClick={() => handleSelectEvent(item.id)}
+                    onMouseEnter={() => handlePrefetchDetail(item.id)}
+                    onFocus={() => handlePrefetchDetail(item.id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        setSelectedEventId(item.id);
+                        handleSelectEvent(item.id);
                       }
                     }}
                     tabIndex={0}
@@ -749,15 +981,6 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
         </>
       )}
 
-      <datalist id="events-device-options">
-        {knownDevices.map((device) => (
-          <option
-            key={device.id}
-            value={device.deviceUid}
-            label={device.name ?? device.longName ?? device.deviceUid}
-          />
-        ))}
-      </datalist>
       <datalist id="events-portnum-options">
         {portnumOptions.map((portnum) => (
           <option key={portnum} value={portnum} />
@@ -766,72 +989,75 @@ export default function EventsExplorerPanel({ isActive, hasQueryApiKey }: Events
 
       {selectedEventId ? (
         <aside className="events-explorer__drawer" aria-label="Event detail">
-          {detailQuery.isLoading ? (
-            <div className="events-explorer__drawer-body">Loading…</div>
-          ) : detailQuery.error ? (
+          <div className="events-explorer__drawer-header">
+            <div className="events-explorer__drawer-header-main">
+              <h4>{selectedEventHeader?.source?.toUpperCase() ?? 'Event'} detail</h4>
+              <div className="events-explorer__drawer-header-subtitle">
+                <span>{selectedEventHeader?.deviceUid ?? 'unknown-device'}</span>
+                <span>{selectedEventHeader?.portnum ?? 'port: —'}</span>
+                <span>{formatTimestamp(selectedEventHeader?.receivedAt)}</span>
+                {detailIsLoadingSelection ? (
+                  <span>{isShowingPreviousDetailWhileLoading ? 'Updating…' : 'Loading…'}</span>
+                ) : null}
+              </div>
+            </div>
+            <button type="button" onClick={() => setSelectedEventId(null)}>
+              Close
+            </button>
+          </div>
+
+          {selectedEventDetail ? (
+            <div className="events-explorer__drawer-body">
+              {isShowingPreviousDetailWhileLoading ? (
+                <div className="events-explorer__drawer-note">Loading selected event details…</div>
+              ) : null}
+              <dl className="events-explorer__detail-list">
+                <dt>Packet</dt>
+                <dd>{selectedEventDetail.packetId ?? '—'}</dd>
+                <dt>Type</dt>
+                <dd>{selectedEventDetail.eventType ?? '—'}</dd>
+                <dt>Error</dt>
+                <dd>{selectedEventDetail.error ?? '—'}</dd>
+              </dl>
+
+              {highlights.length > 0 ? (
+                <div className="events-explorer__highlights">
+                  {highlights.map((highlight) => (
+                    <div key={highlight.label} className="events-explorer__highlight">
+                      <span>{highlight.label}</span>
+                      <strong>{highlight.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {payloadIsHuge && !allowHugePayloadRender ? (
+                <div className="events-explorer__payload-warning">
+                  <p>
+                    Payload is large ({Math.round(payloadSerialization.bytes / 1024)} KB). Tree rendering is
+                    disabled by default.
+                  </p>
+                  <button type="button" onClick={() => setAllowHugePayloadRender(true)}>
+                    Render payload tree
+                  </button>
+                </div>
+              ) : null}
+
+              {payloadShouldRenderTree ? (
+                <JsonTreeViewer
+                  value={selectedEventDetail.payloadJson}
+                  serializedPayload={payloadSerialization.text}
+                  defaultCollapsed={payloadIsLarge || payloadIsHuge}
+                />
+              ) : null}
+            </div>
+          ) : detailError ? (
             <div className="events-explorer__drawer-body events-explorer__error">
-              <div>Failed to load event detail: {detailQuery.error.message}</div>
+              <div>Failed to load event detail: {detailError.message}</div>
               {detailRequestId ? <div>X-Request-Id: {detailRequestId}</div> : null}
             </div>
-          ) : selectedEvent ? (
-            <>
-              <div className="events-explorer__drawer-header">
-                <div className="events-explorer__drawer-header-main">
-                  <h4>{selectedEvent.source.toUpperCase()} event</h4>
-                  <div className="events-explorer__drawer-header-subtitle">
-                    <span>{selectedEvent.deviceUid ?? 'unknown-device'}</span>
-                    <span>{selectedEvent.portnum ?? 'port: —'}</span>
-                    <span>{formatTimestamp(selectedEvent.receivedAt)}</span>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setSelectedEventId(null)}>
-                  Close
-                </button>
-              </div>
-
-              <div className="events-explorer__drawer-body">
-                <dl className="events-explorer__detail-list">
-                  <dt>Packet</dt>
-                  <dd>{selectedEvent.packetId ?? '—'}</dd>
-                  <dt>Type</dt>
-                  <dd>{selectedEvent.eventType ?? '—'}</dd>
-                  <dt>Error</dt>
-                  <dd>{selectedEvent.error ?? '—'}</dd>
-                </dl>
-
-                {highlights.length > 0 ? (
-                  <div className="events-explorer__highlights">
-                    {highlights.map((highlight) => (
-                      <div key={highlight.label} className="events-explorer__highlight">
-                        <span>{highlight.label}</span>
-                        <strong>{highlight.value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {payloadIsHuge && !allowHugePayloadRender ? (
-                  <div className="events-explorer__payload-warning">
-                    <p>
-                      Payload is large ({Math.round(payloadSerialization.bytes / 1024)} KB). Tree rendering is
-                      disabled by default.
-                    </p>
-                    <button type="button" onClick={() => setAllowHugePayloadRender(true)}>
-                      Render payload tree
-                    </button>
-                  </div>
-                ) : null}
-
-                {payloadShouldRenderTree ? (
-                  <JsonTreeViewer
-                    key={selectedEvent.id}
-                    value={selectedEvent.payloadJson}
-                    serializedPayload={payloadSerialization.text}
-                    defaultCollapsed={payloadIsLarge || payloadIsHuge}
-                  />
-                ) : null}
-              </div>
-            </>
+          ) : detailIsLoadingSelection ? (
+            <div className="events-explorer__drawer-body">Loading event detail…</div>
           ) : (
             <div className="events-explorer__drawer-body">No detail available.</div>
           )}

@@ -32,6 +32,7 @@ import { useLorawanEvents } from './query/lorawan';
 import { useSessionTimeline, useSessions, useSessionWindow } from './query/sessions';
 import { useAppTour } from './tour/AppTourProvider';
 import type { TourSidebarTabKey } from './tour/steps';
+import { applyEventsNavigationParams, type EventsNavigationInput } from './utils/eventsNavigation';
 import './App.css';
 
 const DEFAULT_LIMIT = 2000;
@@ -160,6 +161,17 @@ function parseExploreRangePreset(value: string | null): ExploreRangePreset {
 function readInitialSidebarTab(): SidebarTab {
   if (typeof window === 'undefined') {
     return 'device';
+  }
+  const params = new URLSearchParams(window.location.search);
+  const queryTab = params.get('tab') ?? params.get('sidebarTab');
+  if (
+    queryTab === 'device' ||
+    queryTab === 'sessions' ||
+    queryTab === 'playback' ||
+    queryTab === 'coverage' ||
+    queryTab === 'debug'
+  ) {
+    return queryTab;
   }
   const raw = window.localStorage.getItem(SIDEBAR_TAB_KEY);
   if (raw === 'device' || raw === 'sessions' || raw === 'playback' || raw === 'coverage' || raw === 'debug') {
@@ -567,6 +579,9 @@ function App() {
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
   const [fitFeedback, setFitFeedback] = useState<string | null>(null);
   const [sessionSelectionNotice, setSessionSelectionNotice] = useState<string | null>(null);
+  const [eventsNavigationNonce, setEventsNavigationNonce] = useState(0);
+  const [eventsNavigationRequest, setEventsNavigationRequest] =
+    useState<EventsNavigationInput | null>(null);
   const [tourMenuOpen, setTourMenuOpen] = useState(false);
   const [tourResetNotice, setTourResetNotice] = useState<string | null>(null);
   const tourMenuOpenRef = useRef(tourMenuOpen);
@@ -793,41 +808,52 @@ function App() {
       return;
     }
 
-    const params = new URLSearchParams();
-    if (deviceId) {
-      params.set('deviceId', deviceId);
-    }
+    const params = new URLSearchParams(window.location.search);
+    const setOptional = (key: string, value: string | null) => {
+      if (!value) {
+        params.delete(key);
+        return;
+      }
+      params.set(key, value);
+    };
+
+    setOptional('deviceId', deviceId);
     params.set('filterMode', filterMode);
-    if (selectedSessionId) {
-      params.set('sessionId', selectedSessionId);
-    }
+    setOptional('sessionId', selectedSessionId);
     params.set('rangePreset', exploreRangePreset);
     if (useAdvancedRange) {
       params.set('rangeAdvanced', 'true');
-      if (from) {
-        params.set('from', from);
-      }
-      if (to) {
-        params.set('to', to);
-      }
+      setOptional('from', from || null);
+      setOptional('to', to || null);
+    } else {
+      params.delete('rangeAdvanced');
+      params.delete('from');
+      params.delete('to');
     }
     if (!showPoints) {
       params.set('showPoints', 'false');
+    } else {
+      params.delete('showPoints');
     }
     if (!showTrack) {
       params.set('showTrack', 'false');
+    } else {
+      params.delete('showTrack');
     }
     params.set('viewMode', viewMode);
-    if (playbackSessionId) {
-      params.set('playbackSessionId', playbackSessionId);
-    }
+    setOptional('playbackSessionId', playbackSessionId);
     if (Number.isFinite(playbackCursorMs)) {
       params.set('playbackCursor', new Date(playbackCursorMs).toISOString());
+    } else {
+      params.delete('playbackCursor');
     }
     if (Number.isFinite(playbackWindowMs)) {
       params.set('playbackWindowMinutes', String(Math.round(playbackWindowMs / 60000)));
+    } else {
+      params.delete('playbackWindowMinutes');
     }
     params.set('playbackSpeed', String(playbackSpeed));
+    params.set('tab', sidebarTab);
 
     const search = params.toString();
     const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
@@ -846,7 +872,8 @@ function App() {
     playbackSessionId,
     playbackCursorMs,
     playbackWindowMs,
-    playbackSpeed
+    playbackSpeed,
+    sidebarTab
   ]);
 
   const handleFilterModeChange = (mode: 'time' | 'session') => {
@@ -892,6 +919,23 @@ function App() {
     handleFilterModeChange('session');
     setSelectedSessionId(sessionId);
   };
+
+  const handleOpenEvents = useCallback((input: EventsNavigationInput) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    applyEventsNavigationParams(params, input);
+    params.set('tab', 'debug');
+
+    const search = params.toString();
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    window.history.replaceState(null, '', nextUrl);
+    setEventsNavigationRequest(input);
+    setSidebarTab('debug');
+    setEventsNavigationNonce((value) => value + 1);
+  }, []);
 
   const bboxPayload = useMemo(
     () =>
@@ -2287,6 +2331,9 @@ function App() {
       playbackControls={playbackControls}
       fitFeedback={fitFeedback}
       sessionSelectionNotice={sessionSelectionNotice}
+      eventsNavigationNonce={eventsNavigationNonce}
+      eventsNavigationRequest={eventsNavigationRequest}
+      onOpenEvents={handleOpenEvents}
     />
   );
 
@@ -2380,7 +2427,11 @@ function App() {
         >
           {isRightPanelExpanded ? (
             <>
-              <PointDetails measurement={selectedMeasurement} />
+              <PointDetails
+                measurement={selectedMeasurement}
+                deviceUid={selectedMeasurement?.deviceUid ?? selectedDeviceUid ?? null}
+                onOpenEvents={handleOpenEvents}
+              />
               <StatsCard
                 stats={statsQuery.data}
                 isLoading={statsQuery.isLoading}
