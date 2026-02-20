@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.10.0 - 2026-02-20
+
+### Title
+- Raw Events Explorer + payload retention
+
+### Added
+- Added unified QUERY-scoped raw events endpoints (`GET /api/events`, `GET /api/events/:id`) with filters for source/deviceUid/portnum/time/q plus cursor pagination.
+- Added raw payload retention for LoRaWAN and Meshtastic ingest in `WebhookEvent.payloadJson`, including schema migrations for source normalization and raw-event fields.
+- Added Debug-tab Events Explorer UI with filter controls, paged results, and a detail drawer showing extracted highlights plus a collapsible/copyable JSON tree view.
+- Added deep links (`View raw event(s)`) from Device Details and Point Details into Debug > Events with URL-backed filters.
+
+### Changed
+- Updated Meshtastic and LoRaWAN ingest paths to persist richer event metadata (`source`, `portnum`, payload context) for normalization/reprocessing workflows.
+- Updated Pi forwarder ingestion robustness with stdin bridge support and accompanying operator docs/runbook updates.
+- Updated ingestion/troubleshooting docs with Raw Events Explorer usage examples for `TELEMETRY_APP` and `NODEINFO_APP` triage.
+
+### Milestone
+- Operators can diagnose ingest and normalization issues from the app UI without tailing backend logs.
+
+### Acceptance
+- Debug > Events supports filterable/cursor-paginated raw-event exploration and detail inspection with full payload visibility.
+- Raw-event navigation from selected device or point context opens Events with preselected filters.
+- Full raw payload retention is in place for v0.10.0 to support later normalization passes.
+
+### Notes
+- No breaking API changes for existing measurement/session consumers.
+
 ## v0.9.18 - 2026-02-19
 
 ### Title

@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.10.0 (2026-02-20)
+
+- Raw Events Explorer release: added unified QUERY-gated `/api/events` + `/api/events/:id` with source/device/portnum/time/search filters and cursor pagination.
+- Full raw ingest payload retention added for LoRaWAN + Meshtastic (`WebhookEvent.payloadJson`) so future normalization/reprocessing can run against preserved originals.
+- Debug tab now includes Events Explorer filters, detail drawer highlights/JSON tree, and deep links from device/point context into prefiltered raw events.
+- Release notes: `docs/release-v0.10.0.md`.
+
 ## v0.9.17 (2026-02-19)
 
 - Data safety + retention defaults release: added configurable backend raw-event retention scheduling with documented defaults (`WebhookEvent` 30d, `AgentDecision` 90d) and daily cron execution.
