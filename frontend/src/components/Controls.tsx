@@ -22,6 +22,7 @@ import LorawanEventsPanel from './LorawanEventsPanel';
 import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
+import EventsExplorerPanel from './EventsExplorerPanel';
 import DeviceIcon, {
   DEVICE_ICON_CATALOG,
   type DeviceIconKey,
@@ -1380,6 +1381,7 @@ export default function Controls({
 
       {showDebugTab ? (
         <>
+          <EventsExplorerPanel isActive={showDebugTab} hasQueryApiKey={hasQueryApiKey} />
           <div className="controls__group controls__system-status-panel">
             <span className="controls__label">System status</span>
             {!hasQueryApiKey ? (

@@ -279,3 +279,40 @@ export type LorawanSummary = {
   lastEventReceivedAt: string | null;
   lastMeasurementCreatedAt: string | null;
 };
+
+export type UnifiedEventSource = 'meshtastic' | 'lorawan' | 'agent' | 'sim';
+
+export type UnifiedEventListItem = {
+  id: string;
+  source: UnifiedEventSource;
+  receivedAt: string;
+  deviceUid: string | null;
+  portnum: string | null;
+  packetId: string | null;
+  rxRssi: number | null;
+  rxSnr: number | null;
+  hopLimit: number | null;
+  relayNode: string | null;
+  transportMechanism: string | null;
+  lat: number | null;
+  lon: number | null;
+  time: string | null;
+};
+
+export type UnifiedEventsResponse = {
+  items: UnifiedEventListItem[];
+  nextCursor?: string;
+};
+
+export type UnifiedEventDetail = {
+  id: string;
+  source: UnifiedEventSource;
+  receivedAt: string;
+  processedAt: string | null;
+  deviceUid: string | null;
+  portnum: string | null;
+  packetId: string | null;
+  eventType: string | null;
+  error: string | null;
+  payloadJson: unknown;
+};

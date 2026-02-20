@@ -22,7 +22,10 @@ import type {
   SessionDetail,
   Session,
   TrackPoint,
-  SystemStatus
+  SystemStatus,
+  UnifiedEventDetail,
+  UnifiedEventsResponse,
+  UnifiedEventSource
 } from './types';
 
 export type Bbox = {
@@ -95,6 +98,17 @@ export type ReceiversQueryParams = {
   sessionId?: string;
   from?: string | Date;
   to?: string | Date;
+};
+
+export type UnifiedEventsQueryParams = {
+  source?: UnifiedEventSource;
+  deviceUid?: string;
+  portnum?: string;
+  since?: string | Date;
+  until?: string | Date;
+  q?: string;
+  limit?: number;
+  cursor?: string;
 };
 
 type RequestOptions = {
@@ -224,6 +238,37 @@ function buildReceiversQuery(params: ReceiversQueryParams): string {
   }
   if (params.to) {
     searchParams.set('to', toIso(params.to));
+  }
+
+  return searchParams.toString();
+}
+
+function buildUnifiedEventsQuery(params: UnifiedEventsQueryParams): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.source) {
+    searchParams.set('source', params.source);
+  }
+  if (params.deviceUid) {
+    searchParams.set('deviceUid', params.deviceUid);
+  }
+  if (params.portnum) {
+    searchParams.set('portnum', params.portnum);
+  }
+  if (params.since) {
+    searchParams.set('since', toIso(params.since));
+  }
+  if (params.until) {
+    searchParams.set('until', toIso(params.until));
+  }
+  if (params.q) {
+    searchParams.set('q', params.q);
+  }
+  if (typeof params.limit === 'number') {
+    searchParams.set('limit', String(params.limit));
+  }
+  if (params.cursor) {
+    searchParams.set('cursor', params.cursor);
   }
 
   return searchParams.toString();
@@ -578,4 +623,20 @@ export async function getAgentDecisions(
 
 export async function getSystemStatus(options?: RequestOptions): Promise<SystemStatus> {
   return getJson<SystemStatus>('/api/status', withQueryApiKey(options));
+}
+
+export async function listUnifiedEvents(
+  params: UnifiedEventsQueryParams,
+  options?: RequestOptions
+): Promise<UnifiedEventsResponse> {
+  const query = buildUnifiedEventsQuery(params);
+  const path = query ? `/api/events?${query}` : '/api/events';
+  return getJson<UnifiedEventsResponse>(path, withQueryApiKey(options));
+}
+
+export async function getUnifiedEventById(
+  id: string,
+  options?: RequestOptions
+): Promise<UnifiedEventDetail> {
+  return getJson<UnifiedEventDetail>(`/api/events/${id}`, withQueryApiKey(options));
 }
