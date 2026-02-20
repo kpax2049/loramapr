@@ -5,6 +5,7 @@ node_modules/
 dist/
 tmp/
 .tmp/
+backups/
 
 # playwright output
 frontend/playwright-report/

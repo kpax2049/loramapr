@@ -1,6 +1,6 @@
 import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma, WebhookEventSource } from '@prisma/client';
 import { logError, logInfo, logWarn } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementsService } from '../measurements/measurements.service';
@@ -65,15 +65,17 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     const deviceUid =
       parsed.end_device_ids?.dev_eui ?? parsed.end_device_ids?.device_id ?? undefined;
     const uplinkId = deriveUplinkId(parsed);
+    const portnum = getLorawanPortnum(parsed);
 
     try {
       await this.prisma.webhookEvent.create({
         data: {
-          source: 'tts',
+          source: WebhookEventSource.LORAWAN,
           eventType: 'uplink',
           deviceUid,
-          uplinkId,
-          payload: parsed as Prisma.InputJsonValue
+          portnum,
+          packetId: uplinkId,
+          payloadJson: parsed as Prisma.InputJsonValue
         }
       });
       logInfo('webhook.ingest.accepted', {
@@ -112,7 +114,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where.deviceUid = params.deviceUid;
     }
     if (params.processingError) {
-      where.processingError = params.processingError;
+      where.error = params.processingError;
     }
     if (params.processed !== undefined) {
       where.processedAt = params.processed ? { not: null } : null;
@@ -128,11 +130,20 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         id: true,
         receivedAt: true,
         processedAt: true,
-        processingError: true,
+        error: true,
         deviceUid: true,
-        uplinkId: true
+        packetId: true
       }
-    });
+    }).then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        receivedAt: row.receivedAt,
+        processedAt: row.processedAt,
+        processingError: row.error,
+        deviceUid: row.deviceUid,
+        uplinkId: row.packetId
+      }))
+    );
   }
 
   async getEventById(id: string) {
@@ -140,14 +151,26 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where: { id },
       select: {
         id: true,
-        payload: true,
+        payloadJson: true,
         receivedAt: true,
         processedAt: true,
         deviceUid: true,
-        uplinkId: true,
-        processingError: true
+        packetId: true,
+        error: true
       }
-    });
+    }).then((row) =>
+      row
+        ? {
+            id: row.id,
+            payload: row.payloadJson,
+            receivedAt: row.receivedAt,
+            processedAt: row.processedAt,
+            deviceUid: row.deviceUid,
+            uplinkId: row.packetId,
+            processingError: row.error
+          }
+        : null
+    );
   }
 
   async getSummary() {
@@ -164,10 +187,10 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           where: { processedAt: null }
         }),
         this.prisma.webhookEvent.groupBy({
-          by: ['processingError'],
+          by: ['error'],
           where: {
             receivedAt: { gte: since },
-            processingError: { not: null }
+            error: { not: null }
           },
           _count: { _all: true }
         }),
@@ -184,7 +207,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       processedEvents,
       unprocessedEvents,
       errorsByType: errorsByType.map((row) => ({
-        processingError: row.processingError as string,
+        processingError: row.error as string,
         count: row._count._all
       })),
       lastEventReceivedAt: lastEvent._max.receivedAt ?? null,
@@ -197,7 +220,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where: { id },
       data: {
         processedAt: null,
-        processingError: null,
+        error: null,
         processingStartedAt: null,
         processingWorkerId: null
       }
@@ -216,7 +239,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where.deviceUid = params.deviceUid;
     }
     if (params.processingError) {
-      where.processingError = params.processingError;
+      where.error = params.processingError;
     }
     if (params.since) {
       where.receivedAt = { gte: params.since };
@@ -237,7 +260,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where: { id: { in: ids.map((row) => row.id) } },
       data: {
         processedAt: null,
-        processingError: null,
+        error: null,
         processingStartedAt: null,
         processingWorkerId: null
       }
@@ -259,7 +282,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         const candidates = await tx.webhookEvent.findMany({
           where: {
             processedAt: null,
-            source: { in: ['tts', 'meshtastic'] },
+            source: { in: [WebhookEventSource.LORAWAN, WebhookEventSource.MESHTASTIC] },
             OR: [{ processingStartedAt: null }, { processingStartedAt: { lt: staleBefore } }]
           },
           orderBy: { receivedAt: 'asc' },
@@ -271,8 +294,8 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           return [] as Array<{
             id: string;
             deviceUid: string | null;
-            payload: Prisma.JsonValue;
-            source: string;
+            payloadJson: Prisma.JsonValue;
+            source: WebhookEventSource;
             receivedAt: Date;
           }>;
         }
@@ -299,7 +322,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           select: {
             id: true,
             deviceUid: true,
-            payload: true,
+            payloadJson: true,
             source: true,
             receivedAt: true
           }
@@ -311,7 +334,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           event.id,
           event.source,
           event.deviceUid ?? undefined,
-          event.payload,
+          event.payloadJson,
           event.receivedAt
         );
       }
@@ -331,14 +354,14 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
 
   private async processEvent(
     id: string,
-    source: string,
+    source: WebhookEventSource,
     deviceUid: string | undefined,
     payload: Prisma.JsonValue,
     receivedAt: Date
   ): Promise<void> {
     const processedAt = new Date();
     try {
-      if (source === 'meshtastic') {
+      if (source === WebhookEventSource.MESHTASTIC) {
         await this.processMeshtasticEvent(id, deviceUid, payload, receivedAt, processedAt);
         return;
       }
@@ -350,7 +373,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         where: { id },
         data: {
           processedAt,
-          processingError: message
+          error: message
         }
       });
       logError('webhook.normalize.failed', {
@@ -375,7 +398,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         where: { id },
         data: {
           processedAt,
-          processingError: normalized.reason
+          error: normalized.reason
         }
       });
       logWarn('webhook.normalize.rejected', {
@@ -396,7 +419,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where: { id },
       data: {
         processedAt,
-        processingError: null
+        error: null
       }
     });
     logInfo('webhook.normalize.accepted', {
@@ -421,7 +444,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         where: { id },
         data: {
           processedAt,
-          processingError: 'missing_gps'
+          error: 'missing_gps'
         }
       });
       logWarn('webhook.normalize.rejected', {
@@ -459,7 +482,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       where: { id },
       data: {
         processedAt,
-        processingError: null
+        error: null
       }
     });
     logInfo('webhook.normalize.accepted', {
@@ -1008,11 +1031,19 @@ function isWorkerEnabled(): boolean {
   return flag.toLowerCase() === 'true';
 }
 
-function normalizeSource(source: string): 'lorawan' | 'meshtastic' | 'agent' {
-  if (source === 'meshtastic') {
+function getLorawanPortnum(payload: TtsUplink): string | null {
+  const fPort = payload.uplink_message?.f_port;
+  if (typeof fPort === 'number' && Number.isFinite(fPort)) {
+    return String(Math.trunc(fPort));
+  }
+  return null;
+}
+
+function normalizeSource(source: WebhookEventSource): 'lorawan' | 'meshtastic' | 'agent' {
+  if (source === WebhookEventSource.MESHTASTIC) {
     return 'meshtastic';
   }
-  if (source === 'agent') {
+  if (source === WebhookEventSource.AGENT) {
     return 'agent';
   }
   return 'lorawan';

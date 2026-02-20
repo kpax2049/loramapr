@@ -134,6 +134,13 @@ enum ApiKeyScope {
   QUERY
 }
 
+enum WebhookEventSource {
+  MESHTASTIC
+  LORAWAN
+  AGENT
+  SIM
+}
+
 model LorawanUplink {
   id         String   @id @default(uuid()) @db.Uuid
   payloadRaw Json
@@ -142,21 +149,24 @@ model LorawanUplink {
 
 model WebhookEvent {
   id         String   @id @default(uuid()) @db.Uuid
-  source     String
+  source     WebhookEventSource
   receivedAt DateTime @default(now())
-  payload    Json
+  payloadJson Json @map("payload")
   processingStartedAt DateTime?
   processingWorkerId String?
   processedAt DateTime?
-  processingError String?
+  error      String? @map("processingError")
   eventType  String?
   deviceUid  String?
-  uplinkId   String?  @unique
+  portnum    String?
+  packetId   String?  @unique @map("uplinkId")
 
   @@index([receivedAt])
   @@index([processedAt])
   @@index([source, receivedAt(sort: Desc)])
   @@index([deviceUid])
+  @@index([deviceUid, receivedAt(sort: Desc)])
+  @@index([portnum, receivedAt(sort: Desc)])
 }
 
 model CoverageBin {

@@ -83,7 +83,7 @@ describe('LoRaWAN uplink e2e', () => {
         where: {
           OR: [
             trackedDeviceUids.length > 0 ? { deviceUid: { in: trackedDeviceUids } } : undefined,
-            trackedUplinkIds.length > 0 ? { uplinkId: { in: trackedUplinkIds } } : undefined
+            trackedUplinkIds.length > 0 ? { packetId: { in: trackedUplinkIds } } : undefined
           ].filter(Boolean) as object[]
         }
       });
@@ -168,7 +168,7 @@ describe('LoRaWAN uplink e2e', () => {
     await waitForWebhookProcessed(prisma, uplinkId);
 
     const eventCount = await prisma.webhookEvent.count({
-      where: { uplinkId }
+      where: { packetId: uplinkId }
     });
 
     expect(eventCount).toBe(1);
@@ -236,7 +236,7 @@ describe('LoRaWAN uplink e2e', () => {
     expect(event?.uplinkId).toBe(uplinkId);
 
     const eventCount = await prisma.webhookEvent.count({
-      where: { uplinkId }
+      where: { packetId: uplinkId }
     });
 
     expect(eventCount).toBe(1);
@@ -293,13 +293,17 @@ function clonePayload(payload: TtsPayload): TtsPayload {
 async function waitForWebhookProcessed(prisma: PrismaService, uplinkId: string) {
   return waitFor(async () => {
     const event = await prisma.webhookEvent.findUnique({
-      where: { uplinkId },
-      select: { processedAt: true, processingError: true, uplinkId: true }
+      where: { packetId: uplinkId },
+      select: { processedAt: true, error: true, packetId: true }
     });
     if (!event?.processedAt) {
       return null;
     }
-    return event;
+    return {
+      processedAt: event.processedAt,
+      processingError: event.error,
+      uplinkId: event.packetId
+    };
   });
 }
 

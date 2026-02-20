@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, WebhookEventSource } from '@prisma/client';
 import { createHash } from 'crypto';
 import { logError, logInfo } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -11,35 +11,38 @@ export class MeshtasticService {
   async ingestEvent(body: unknown, idempotencyKeyHeader?: string): Promise<void> {
     const deviceUid = getDeviceUid(body);
     const eventId = normalizeIdempotencyKey(idempotencyKeyHeader) ?? getEventId(body);
+    const portnum = getPortnum(body);
 
     try {
       await this.prisma.webhookEvent.create({
         data: {
-          source: 'meshtastic',
+          source: WebhookEventSource.MESHTASTIC,
           eventType: 'event',
           deviceUid,
-          uplinkId: eventId,
-          payload: body as Prisma.InputJsonValue
+          portnum,
+          packetId: eventId,
+          payloadJson: body as Prisma.InputJsonValue
         }
       });
       logInfo('webhook.ingest.accepted', {
         source: 'meshtastic',
         deviceUid,
-        uplinkId: eventId
+        packetId: eventId,
+        portnum: portnum ?? null
       });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         logInfo('webhook.ingest.duplicate', {
           source: 'meshtastic',
           deviceUid,
-          uplinkId: eventId
+          packetId: eventId
         });
         return;
       }
       logError('webhook.ingest.failed', {
         source: 'meshtastic',
         deviceUid,
-        uplinkId: eventId,
+        packetId: eventId,
         reason: getErrorMessage(error)
       });
       throw error;
@@ -54,13 +57,13 @@ export class MeshtasticService {
     cursor?: Date;
   }) {
     const where: Record<string, unknown> = {
-      source: 'meshtastic'
+      source: WebhookEventSource.MESHTASTIC
     };
     if (params.deviceUid) {
       where.deviceUid = params.deviceUid;
     }
     if (params.processingError) {
-      where.processingError = params.processingError;
+      where.error = params.processingError;
     }
     if (params.processed !== undefined) {
       where.processedAt = params.processed ? { not: null } : null;
@@ -77,26 +80,47 @@ export class MeshtasticService {
         id: true,
         receivedAt: true,
         processedAt: true,
-        processingError: true,
+        error: true,
         deviceUid: true,
-        uplinkId: true
+        packetId: true
       }
-    });
+    }).then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        receivedAt: row.receivedAt,
+        processedAt: row.processedAt,
+        processingError: row.error,
+        deviceUid: row.deviceUid,
+        uplinkId: row.packetId
+      }))
+    );
   }
 
   async getEventById(id: string) {
     return this.prisma.webhookEvent.findFirst({
-      where: { id, source: 'meshtastic' },
+      where: { id, source: WebhookEventSource.MESHTASTIC },
       select: {
         id: true,
-        payload: true,
+        payloadJson: true,
         receivedAt: true,
         processedAt: true,
         deviceUid: true,
-        uplinkId: true,
-        processingError: true
+        packetId: true,
+        error: true
       }
-    });
+    }).then((row) =>
+      row
+        ? {
+            id: row.id,
+            payload: row.payloadJson,
+            receivedAt: row.receivedAt,
+            processedAt: row.processedAt,
+            deviceUid: row.deviceUid,
+            uplinkId: row.packetId,
+            processingError: row.error
+          }
+        : null
+    );
   }
 
   async listReceivers(params: {
@@ -155,6 +179,9 @@ function normalizeIdempotencyKey(value?: string): string | null {
 function getDeviceUid(body: unknown): string {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
+    if (typeof record.fromId === 'string' && record.fromId.trim().length > 0) {
+      return record.fromId;
+    }
     if (typeof record.from === 'string' && record.from.trim().length > 0) {
       return record.from;
     }
@@ -166,6 +193,44 @@ function getDeviceUid(body: unknown): string {
     }
   }
   return 'unknown';
+}
+
+function getPortnum(body: unknown): string | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  const record = body as Record<string, unknown>;
+  const direct = toNonEmptyString(record.portnum);
+  if (direct) {
+    return direct;
+  }
+
+  const decoded = record.decoded;
+  if (decoded && typeof decoded === 'object') {
+    const nested = toNonEmptyString((decoded as Record<string, unknown>).portnum);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  const payload = record.payload;
+  if (payload && typeof payload === 'object') {
+    const payloadRecord = payload as Record<string, unknown>;
+    const payloadDirect = toNonEmptyString(payloadRecord.portnum);
+    if (payloadDirect) {
+      return payloadDirect;
+    }
+    const payloadDecoded = payloadRecord.decoded;
+    if (payloadDecoded && typeof payloadDecoded === 'object') {
+      const nested = toNonEmptyString((payloadDecoded as Record<string, unknown>).portnum);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
 }
 
 function getEventId(body: unknown): string {
@@ -204,6 +269,17 @@ function safeStringify(value: unknown): string {
   } catch {
     return 'unstringifiable';
   }
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

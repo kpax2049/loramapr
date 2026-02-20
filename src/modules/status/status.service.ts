@@ -90,13 +90,13 @@ export class StatusService {
         orderBy: { receivedAt: 'desc' },
         select: {
           receivedAt: true,
-          processingError: true
+          error: true
         }
       });
 
       return {
         latestWebhookReceivedAt: latestWebhook?.receivedAt.toISOString() ?? null,
-        latestWebhookError: latestWebhook?.processingError ?? null
+        latestWebhookError: latestWebhook?.error ?? null
       };
     } catch {
       return {

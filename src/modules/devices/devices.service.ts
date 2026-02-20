@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, WebhookEventSource } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -294,14 +294,14 @@ export class DevicesService {
       this.prisma.webhookEvent.findFirst({
         where: { deviceUid },
         orderBy: { receivedAt: 'desc' },
-        select: { receivedAt: true, processingError: true, source: true }
+        select: { receivedAt: true, error: true, source: true }
       })
     ]);
 
     return {
       latestMeasurementAt: latestMeasurement?.capturedAt ?? null,
       latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
-      latestWebhookError: latestWebhook?.processingError ?? null,
+      latestWebhookError: latestWebhook?.error ?? null,
       latestWebhookSource: normalizeWebhookSource(latestWebhook?.source)
     };
   }
@@ -574,17 +574,19 @@ export class DevicesService {
   }
 }
 
-function normalizeWebhookSource(source?: string | null): LatestWebhookSource | null {
+function normalizeWebhookSource(
+  source?: string | WebhookEventSource | null
+): LatestWebhookSource | null {
   if (!source) {
     return null;
   }
-  if (source === 'tts' || source === 'lorawan') {
+  if (source === 'tts' || source === 'lorawan' || source === WebhookEventSource.LORAWAN) {
     return 'lorawan';
   }
-  if (source === 'meshtastic') {
+  if (source === 'meshtastic' || source === WebhookEventSource.MESHTASTIC) {
     return 'meshtastic';
   }
-  if (source === 'agent') {
+  if (source === 'agent' || source === WebhookEventSource.AGENT) {
     return 'agent';
   }
   return null;

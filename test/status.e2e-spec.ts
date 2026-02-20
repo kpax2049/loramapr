@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { ApiKeyScope } from '@prisma/client';
+import { ApiKeyScope, WebhookEventSource } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { hashApiKey } from '../src/common/security/apiKey';
@@ -81,16 +81,16 @@ describe('Status endpoint e2e', () => {
   it('returns compact status payload for QUERY-scope API key', async () => {
     const webhook = await prisma.webhookEvent.create({
       data: {
-        source: 'meshtastic',
-        payload: { test: true },
-        processingError: 'missing_gps',
+        source: WebhookEventSource.MESHTASTIC,
+        payloadJson: { test: true },
+        error: 'missing_gps',
         processedAt: new Date(),
         receivedAt: new Date(Date.now() + 60_000)
       },
       select: {
         id: true,
         receivedAt: true,
-        processingError: true
+        error: true
       }
     });
     createdWebhookId = webhook.id;
@@ -120,7 +120,7 @@ describe('Status endpoint e2e', () => {
 
     expect(response.body.ingest).toEqual({
       latestWebhookReceivedAt: webhook.receivedAt.toISOString(),
-      latestWebhookError: webhook.processingError
+      latestWebhookError: webhook.error
     });
   });
 });
