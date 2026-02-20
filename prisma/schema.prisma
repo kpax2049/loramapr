@@ -23,11 +23,15 @@ model Device {
   deviceUid  String    @unique
   name       String?
   notes      String?
+  meshtasticNodeId String?
   hwModel    String?
   firmwareVersion String?
   appVersion String?
   longName   String?
   shortName  String?
+  macaddr    String?
+  publicKey  String?
+  isUnmessagable Boolean?
   role       String?
   lastNodeInfoAt DateTime?
   iconKey    String?
@@ -41,6 +45,7 @@ model Device {
   owner        User?         @relation(fields: [ownerId], references: [id])
   sessions     Session[]
   measurements Measurement[]
+  telemetrySamples DeviceTelemetrySample[]
   coverageBins CoverageBin[]
   agentDecisions AgentDecision[]
   autoSessionConfig DeviceAutoSessionConfig?
@@ -209,6 +214,28 @@ model AgentDecision {
   device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   @@index([deviceId, createdAt])
+}
+
+model DeviceTelemetrySample {
+  id                String   @id @default(uuid()) @db.Uuid
+  deviceId          String   @db.Uuid
+  device            Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  capturedAt        DateTime
+  source            String
+
+  batteryLevel      Int?
+  voltage           Float?
+  channelUtilization Float?
+  airUtilTx         Float?
+  uptimeSeconds     Int?
+
+  raw               Json?
+
+  createdAt         DateTime @default(now())
+
+  @@index([deviceId, capturedAt])
+  @@index([capturedAt])
 }
 
 model DeviceAutoSessionConfig {
