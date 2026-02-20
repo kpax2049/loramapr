@@ -48,6 +48,14 @@ export function useUnifiedEvents(
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     refetchInterval: options?.refetchInterval ?? false,
+    placeholderData: (previous) => previous,
+    notifyOnChangeProps: [
+      'data',
+      'error',
+      'hasNextPage',
+      'isFetchingNextPage',
+      'isLoading'
+    ],
     queryFn: ({ pageParam, signal }) =>
       listUnifiedEvents(
         {
