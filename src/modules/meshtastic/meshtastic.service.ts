@@ -9,6 +9,8 @@ export class MeshtasticService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ingestEvent(body: unknown, idempotencyKeyHeader?: string): Promise<void> {
+    // Store the incoming request payload as-is; normalization happens in the worker pipeline.
+    const payloadJson = toPrismaJsonInput(body);
     const deviceUid = getDeviceUid(body);
     const eventId = normalizeIdempotencyKey(idempotencyKeyHeader) ?? getEventId(body);
     const portnum = getPortnum(body);
@@ -21,7 +23,7 @@ export class MeshtasticService {
           deviceUid,
           portnum,
           packetId: eventId,
-          payloadJson: body as Prisma.InputJsonValue
+          payloadJson
         }
       });
       logInfo('webhook.ingest.accepted', {
@@ -176,11 +178,24 @@ function normalizeIdempotencyKey(value?: string): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function toPrismaJsonInput(value: unknown): Prisma.InputJsonValue | Prisma.JsonNullValueInput {
+  if (value === null) {
+    return Prisma.JsonNull;
+  }
+  return value as Prisma.InputJsonValue;
+}
+
 function getDeviceUid(body: unknown): string {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
+    if (typeof record.fromId === 'number' && Number.isFinite(record.fromId)) {
+      return String(record.fromId);
+    }
     if (typeof record.fromId === 'string' && record.fromId.trim().length > 0) {
       return record.fromId;
+    }
+    if (typeof record.from === 'number' && Number.isFinite(record.from)) {
+      return String(record.from);
     }
     if (typeof record.from === 'string' && record.from.trim().length > 0) {
       return record.from;

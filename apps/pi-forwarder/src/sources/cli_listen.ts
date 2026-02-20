@@ -77,6 +77,9 @@ async function runOnce(
   onSpawn(child);
   let parsedObjects = 0;
   let nonJsonLines = 0;
+  let nonObjectLines = 0;
+  let stderrNonJsonLines = 0;
+  let stderrNonObjectLines = 0;
   let noisyStderrLines = 0;
 
   const stdoutReader = consumeStreamLines(child.stdout, async (line) => {
@@ -85,10 +88,8 @@ async function runOnce(
       return;
     }
 
-    let payload: unknown;
-    try {
-      payload = JSON.parse(trimmed);
-    } catch (error) {
+    const payload = parseJsonObject(trimmed);
+    if (payload === null) {
       nonJsonLines += 1;
       if (nonJsonLines % NON_JSON_DEBUG_EVERY === 0) {
         options.logger.debug(
@@ -100,10 +101,10 @@ async function runOnce(
     }
 
     if (!isRecord(payload)) {
-      nonJsonLines += 1;
-      if (nonJsonLines % NON_JSON_DEBUG_EVERY === 0) {
+      nonObjectLines += 1;
+      if (nonObjectLines % NON_JSON_DEBUG_EVERY === 0) {
         options.logger.debug(
-          { ignoredNonJsonLines: nonJsonLines, sample: trimmed.slice(0, 280) },
+          { ignoredNonObjectLines: nonObjectLines, sample: trimmed.slice(0, 280) },
           'Ignoring parsed JSON that is not an object'
         );
       }
@@ -120,16 +121,24 @@ async function runOnce(
       return;
     }
 
-    const fallbackPayload = parsePacketFromStderr(trimmed);
-    if (fallbackPayload) {
+    const payload = parseJsonObject(trimmed);
+    if (payload !== null && isRecord(payload)) {
       parsedObjects += 1;
-      await options.onEvent(fallbackPayload);
-      options.logger.debug(
-        { packetId: fallbackPayload.packetId, from: fallbackPayload.from ?? fallbackPayload.nodeId },
-        'Parsed Meshtastic packet from stderr fallback'
-      );
+      await options.onEvent(payload);
       return;
     }
+    if (payload !== null && !isRecord(payload)) {
+      stderrNonObjectLines += 1;
+      if (stderrNonObjectLines % STDERR_DEBUG_EVERY === 0) {
+        options.logger.debug(
+          { ignoredNonObjectStderrLines: stderrNonObjectLines, sample: trimmed.slice(0, 280) },
+          'Ignoring parsed JSON stderr lines that are not objects'
+        );
+      }
+      return;
+    }
+
+    stderrNonJsonLines += 1;
 
     if (isImportantStderr(trimmed)) {
       options.logger.warn({ stderr: trimmed }, 'Source stderr');
@@ -186,62 +195,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parsePacketFromStderr(line: string): Record<string, unknown> | null {
-  if (!line.includes('packet={')) {
+function parseJsonObject(line: string): unknown {
+  try {
+    return JSON.parse(line);
+  } catch {
     return null;
   }
-
-  const lat = extractNumber(line, /'latitude'\s*:\s*(-?\d+(?:\.\d+)?)/);
-  const lon = extractNumber(line, /'longitude'\s*:\s*(-?\d+(?:\.\d+)?)/);
-  if (lat === null || lon === null) {
-    return null;
-  }
-
-  const payload: Record<string, unknown> = {
-    lat,
-    lon
-  };
-
-  const fromId = extractString(line, /'fromId'\s*:\s*'([^']+)'/);
-  const fromNumeric = extractNumber(line, /'from'\s*:\s*(\d+)/);
-  if (fromId) {
-    payload.from = fromId;
-  } else if (fromNumeric !== null) {
-    payload.nodeId = String(Math.trunc(fromNumeric));
-  }
-
-  const packetId = extractNumber(line, /'id'\s*:\s*(\d+)/);
-  if (packetId !== null) {
-    payload.packetId = Math.trunc(packetId);
-  }
-
-  const positionTime = extractNumber(line, /'time'\s*:\s*(\d+)/);
-  const rxTime = extractNumber(line, /'rxTime'\s*:\s*(\d+)/);
-  const timestamp = positionTime ?? rxTime;
-  if (timestamp !== null) {
-    payload.timestamp = Math.trunc(timestamp);
-  }
-
-  return payload;
-}
-
-function extractNumber(input: string, pattern: RegExp): number | null {
-  const match = pattern.exec(input);
-  if (!match || !match[1]) {
-    return null;
-  }
-
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
-}
-
-function extractString(input: string, pattern: RegExp): string | null {
-  const match = pattern.exec(input);
-  if (!match || !match[1]) {
-    return null;
-  }
-
-  return match[1];
 }
 
 function isImportantStderr(line: string): boolean {

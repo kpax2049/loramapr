@@ -45,6 +45,24 @@ curl -i \
 You should see `X-Request-Id: req-troubleshoot-001` in the response headers.  
 If you omit the header, backend generates one and returns it in both response headers and error JSON bodies.
 
+## Use Raw Events Explorer for ingest triage
+
+When points or metadata are missing in the map, check **Debug -> Events** first.
+
+- Filter by `deviceUid` to isolate one node.
+- Narrow by `source` (`meshtastic` vs `lorawan`) when mixed traffic exists.
+- Filter `portnum` to inspect specific packet classes quickly.
+
+Useful examples:
+
+- `portnum = TELEMETRY_APP`: verify battery/voltage telemetry is arriving.
+- `portnum = NODEINFO_APP`: verify node-info fields such as `hwModel` are arriving.
+
+Notes:
+
+- In v0.10.0, full raw event payloads are retained in `WebhookEvent.payloadJson` so you can inspect original packets even when normalization rules change later.
+- If a measurement does not show an exact event link yet, use the Events filter by `deviceUid` and a narrow time window around `capturedAt` (for example +/- 2 minutes).
+
 ## 401 / 403 errors (API key or scope)
 
 Symptoms:
@@ -161,6 +179,93 @@ sudo systemctl disable meshtastic-logger.service
 
 ```bash
 sudo systemctl restart loramapr-pi-forwarder
+```
+
+## Pi Forwarder `SOURCE=stdin` loops with `stdin reached EOF`
+
+Symptoms:
+
+- service restarts every few seconds
+- logs show `stdin reached EOF` then unit exits
+
+Cause:
+
+- stdin producer process is missing/crashing, so `node dist/index.js` gets immediate EOF.
+
+Checks:
+
+```bash
+sudo systemctl status loramapr-pi-forwarder --no-pager -l
+sudo systemctl cat loramapr-pi-forwarder
+sudo journalctl -u loramapr-pi-forwarder -n 200 --no-pager
+```
+
+Fix:
+
+- ensure `ExecStart` is a producer pipe into forwarder, for example:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/bin/bash -lc '/home/kpax/meshtastic-venv/bin/python /opt/loramapr/pi-forwarder/scripts/meshtastic-json-bridge.py --port "${MESHTASTIC_PORT}" | /usr/bin/node /opt/loramapr/pi-forwarder/dist/index.js'
+```
+
+- reload + restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart loramapr-pi-forwarder
+```
+
+## Pi Forwarder bridge errors (`Object of type Telemetry/Position is not JSON serializable`)
+
+Symptoms:
+
+- Meshtastic events appear with:
+  - `deviceUid: "unknown"`
+  - `processingError: "missing_gps"`
+  - payload containing `bridgeError`
+
+Cause:
+
+- bridge is emitting error objects instead of packet JSON.
+
+Checks:
+
+```bash
+curl -s -H "X-API-Key: $QUERY_API_KEY" \
+  "http://localhost:3000/api/meshtastic/events?limit=20" | jq '.items[] | {id,deviceUid,processingError}'
+
+curl -s -H "X-API-Key: $QUERY_API_KEY" \
+  "http://localhost:3000/api/meshtastic/events/<EVENT_ID>" | jq .
+```
+
+Fix:
+
+- deploy repo bridge script:
+  - `apps/pi-forwarder/scripts/meshtastic-json-bridge.py`
+- copy it to `/opt/loramapr/pi-forwarder/scripts/`
+- restart service
+
+Verification:
+
+```bash
+curl -s -H "X-API-Key: $QUERY_API_KEY" \
+  "http://localhost:3000/api/meshtastic/events?limit=10" | jq '.items[] | {receivedAt,deviceUid,processingError}'
+```
+
+If `successfulPosts` increases but your expected device stays stale, check latest event mix:
+
+```bash
+curl -s -H "X-API-Key: $QUERY_API_KEY" \
+  "http://localhost:3000/api/meshtastic/events?limit=30" | jq '.items[] | {receivedAt,deviceUid,processingError}'
+```
+
+Then inspect problematic rows:
+
+```bash
+curl -s -H "X-API-Key: $QUERY_API_KEY" \
+  "http://localhost:3000/api/meshtastic/events/<EVENT_ID>" | jq .
 ```
 
 ## DB connectivity errors

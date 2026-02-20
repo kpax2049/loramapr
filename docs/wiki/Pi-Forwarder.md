@@ -1,17 +1,15 @@
 # Pi Forwarder
 
+`apps/pi-forwarder` sends Meshtastic packet JSON to backend ingest (`POST /api/meshtastic/event`).
+
 ## What it does
 
-`apps/pi-forwarder` is a small Node/TypeScript process that forwards Meshtastic JSON events to backend ingest:
+- Adds `X-API-Key` (`INGEST` scope) and `X-Idempotency-Key`.
+- Forwards full packet JSON unchanged.
+- Appends `_forwarder` metadata (`deviceHint`, `receivedAt`, `eventId`).
+- Retries transient failures with bounded in-memory queue.
 
-- target endpoint: `POST /api/meshtastic/event`
-- auth header: `X-API-Key` (INGEST scope)
-- idempotency header: `X-Idempotency-Key` (computed per event)
-- adds `_forwarder` metadata (`deviceHint`, `receivedAt`, `eventId`) to payload
-
-## Install / Build / Start
-
-From repo root:
+## Build and run
 
 ```bash
 cd apps/pi-forwarder
@@ -20,129 +18,130 @@ npm run build
 npm run start
 ```
 
-Development mode:
+Deploy copy (Pi target):
 
 ```bash
-cd apps/pi-forwarder
-npm run dev
+sudo rsync -az --delete apps/pi-forwarder/dist/ /opt/loramapr/pi-forwarder/dist/
+sudo rsync -az apps/pi-forwarder/scripts/ /opt/loramapr/pi-forwarder/scripts/
+sudo cp apps/pi-forwarder/package.json /opt/loramapr/pi-forwarder/
+if [ -f apps/pi-forwarder/package-lock.json ]; then sudo cp apps/pi-forwarder/package-lock.json /opt/loramapr/pi-forwarder/; fi
 ```
 
-## Environment variables (`src/env.ts`)
+## Environment (`src/env.ts`)
 
-Validated env vars:
-
-- `API_BASE_URL` (required, URL)
+- `API_BASE_URL` (required)
 - `INGEST_API_KEY` (required)
 - `DEVICE_HINT` (optional)
 - `SOURCE` (required): `cli` or `stdin`
 - `MESHTASTIC_PORT` (optional)
-- `MESHTASTIC_HOST` (optional; currently unused in CLI mode)
+- `MESHTASTIC_HOST` (optional, currently unused)
 - `CLI_PATH` (optional, default `meshtastic`)
-- `POLL_HEARTBEAT_SECONDS` (optional, default `60`)
-- `POST_TIMEOUT_MS` (optional, default `8000`)
-- `RETRY_BASE_MS` (optional, default `500`)
-- `RETRY_MAX_MS` (optional, default `10000`)
-- `MAX_QUEUE` (optional, default `5000`)
+- `POLL_HEARTBEAT_SECONDS` (default `60`)
+- `POST_TIMEOUT_MS` (default `8000`)
+- `RETRY_BASE_MS` (default `500`)
+- `RETRY_MAX_MS` (default `10000`)
+- `MAX_QUEUE` (default `5000`)
 
-Example env:
+## Source mode guidance
 
-```bash
-API_BASE_URL=http://localhost:3000
-INGEST_API_KEY=replace_me
-DEVICE_HINT=pi-home-node
-SOURCE=cli
-MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Tracker_L1_...
-MESHTASTIC_HOST=
-CLI_PATH=meshtastic
-POLL_HEARTBEAT_SECONDS=60
-POST_TIMEOUT_MS=8000
-RETRY_BASE_MS=500
-RETRY_MAX_MS=10000
-MAX_QUEUE=5000
-```
+### `SOURCE=stdin` (recommended on Pi)
 
-## `SOURCE=stdin` vs `SOURCE=cli`
+Use with the included bridge script:
 
-### `SOURCE=stdin`
+- `apps/pi-forwarder/scripts/meshtastic-json-bridge.py`
+- requires Python env with `meshtastic` installed
 
-- Reads one JSON object per line from stdin.
-- Useful for piping another process:
+Example:
 
 ```bash
-meshtastic --listen | API_BASE_URL=http://localhost:3000 INGEST_API_KEY=... SOURCE=stdin node dist/index.js
+/home/kpax/meshtastic-venv/bin/python apps/pi-forwarder/scripts/meshtastic-json-bridge.py \
+  --port /dev/serial/by-id/usb-Seeed_Studio_TRACKER_L1_D5BCE63E6E8DE77E-if00 \
+| API_BASE_URL=http://192.168.178.22:3000 INGEST_API_KEY=... SOURCE=stdin node apps/pi-forwarder/dist/index.js
 ```
 
 ### `SOURCE=cli`
 
-- Spawns Meshtastic CLI (`CLI_PATH --listen` and optional `--port <MESHTASTIC_PORT>`).
-- Parses JSON from CLI output (stdout + supported stderr fallback parsing).
-- Auto-restarts CLI process on exit with backoff.
+Spawns `CLI_PATH --listen [--port MESHTASTIC_PORT]` and expects JSON object output.  
+If your CLI stream is mostly debug text, this mode can appear healthy but post nothing.
 
-Important serial-port warning:
+## Serial port exclusivity
 
-- CLI mode opens the serial device directly.
-- Only one process can hold the serial port at a time.
-- If another process already owns it (for example another Meshtastic logger), forwarder cannot read from it.
-
-Port lock check:
+Only one process can own `/dev/ttyACM0` (or the by-id alias) at a time.
 
 ```bash
 lsof /dev/ttyACM0
+ls -l /dev/serial/by-id/
 ```
 
-## systemd setup
+Stop competing services (for example `meshtastic-logger`) before running forwarder.
 
-Provided unit file:
+## systemd
 
-- `apps/pi-forwarder/systemd/loramapr-pi-forwarder.service`
+Base unit: `apps/pi-forwarder/systemd/loramapr-pi-forwarder.service`
 
 Install:
 
 ```bash
 sudo cp apps/pi-forwarder/systemd/loramapr-pi-forwarder.service /etc/systemd/system/
+```
+
+If your host user is not `pi`, override `User`/`Group` to a real account on the box.
+
+Create env file:
+
+```bash
 sudo mkdir -p /etc/loramapr
 sudo tee /etc/loramapr/pi-forwarder.env >/dev/null <<'EOF'
-API_BASE_URL=http://localhost:3000
+API_BASE_URL=http://192.168.178.22:3000
 INGEST_API_KEY=replace_me
-SOURCE=cli
-CLI_PATH=meshtastic
-MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Tracker_L1_...
+DEVICE_HINT=pi-home-node
+SOURCE=stdin
+MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Studio_TRACKER_L1_D5BCE63E6E8DE77E-if00
 POLL_HEARTBEAT_SECONDS=60
 POST_TIMEOUT_MS=8000
 RETRY_BASE_MS=500
 RETRY_MAX_MS=10000
 MAX_QUEUE=5000
 EOF
-sudo systemctl daemon-reload
-sudo systemctl enable --now loramapr-pi-forwarder
 ```
 
-Logs:
+For stdin bridge mode, override ExecStart:
 
 ```bash
+sudo systemctl edit loramapr-pi-forwarder
+```
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/bin/bash -lc '/home/kpax/meshtastic-venv/bin/python /opt/loramapr/pi-forwarder/scripts/meshtastic-json-bridge.py --port "${MESHTASTIC_PORT}" | /usr/bin/node /opt/loramapr/pi-forwarder/dist/index.js'
+```
+
+Repo example:
+
+- `apps/pi-forwarder/systemd/loramapr-pi-forwarder.stdin-bridge.override.conf`
+
+Enable and inspect:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now loramapr-pi-forwarder
+sudo systemctl status loramapr-pi-forwarder --no-pager -l
 sudo journalctl -u loramapr-pi-forwarder -f
 ```
 
-Note: the unit template uses `User=pi` / `Group=pi`; adjust for your host user if needed.
-
-## Smoke test
-
-Direct backend ingest check:
+## Smoke test + confirmation
 
 ```bash
 curl -i -X POST "http://localhost:3000/api/meshtastic/event" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_INGEST_KEY" \
   -H "X-Idempotency-Key: pi-forwarder-smoke-1" \
-  -d '{"from":"pi-smoke-node","lat":37.77,"lon":-122.42,"packetId":"pi-smoke-1"}'
+  -d '{"fromId":"!pi-smoke","id":123,"decoded":{"portnum":"POSITION_APP","position":{"latitudeI":493959195,"longitudeI":76103928,"time":1770935010}}}'
 ```
 
-Expected:
+Then verify:
 
-- HTTP `200` with `{"status":"ok"}`.
-
-Backend/UI confirmation:
-
-1. Open frontend **Debug** tab.
-2. Check **Meshtastic events** panel shows the new event.
-3. If GPS normalization succeeded, confirm measurements appear for the event device in map/device views.
+1. `GET /api/meshtastic/events` shows new rows.
+2. New rows are not `deviceUid: "unknown"` / `processingError: "missing_gps"` for valid position packets.
+3. Measurements appear for that device in map views.

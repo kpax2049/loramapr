@@ -6,13 +6,14 @@
 
 - External webhook source (The Things Stack) posts uplinks to:
   - `POST /api/lorawan/uplink`
-- Backend stores incoming payloads as `WebhookEvent` (`source: 'tts'`) and processes them in `LorawanService` worker.
+- Backend stores incoming payloads as `WebhookEvent` (`source: 'lorawan'`) and processes them in `LorawanService` worker.
 
 ### Meshtastic (Pi Forwarder)
 
 - Pi Forwarder posts events to:
   - `POST /api/meshtastic/event`
 - Backend stores payloads as `WebhookEvent` (`source: 'meshtastic'`) and processes them in `LorawanService` worker.
+- Forwarder should send full packet JSON as received (plus `_forwarder` metadata). Do not pre-normalize GPS fields in the forwarder.
 
 ### Simulator (`simulate:walk`)
 
@@ -65,10 +66,12 @@ LoRaWAN (`normalizeTtsUplinkToMeasurement`):
 Meshtastic (`normalizeMeshtasticPayload`):
 
 - Looks in order for:
-  - `position.latitude/position.longitude`
-  - `payload.position.latitude/payload.position.longitude`
-  - top-level `lat/lon`
-  - top-level `latitude/longitude`
+  - top-level and nested candidates including:
+    - `decoded.position.latitude/longitude`
+    - `decoded.position.latitudeI/longitudeI`
+    - `position.latitude/longitude`
+    - `payload.position.latitude/longitude`
+    - top-level `lat/lon` and `latitude/longitude`
 - Missing GPS (and no node-info fields) => `processingError: 'missing_gps'`.
 
 ### Coordinate scaling (`lat_i` / `lon_i` style values)
@@ -77,6 +80,11 @@ Meshtastic coordinates are passed through `normalizeCoordinate(value, limit)`:
 
 - If value is out of normal range (`abs > 90/180`) or looks like scaled int (`abs >= 1_000_000`), divide by `1e7`.
 - This is how integer-like coordinates (for example `latitude_i`/`longitude_i` magnitude) are converted to decimal lat/lon.
+
+Important:
+
+- Many Meshtastic packets are non-position telemetry/node-info packets. These can be valid raw events but still normalize with `missing_gps`.
+- If many events show `deviceUid: "unknown"` with `missing_gps`, inspect event detail payload for bridge-side serialization errors (for example `bridgeError` fields).
 
 ### Radio metadata destination
 
@@ -95,8 +103,28 @@ Meshtastic coordinates are passed through `normalizeCoordinate(value, limit)`:
 
 - Open **Debug** tab in frontend.
 - Panels:
+  - Events (Raw Events Explorer)
   - LoRaWAN Events
   - Meshtastic Events
+
+### Raw Events Explorer (unified events)
+
+Use the **Events** panel in Debug when you need to inspect raw ingest traffic across sources in one place.
+
+- What it shows per row:
+  - `Time`, `Source`, `Device`, `Portnum`, `rxRssi`, `rxSnr`, and a short summary.
+- Filters:
+  - `Source` dropdown (`lorawan`, `meshtastic`, `agent`, `sim`)
+  - `Device` (`deviceUid`; dropdown suggestions + free text)
+  - `Portnum` (result-derived options + free text)
+  - Time range (`15m`, `1h`, `24h`, `custom`)
+  - `q` text search
+- Row click opens the event detail drawer with extracted highlights plus full raw `payloadJson`.
+
+Examples:
+
+- Battery telemetry often appears under `TELEMETRY_APP` (for example battery percent/voltage fields in payload).
+- Device/node model details commonly appear under `NODEINFO_APP` (for example `hwModel` in payload).
 
 ### API endpoints behind Debug
 
@@ -112,6 +140,11 @@ Meshtastic panel:
 
 - `GET /api/meshtastic/events`
 - `GET /api/meshtastic/events/:id`
+
+Raw Events Explorer:
+
+- `GET /api/events`
+- `GET /api/events/:id`
 
 List endpoint pagination and limits:
 
@@ -139,6 +172,10 @@ RxMetadata-derived receiver/gateway lists (QUERY scope):
   - response: `{ items, count, limit }`
 
 These debug endpoints require `X-API-Key` with `QUERY` scope (frontend typically via `VITE_QUERY_API_KEY`).
+
+## 5) Raw payload retention note (v0.10.0)
+
+- v0.10.0 stores full raw ingest payloads on `WebhookEvent.payloadJson` for later normalization, debugging, and reprocessing workflows.
 
 ### Common failure modes
 

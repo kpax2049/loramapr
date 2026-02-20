@@ -615,8 +615,8 @@ function normalizeMeshtasticPayload(
     return null;
   }
 
-  const rssi = getNumber(record.rssi);
-  const snr = getNumber(record.snr);
+  const rssi = findFirstMeshtasticNumber(record, ['rxRssi', 'rx_rssi', 'rssi']);
+  const snr = findFirstMeshtasticNumber(record, ['rxSnr', 'rx_snr', 'snr']);
   const gatewayId = getGatewayId(record);
   const rxMetadata = buildMeshtasticRxMetadata(record, gatewayId, rssi, snr);
 
@@ -799,93 +799,65 @@ function normalizeLookupKey(key: string): string {
 }
 
 function extractPosition(record: Record<string, unknown>): { lat: number; lon: number } | null {
-  const position = record.position;
-  if (position && typeof position === 'object') {
-    const posRecord = position as Record<string, unknown>;
-    const lat = getNumber(posRecord.latitude);
-    const lon = getNumber(posRecord.longitude);
-    if (lat !== null && lon !== null) {
-      return { lat, lon };
-    }
-  }
+  const candidates = collectMeshtasticRecords(record);
+  for (const candidate of candidates) {
+    const pairs: Array<[string, string]> = [
+      ['lat', 'lon'],
+      ['latitude', 'longitude'],
+      ['latitudeI', 'longitudeI'],
+      ['latitude_i', 'longitude_i']
+    ];
 
-  const nestedPayload = record.payload;
-  if (nestedPayload && typeof nestedPayload === 'object') {
-    const payloadRecord = nestedPayload as Record<string, unknown>;
-    const nestedPosition = payloadRecord.position;
-    if (nestedPosition && typeof nestedPosition === 'object') {
-      const posRecord = nestedPosition as Record<string, unknown>;
-      const lat = getNumber(posRecord.latitude);
-      const lon = getNumber(posRecord.longitude);
+    for (const [latKey, lonKey] of pairs) {
+      const lat = getNumber(candidate[latKey]);
+      const lon = getNumber(candidate[lonKey]);
       if (lat !== null && lon !== null) {
         return { lat, lon };
       }
     }
   }
 
-  const lat = getNumber(record.lat);
-  const lon = getNumber(record.lon);
-  if (lat !== null && lon !== null) {
-    return { lat, lon };
-  }
-
-  const latAlt = getNumber(record.latitude);
-  const lonAlt = getNumber(record.longitude);
-  if (latAlt !== null && lonAlt !== null) {
-    return { lat: latAlt, lon: lonAlt };
-  }
-
   return null;
 }
 
 function resolveCapturedAt(record: Record<string, unknown>, receivedAt: Date): Date {
-  const time = getNumber(record.time);
-  if (time !== null) {
-    return new Date(time * 1000);
-  }
-  const timestamp = getNumber(record.timestamp);
-  if (timestamp !== null) {
-    return new Date(timestamp * 1000);
+  const captured = findFirstMeshtasticNumber(record, [
+    'time',
+    'timestamp',
+    'rxTime',
+    'rx_time',
+    'capturedAt',
+    'captured_at'
+  ]);
+  if (captured !== null) {
+    return new Date(toEpochMs(captured));
   }
   return receivedAt;
 }
 
 function getMeshtasticDeviceUid(record: Record<string, unknown>): string {
-  if (typeof record.from === 'string' && record.from.trim().length > 0) {
-    return record.from;
-  }
-  if (typeof record.nodeId === 'string' && record.nodeId.trim().length > 0) {
-    return record.nodeId;
-  }
-  if (typeof record.nodeId === 'number' && Number.isFinite(record.nodeId)) {
-    return String(record.nodeId);
+  const deviceUid = findFirstMeshtasticString(record, [
+    'fromId',
+    'from_id',
+    'from',
+    'nodeId',
+    'node_id'
+  ]);
+  if (deviceUid !== null) {
+    return deviceUid;
   }
   return 'unknown';
 }
 
 function getGatewayId(record: Record<string, unknown>): string | null {
-  const rxNodeId = record.rxNodeId;
-  if (typeof rxNodeId === 'string' && rxNodeId.trim().length > 0) {
-    return rxNodeId;
-  }
-  if (typeof rxNodeId === 'number' && Number.isFinite(rxNodeId)) {
-    return String(rxNodeId);
-  }
-  const receiver = record.receiver;
-  if (typeof receiver === 'string' && receiver.trim().length > 0) {
-    return receiver;
-  }
-  if (typeof receiver === 'number' && Number.isFinite(receiver)) {
-    return String(receiver);
-  }
-  const via = record.via;
-  if (typeof via === 'string' && via.trim().length > 0) {
-    return via;
-  }
-  if (typeof via === 'number' && Number.isFinite(via)) {
-    return String(via);
-  }
-  return null;
+  return findFirstMeshtasticString(record, [
+    'rxNodeId',
+    'rx_node_id',
+    'receiver',
+    'via',
+    'relayNode',
+    'relay_node'
+  ]);
 }
 
 function buildMeshtasticRxMetadata(
@@ -1012,6 +984,108 @@ function getNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function findFirstMeshtasticNumber(record: Record<string, unknown>, keys: string[]): number | null {
+  const candidates = collectMeshtasticRecords(record);
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      const value = getNumber(candidate[key]);
+      if (value !== null) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function findFirstMeshtasticString(record: Record<string, unknown>, keys: string[]): string | null {
+  const candidates = collectMeshtasticRecords(record);
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      const value = toNonEmptyString(candidate[key]);
+      if (value !== null) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function toEpochMs(value: number): number {
+  if (Math.abs(value) >= 1_000_000_000_000) {
+    return value;
+  }
+  return value * 1000;
+}
+
+function collectMeshtasticRecords(root: Record<string, unknown>): Record<string, unknown>[] {
+  const preferred: Array<Record<string, unknown>> = [];
+  const addPreferred = (value: unknown) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      preferred.push(value as Record<string, unknown>);
+    }
+  };
+
+  addPreferred(root);
+  addPreferred(root.position);
+  addPreferred(root.decoded);
+  if (root.decoded && typeof root.decoded === 'object' && !Array.isArray(root.decoded)) {
+    const decoded = root.decoded as Record<string, unknown>;
+    addPreferred(decoded.position);
+    addPreferred(decoded.user);
+    addPreferred(decoded.telemetry);
+  }
+  addPreferred(root.payload);
+  if (root.payload && typeof root.payload === 'object' && !Array.isArray(root.payload)) {
+    const payload = root.payload as Record<string, unknown>;
+    addPreferred(payload.position);
+    addPreferred(payload.decoded);
+    if (payload.decoded && typeof payload.decoded === 'object' && !Array.isArray(payload.decoded)) {
+      const payloadDecoded = payload.decoded as Record<string, unknown>;
+      addPreferred(payloadDecoded.position);
+      addPreferred(payloadDecoded.user);
+      addPreferred(payloadDecoded.telemetry);
+    }
+  }
+
+  const stack: unknown[] = [root];
+  const all: Array<Record<string, unknown>> = [];
+  const seen = new Set<Record<string, unknown>>();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const entry of current) {
+        stack.push(entry);
+      }
+      continue;
+    }
+    const asRecord = current as Record<string, unknown>;
+    if (seen.has(asRecord)) {
+      continue;
+    }
+    seen.add(asRecord);
+    all.push(asRecord);
+    for (const value of Object.values(asRecord)) {
+      if (value && typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+  }
+
+  const ordered: Array<Record<string, unknown>> = [];
+  const orderedSeen = new Set<Record<string, unknown>>();
+  for (const candidate of [...preferred, ...all]) {
+    if (orderedSeen.has(candidate)) {
+      continue;
+    }
+    orderedSeen.add(candidate);
+    ordered.push(candidate);
+  }
+  return ordered;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

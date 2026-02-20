@@ -16,6 +16,7 @@ export async function runStdinSource(options: StdinSourceOptions): Promise<void>
     terminal: false
   });
   let ignoredNonJsonLines = 0;
+  let ignoredNonObjectLines = 0;
 
   options.logger.info('Reading JSON events from stdin');
 
@@ -40,6 +41,18 @@ export async function runStdinSource(options: StdinSourceOptions): Promise<void>
       continue;
     }
 
+    if (!isRecord(payload)) {
+      ignoredNonObjectLines += 1;
+      options.logger.debug(
+        {
+          ignoredNonObjectLines,
+          sample: trimmed.slice(0, 280)
+        },
+        'Ignoring parsed JSON that is not an object'
+      );
+      continue;
+    }
+
     await options.onEvent(payload);
   }
 
@@ -50,4 +63,8 @@ export async function runStdinSource(options: StdinSourceOptions): Promise<void>
       /* intentional no-op */
     });
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

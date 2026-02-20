@@ -28,11 +28,6 @@ export type PosterWorker = {
 
 export function eventId(obj: unknown): string {
   if (isRecord(obj)) {
-    const packetId = obj.packetId;
-    if (typeof packetId === 'string' || typeof packetId === 'number') {
-      return knownIdToHex(packetId);
-    }
-
     const id = obj.id;
     if (typeof id === 'string' || typeof id === 'number') {
       return knownIdToHex(id);
