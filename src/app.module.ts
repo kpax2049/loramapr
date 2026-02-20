@@ -17,6 +17,7 @@ import { MeshtasticModule } from './modules/meshtastic/meshtastic.module';
 import { ReceiversModule } from './modules/receivers/receivers.module';
 import { RetentionModule } from './modules/retention/retention.module';
 import { StatusModule } from './modules/status/status.module';
+import { EventsModule } from './modules/events/events.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ExportModule,
     GatewaysModule,
     MeshtasticModule,
+    EventsModule,
     ReceiversModule,
     StatusModule,
     PrismaModule,
