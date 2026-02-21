@@ -2199,30 +2199,42 @@
   border: 1px solid var(--border-soft);
   border-radius: 8px;
   background: var(--panel-bg);
-  overflow: auto;
-  max-height: 15.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .events-explorer__table {
-  width: 100%;
-  border-collapse: collapse;
+  width: max(100%, 44rem);
   min-width: 44rem;
 }
 
-.events-explorer__table th,
-.events-explorer__table td {
-  text-align: left;
+.events-explorer__virtual-list {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.events-explorer__virtual-row {
+  display: grid;
+  grid-template-columns: minmax(7.6rem, 1.2fr) minmax(4.2rem, 0.7fr) minmax(7.2rem, 1.3fr) minmax(
+      5.4rem,
+      0.9fr
+    ) minmax(4rem, 0.65fr) minmax(4rem, 0.65fr) minmax(11rem, 2fr);
+  align-items: center;
+}
+
+.events-explorer__virtual-row > div {
   font-size: 0.66rem;
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
   padding: 0.36rem 0.45rem;
   border-bottom: 1px solid var(--border-soft);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
 }
 
-.events-explorer__table th {
-  position: sticky;
-  top: 0;
+.events-explorer__virtual-row--header > div {
   z-index: 1;
   color: var(--panel-muted);
   font-size: 0.62rem;
@@ -2231,7 +2243,7 @@
   background: var(--panel-surface);
 }
 
-.events-explorer__table tbody tr:last-child td {
+.events-explorer__virtual-list > [role='list'] > .events-explorer__virtual-row:last-child > div {
   border-bottom: 0;
 }
 

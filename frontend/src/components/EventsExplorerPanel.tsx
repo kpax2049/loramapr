@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { List, type RowComponentProps } from 'react-window';
 import { getUnifiedEventById } from '../api/endpoints';
 import { ApiError } from '../api/http';
 import { useDevices } from '../query/hooks';
@@ -26,6 +27,8 @@ type EventHighlight = {
 
 const AUTO_REFRESH_MS = 7000;
 const DEFAULT_LIMIT = 100;
+const EVENT_ROW_HEIGHT = 30;
+const EVENT_LIST_HEIGHT = 208;
 const LARGE_PAYLOAD_BYTES = 250_000;
 const HUGE_PAYLOAD_BYTES = 1_000_000;
 const JSON_TREE_CHILD_LIMIT = 500;
@@ -44,6 +47,8 @@ const TIME_PRESETS: Array<{ value: TimePreset; label: string }> = [
   { value: 'last24h', label: 'Last 24h' },
   { value: 'custom', label: 'Custom' }
 ];
+
+const EVENT_COLUMN_HEADERS = ['Time', 'Source', 'Device', 'Portnum', 'rxRssi', 'rxSnr', 'Summary'] as const;
 
 function trimOptional(value: string): string | undefined {
   const trimmed = value.trim();
@@ -134,6 +139,55 @@ function buildRequestId(error: unknown): string | null {
     return (error as { details?: { requestId?: string } }).details?.requestId ?? null;
   }
   return null;
+}
+
+type EventVirtualRowProps = {
+  events: UnifiedEventListItem[];
+  selectedEventId: string | null;
+  onSelectEvent: (event: UnifiedEventListItem) => void;
+  onPrefetchDetail: (eventId: string) => void;
+};
+
+function EventsVirtualRow({
+  ariaAttributes,
+  index,
+  style,
+  events,
+  selectedEventId,
+  onSelectEvent,
+  onPrefetchDetail
+}: RowComponentProps<EventVirtualRowProps>) {
+  const item = events[index];
+  if (!item) {
+    return null;
+  }
+  return (
+    <div
+      style={style}
+      {...ariaAttributes}
+      role="row"
+      aria-selected={selectedEventId === item.id}
+      className={`events-explorer__virtual-row events-explorer__row ${selectedEventId === item.id ? 'is-selected' : ''}`}
+      onClick={() => onSelectEvent(item)}
+      onMouseEnter={() => onPrefetchDetail(item.id)}
+      onFocus={() => onPrefetchDetail(item.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelectEvent(item);
+        }
+      }}
+      tabIndex={0}
+    >
+      <div role="cell">{formatTimestamp(item.receivedAt)}</div>
+      <div role="cell">{item.source}</div>
+      <div role="cell">{item.deviceUid ?? '—'}</div>
+      <div role="cell">{item.portnum ?? '—'}</div>
+      <div role="cell">{item.rxRssi ?? '—'}</div>
+      <div role="cell">{item.rxSnr ?? '—'}</div>
+      <div role="cell">{buildSummary(item)}</div>
+    </div>
+  );
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -830,6 +884,16 @@ export default function EventsExplorerPanel({
       });
   };
 
+  const virtualRowProps = useMemo<EventVirtualRowProps>(
+    () => ({
+      events,
+      selectedEventId,
+      onSelectEvent: handleSelectEvent,
+      onPrefetchDetail: handlePrefetchDetail
+    }),
+    [events, selectedEventId, handleSelectEvent, handlePrefetchDetail]
+  );
+
   return (
     <section className="events-explorer" aria-label="Unified events explorer">
       <div className="events-explorer__header">
@@ -934,47 +998,24 @@ export default function EventsExplorerPanel({
           ) : null}
 
           <div className="events-explorer__table-wrap">
-            <table className="events-explorer__table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Source</th>
-                  <th>Device</th>
-                  <th>Portnum</th>
-                  <th>rxRssi</th>
-                  <th>rxSnr</th>
-                  <th>Summary</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((item) => (
-                  <tr
-                    key={item.id}
-                    className={`events-explorer__row ${selectedEventId === item.id ? 'is-selected' : ''}`}
-                    onClick={() => handleSelectEvent(item)}
-                    onMouseEnter={() => handlePrefetchDetail(item.id)}
-                    onFocus={() => handlePrefetchDetail(item.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleSelectEvent(item);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Open event ${item.id}`}
-                  >
-                    <td>{formatTimestamp(item.receivedAt)}</td>
-                    <td>{item.source}</td>
-                    <td>{item.deviceUid ?? '—'}</td>
-                    <td>{item.portnum ?? '—'}</td>
-                    <td>{item.rxRssi ?? '—'}</td>
-                    <td>{item.rxSnr ?? '—'}</td>
-                    <td>{buildSummary(item)}</td>
-                  </tr>
+            <div className="events-explorer__table" role="table" aria-label="Events">
+              <div className="events-explorer__virtual-row events-explorer__virtual-row--header" role="row">
+                {EVENT_COLUMN_HEADERS.map((label) => (
+                  <div key={label} role="columnheader">
+                    {label}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              <List
+                className="events-explorer__virtual-list"
+                rowComponent={EventsVirtualRow}
+                rowCount={events.length}
+                rowHeight={EVENT_ROW_HEIGHT}
+                rowProps={virtualRowProps}
+                style={{ height: EVENT_LIST_HEIGHT }}
+                overscanCount={8}
+              />
+            </div>
             {!eventsQuery.isLoading && events.length === 0 ? (
               <div className="events-explorer__empty">No events found for current filters.</div>
             ) : null}
