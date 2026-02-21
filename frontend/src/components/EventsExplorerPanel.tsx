@@ -596,6 +596,62 @@ function formatPrimitiveValue(value: unknown): string {
   return String(value);
 }
 
+type JsonSearchMatch = {
+  branchPaths: Set<string>;
+  directPaths: Set<string>;
+  count: number;
+};
+
+function collectJsonSearchMatches(value: unknown, searchTerm: string): JsonSearchMatch {
+  const branchPaths = new Set<string>();
+  const directPaths = new Set<string>();
+
+  if (!searchTerm) {
+    return { branchPaths, directPaths, count: 0 };
+  }
+
+  const normalized = searchTerm.trim().toLowerCase();
+  if (!normalized) {
+    return { branchPaths, directPaths, count: 0 };
+  }
+
+  let count = 0;
+
+  const traverse = (node: unknown, path: string, label: string): boolean => {
+    const pathMatches = path.toLowerCase().includes(normalized);
+    const keyMatches = label.toLowerCase().includes(normalized);
+    const valueMatches = !isContainer(node)
+      ? formatPrimitiveValue(node).toLowerCase().includes(normalized)
+      : false;
+    const directMatch = pathMatches || keyMatches || valueMatches;
+
+    if (directMatch) {
+      directPaths.add(path);
+      count += 1;
+    }
+
+    let hasMatchedDescendant = false;
+    if (isContainer(node)) {
+      for (const [childKey, childValue] of getContainerEntries(node)) {
+        const childPath = Array.isArray(node) ? `${path}[${childKey}]` : `${path}.${childKey}`;
+        const childLabel = Array.isArray(node) ? `[${childKey}]` : childKey;
+        if (traverse(childValue, childPath, childLabel)) {
+          hasMatchedDescendant = true;
+        }
+      }
+    }
+
+    const branchMatch = directMatch || hasMatchedDescendant;
+    if (branchMatch) {
+      branchPaths.add(path);
+    }
+    return branchMatch;
+  };
+
+  traverse(value, '$', 'payloadJson');
+  return { branchPaths, directPaths, count };
+}
+
 type JsonTreeNodeProps = {
   label: string;
   value: unknown;
@@ -603,6 +659,10 @@ type JsonTreeNodeProps = {
   depth: number;
   defaultExpanded: boolean;
   expandedByPath: Record<string, boolean>;
+  searchTerm: string;
+  searchBranchPaths: Set<string>;
+  searchDirectPaths: Set<string>;
+  onCopyPath: (path: string) => void;
   onToggle: (path: string) => void;
 };
 
@@ -613,39 +673,86 @@ function JsonTreeNode({
   depth,
   defaultExpanded,
   expandedByPath,
+  searchTerm,
+  searchBranchPaths,
+  searchDirectPaths,
+  onCopyPath,
   onToggle
 }: JsonTreeNodeProps) {
+  const searchActive = Boolean(searchTerm.trim());
+  const isDirectMatch = searchActive && searchDirectPaths.has(path);
+
   if (!isContainer(value)) {
     return (
-      <div className="events-json-node events-json-node--leaf" style={{ paddingLeft: `${depth * 0.85}rem` }}>
-        <span className="events-json-node__key">{label}:</span>
-        <span className={`events-json-node__value ${getValueClassName(value)}`}>
-          {formatPrimitiveValue(value)}
-        </span>
+      <div
+        className={`events-json-node events-json-node--leaf ${isDirectMatch ? 'events-json-node--match' : ''}`}
+        style={{ paddingLeft: `${depth * 0.85}rem` }}
+      >
+        <div className="events-json-node__row">
+          <span className="events-json-node__key">{label}:</span>
+          <span className={`events-json-node__value ${getValueClassName(value)}`}>
+            {formatPrimitiveValue(value)}
+          </span>
+          <button
+            type="button"
+            className="events-json-node__copy-path"
+            onClick={() => onCopyPath(path)}
+            title={`Copy JSON path ${path}`}
+            aria-label={`Copy JSON path ${path}`}
+          >
+            Copy path
+          </button>
+        </div>
       </div>
     );
   }
 
   const entries = getContainerEntries(value);
-  const expanded = expandedByPath[path] ?? defaultExpanded;
-  const visibleEntries = expanded ? entries.slice(0, JSON_TREE_CHILD_LIMIT) : [];
-  const hiddenEntriesCount = expanded && entries.length > JSON_TREE_CHILD_LIMIT
-    ? entries.length - JSON_TREE_CHILD_LIMIT
+  const expanded = searchActive ? searchBranchPaths.has(path) : expandedByPath[path] ?? defaultExpanded;
+  const displayEntries = searchActive
+    ? entries.filter(([childKey]) => {
+        const childPath = Array.isArray(value) ? `${path}[${childKey}]` : `${path}.${childKey}`;
+        return searchBranchPaths.has(childPath);
+      })
+    : entries;
+  const visibleEntriesLimited = expanded ? displayEntries.slice(0, JSON_TREE_CHILD_LIMIT) : [];
+  const hiddenEntriesCount = expanded && displayEntries.length > JSON_TREE_CHILD_LIMIT
+    ? displayEntries.length - JSON_TREE_CHILD_LIMIT
     : 0;
 
   return (
-    <div className="events-json-node" style={{ paddingLeft: `${depth * 0.85}rem` }}>
-      <button type="button" className="events-json-node__toggle" onClick={() => onToggle(path)}>
-        <span className={`events-json-node__caret ${expanded ? 'is-open' : ''}`} aria-hidden="true">
-          ▸
-        </span>
-        <span className="events-json-node__key">{label}</span>
-        <span className="events-json-node__preview">{getNodePreview(value)}</span>
-      </button>
+    <div
+      className={`events-json-node ${isDirectMatch ? 'events-json-node--match' : ''}`}
+      style={{ paddingLeft: `${depth * 0.85}rem` }}
+    >
+      <div className="events-json-node__row">
+        <button
+          type="button"
+          className="events-json-node__toggle"
+          onClick={() => onToggle(path)}
+          disabled={searchActive}
+          title={searchActive ? 'Collapse/expand disabled while search is active' : undefined}
+        >
+          <span className={`events-json-node__caret ${expanded ? 'is-open' : ''}`} aria-hidden="true">
+            ▸
+          </span>
+          <span className="events-json-node__key">{label}</span>
+          <span className="events-json-node__preview">{getNodePreview(value)}</span>
+        </button>
+        <button
+          type="button"
+          className="events-json-node__copy-path"
+          onClick={() => onCopyPath(path)}
+          title={`Copy JSON path ${path}`}
+          aria-label={`Copy JSON path ${path}`}
+        >
+          Copy path
+        </button>
+      </div>
 
       {expanded ? (
         <div className="events-json-node__children">
-          {visibleEntries.map(([childKey, childValue]) => {
+          {visibleEntriesLimited.map(([childKey, childValue]) => {
             const childPath = Array.isArray(value) ? `${path}[${childKey}]` : `${path}.${childKey}`;
             return (
               <JsonTreeNode
@@ -656,6 +763,10 @@ function JsonTreeNode({
                 depth={depth + 1}
                 defaultExpanded={defaultExpanded}
                 expandedByPath={expandedByPath}
+                searchTerm={searchTerm}
+                searchBranchPaths={searchBranchPaths}
+                searchDirectPaths={searchDirectPaths}
+                onCopyPath={onCopyPath}
                 onToggle={onToggle}
               />
             );
@@ -680,11 +791,18 @@ type JsonTreeViewerProps = {
 function JsonTreeViewer({ value, serializedPayload, defaultCollapsed }: JsonTreeViewerProps) {
   const [defaultExpanded, setDefaultExpanded] = useState(!defaultCollapsed);
   const [expandedByPath, setExpandedByPath] = useState<Record<string, boolean>>({});
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [searchInput, setSearchInput] = useState('');
+  const [copyState, setCopyState] = useState<'idle' | 'copied_json' | 'copied_path' | 'failed'>('idle');
+  const normalizedSearchTerm = searchInput.trim().toLowerCase();
+  const searchMatch = useMemo(
+    () => collectJsonSearchMatches(value, normalizedSearchTerm),
+    [value, normalizedSearchTerm]
+  );
 
   useEffect(() => {
     setDefaultExpanded(!defaultCollapsed);
     setExpandedByPath({});
+    setSearchInput('');
     setCopyState('idle');
   }, [defaultCollapsed, serializedPayload]);
 
@@ -713,7 +831,21 @@ function JsonTreeViewer({ value, serializedPayload, defaultCollapsed }: JsonTree
 
     try {
       await navigator.clipboard.writeText(serializedPayload);
-      setCopyState('copied');
+      setCopyState('copied_json');
+    } catch {
+      setCopyState('failed');
+    }
+  };
+
+  const handleCopyPath = async (path: string) => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      setCopyState('failed');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopyState('copied_path');
     } catch {
       setCopyState('failed');
     }
@@ -722,6 +854,15 @@ function JsonTreeViewer({ value, serializedPayload, defaultCollapsed }: JsonTree
   return (
     <div className="events-json-tree">
       <div className="events-json-tree__toolbar">
+        <label className="events-json-tree__search">
+          <span>Search</span>
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Find key/value"
+          />
+        </label>
         <button type="button" className="events-json-tree__button" onClick={handleExpandAll}>
           Expand all
         </button>
@@ -731,8 +872,19 @@ function JsonTreeViewer({ value, serializedPayload, defaultCollapsed }: JsonTree
         <button type="button" className="events-json-tree__button" onClick={() => void handleCopy()}>
           Copy JSON
         </button>
+        <span className="events-json-tree__search-meta" aria-live="polite">
+          {normalizedSearchTerm
+            ? `${searchMatch.count} match${searchMatch.count === 1 ? '' : 'es'}`
+            : ''}
+        </span>
         <span className="events-json-tree__copy-state" aria-live="polite">
-          {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : ''}
+          {copyState === 'copied_json'
+            ? 'Copied JSON'
+            : copyState === 'copied_path'
+              ? 'Copied path'
+              : copyState === 'failed'
+                ? 'Copy failed'
+                : ''}
         </span>
       </div>
 
@@ -744,6 +896,10 @@ function JsonTreeViewer({ value, serializedPayload, defaultCollapsed }: JsonTree
           depth={0}
           defaultExpanded={defaultExpanded}
           expandedByPath={expandedByPath}
+          searchTerm={normalizedSearchTerm}
+          searchBranchPaths={searchMatch.branchPaths}
+          searchDirectPaths={searchMatch.directPaths}
+          onCopyPath={(path) => void handleCopyPath(path)}
           onToggle={handleToggle}
         />
       </div>

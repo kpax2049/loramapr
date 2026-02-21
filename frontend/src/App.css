@@ -2599,6 +2599,33 @@
   gap: 0.28rem;
 }
 
+.events-json-tree__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-width: 11rem;
+}
+
+.events-json-tree__search span {
+  color: var(--panel-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.events-json-tree__search input {
+  flex: 1 1 auto;
+  min-width: 7.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  color: var(--panel-text);
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  padding: 0.18rem 0.38rem;
+}
+
 .events-json-tree__button {
   border-radius: 6px;
   border: 1px solid var(--border-strong);
@@ -2609,6 +2636,14 @@
   text-transform: uppercase;
   font-family: var(--font-mono);
   padding: 0.2rem 0.42rem;
+}
+
+.events-json-tree__search-meta {
+  color: var(--panel-muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
 }
 
 .events-json-tree__copy-state {
@@ -2630,6 +2665,13 @@
 }
 
 .events-json-node {
+  min-width: 0;
+}
+
+.events-json-node__row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   min-width: 0;
 }
 
@@ -2664,6 +2706,11 @@
 
 .events-json-node__toggle:hover {
   background: var(--surface-hover);
+}
+
+.events-json-node__toggle:disabled {
+  cursor: default;
+  opacity: 0.92;
 }
 
 .events-json-node__caret {
@@ -2714,6 +2761,31 @@
 
 .events-json-node__value--other {
   color: var(--panel-text);
+}
+
+.events-json-node__copy-path {
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--panel-bg);
+  color: var(--panel-muted);
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+  padding: 0.1rem 0.25rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.events-json-node__row:hover .events-json-node__copy-path,
+.events-json-node__copy-path:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.events-json-node--match {
+  background: var(--accent-bg-soft);
 }
 
 @media (max-width: 880px) {
