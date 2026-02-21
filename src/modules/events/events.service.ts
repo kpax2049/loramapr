@@ -58,6 +58,10 @@ export class EventsService {
     items: EventListItem[];
     nextCursor?: string;
   }> {
+    if (params.q) {
+      return this.listWithSearch(params);
+    }
+
     const where = buildWhereClause(params);
     const rows = await this.prisma.webhookEvent.findMany({
       where,
@@ -73,6 +77,98 @@ export class EventsService {
         payloadJson: true
       }
     });
+
+    const hasMore = rows.length > params.limit;
+    const sliced = hasMore ? rows.slice(0, params.limit) : rows;
+    const items = sliced.map((row) => formatListItem(row));
+
+    if (!hasMore || items.length === 0) {
+      return { items };
+    }
+
+    const last = items[items.length - 1];
+    return {
+      items,
+      nextCursor: encodeCursor({
+        receivedAt: last.receivedAt,
+        id: last.id
+      })
+    };
+  }
+
+  private async listWithSearch(params: ListEventsParams): Promise<{
+    items: EventListItem[];
+    nextCursor?: string;
+  }> {
+    const q = params.q?.trim();
+    if (!q) {
+      return { items: [] };
+    }
+
+    const qLike = `%${escapeLikePattern(q)}%`;
+    const conditions: Prisma.Sql[] = [];
+
+    if (params.source) {
+      conditions.push(
+        Prisma.sql`"source" = ${normalizeSourceForDb(params.source)}::"WebhookEventSource"`
+      );
+    }
+    if (params.deviceUid) {
+      conditions.push(Prisma.sql`"deviceUid" = ${params.deviceUid}`);
+    }
+    if (params.portnum) {
+      conditions.push(Prisma.sql`"portnum" = ${params.portnum}`);
+    }
+    if (params.since) {
+      conditions.push(Prisma.sql`"receivedAt" >= ${params.since}`);
+    }
+    if (params.until) {
+      conditions.push(Prisma.sql`"receivedAt" <= ${params.until}`);
+    }
+    if (params.cursor) {
+      conditions.push(
+        Prisma.sql`("receivedAt" < ${params.cursor.receivedAt} OR ("receivedAt" = ${params.cursor.receivedAt} AND "id" < ${params.cursor.id}))`
+      );
+    }
+
+    conditions.push(
+      Prisma.sql`(
+        "deviceUid" ILIKE ${qLike} ESCAPE '\\'
+        OR "portnum" ILIKE ${qLike} ESCAPE '\\'
+        OR "uplinkId" ILIKE ${qLike} ESCAPE '\\'
+        OR to_tsvector('english', COALESCE("payloadText", '')) @@ plainto_tsquery('english', ${q})
+      )`
+    );
+
+    const whereSql =
+      conditions.length > 0
+        ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+        : Prisma.empty;
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        source: WebhookEventSource;
+        receivedAt: Date;
+        deviceUid: string | null;
+        portnum: string | null;
+        packetId: string | null;
+        payloadJson: Prisma.JsonValue;
+      }>
+    >(Prisma.sql`
+      SELECT
+        "id",
+        "source",
+        "receivedAt",
+        "deviceUid",
+        "portnum",
+        "uplinkId" AS "packetId",
+        "payload" AS "payloadJson"
+      FROM "WebhookEvent"
+      ${whereSql}
+      ORDER BY "receivedAt" DESC, "id" DESC
+      LIMIT ${params.limit + 1}
+    `);
 
     const hasMore = rows.length > params.limit;
     const sliced = hasMore ? rows.slice(0, params.limit) : rows;
@@ -436,6 +532,10 @@ function normalizeSourceForApi(source: WebhookEventSource): EventsSource {
     return 'sim';
   }
   return 'lorawan';
+}
+
+function escapeLikePattern(input: string): string {
+  return input.replace(/[\\%_]/g, '\\$&');
 }
 
 export function encodeCursor(cursor: EventsCursor): string {

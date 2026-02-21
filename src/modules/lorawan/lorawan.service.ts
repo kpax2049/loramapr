@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { Prisma, WebhookEventSource } from '@prisma/client';
 import { logError, logInfo, logWarn } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildWebhookPayloadText } from '../events/payload-text';
 import { MeasurementsService } from '../measurements/measurements.service';
 import { normalizeTtsUplinkToMeasurement } from './tts-normalize';
 import type { TtsUplink } from './tts-uplink.schema';
@@ -66,6 +67,12 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       parsed.end_device_ids?.dev_eui ?? parsed.end_device_ids?.device_id ?? undefined;
     const uplinkId = deriveUplinkId(parsed);
     const portnum = getLorawanPortnum(parsed);
+    const payloadText = buildWebhookPayloadText({
+      deviceUid: deviceUid ?? null,
+      portnum,
+      packetId: uplinkId,
+      payload: parsed
+    });
 
     try {
       await this.prisma.webhookEvent.create({
@@ -75,7 +82,8 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           deviceUid,
           portnum,
           packetId: uplinkId,
-          payloadJson: parsed as Prisma.InputJsonValue
+          payloadJson: parsed as Prisma.InputJsonValue,
+          payloadText
         }
       });
       logInfo('webhook.ingest.accepted', {

@@ -3,6 +3,7 @@ import { Prisma, WebhookEventSource } from '@prisma/client';
 import { createHash } from 'crypto';
 import { logError, logInfo } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildWebhookPayloadText } from '../events/payload-text';
 
 @Injectable()
 export class MeshtasticService {
@@ -14,6 +15,12 @@ export class MeshtasticService {
     const deviceUid = getDeviceUid(body);
     const eventId = normalizeIdempotencyKey(idempotencyKeyHeader) ?? getEventId(body);
     const portnum = getPortnum(body);
+    const payloadText = buildWebhookPayloadText({
+      deviceUid,
+      portnum,
+      packetId: eventId,
+      payload: body
+    });
 
     try {
       await this.prisma.webhookEvent.create({
@@ -23,7 +30,8 @@ export class MeshtasticService {
           deviceUid,
           portnum,
           packetId: eventId,
-          payloadJson
+          payloadJson,
+          payloadText
         }
       });
       logInfo('webhook.ingest.accepted', {

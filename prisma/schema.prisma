@@ -191,6 +191,7 @@ model WebhookEvent {
   source     WebhookEventSource
   receivedAt DateTime @default(now())
   payloadJson Json @map("payload")
+  payloadText String?
   processingStartedAt DateTime?
   processingWorkerId String?
   processedAt DateTime?
