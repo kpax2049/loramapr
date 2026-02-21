@@ -53,6 +53,7 @@ Key fields:
 
 - identity/links: `id`, `deviceId`, `sessionId` (nullable)
 - canonical telemetry/time: `capturedAt`, `lat`, `lon`
+- GPS quality/context: `alt`, `altitude`, `hdop`, `pdop`, `satsInView`, `precisionBits`, `locationSource`, `groundSpeed`, `groundTrack`
 - signal/radio summary: `rssi`, `snr`, `sf`, `bw`, `freq`, `gatewayId`
 - raw/source payload fields: `payloadRaw`, `rxMetadata` (JSON)
 - ingest timestamp: `ingestedAt`
@@ -62,6 +63,7 @@ Relations:
 - many -> 1 `Device`
 - many -> 1 `Session` (nullable)
 - 1 -> many `RxMetadata` (`rxMetadataRows`)
+- optional 1 -> 1 `MeshtasticRx` (`meshtasticRx`)
 
 Indexes:
 
@@ -111,6 +113,26 @@ Indexes / constraints:
 - `@@index([gatewayId, measurementId])`
 - `@@index([receivedAt])`
 - `@@unique([measurementId, gatewayId])`
+
+### `MeshtasticRx`
+
+Key fields:
+
+- `id`
+- `measurementId` (FK -> `Measurement.id`, unique per measurement)
+- radio receive details: `rxTime`, `rxRssi`, `rxSnr`, `hopLimit`, `hopStart`, `relayNode`, `transportMechanism`
+- packet identity hints: `fromId`, `toId`
+- `raw` (JSON subtree for debugging)
+
+Relation:
+
+- many -> 1 `Measurement` (`onDelete: Cascade`)
+
+Indexes / constraints:
+
+- `@@unique([measurementId])`
+- `@@index([rxTime])`
+- `@@index([rxRssi])`
 
 ### `WebhookEvent`
 
@@ -178,6 +200,7 @@ Indexes / constraints:
 - `Session` 1 -> many `Measurement`
 - `Measurement.sessionId` is nullable (supports detached measurements after session delete)
 - `Measurement` 1 -> many `RxMetadata`
+- `Measurement` 1 -> optional 1 `MeshtasticRx`
 - `Device` 1 -> many `DeviceTelemetrySample`
 - `WebhookEvent` maps to devices primarily by `deviceUid` (string), while `Measurement`/`Session` use `deviceId` UUID FKs.
 
@@ -197,6 +220,7 @@ Canonical measurement fields (common storage shape):
 Common normalized signal fields:
 
 - `gatewayId`, `rssi`, `snr`, `sf`, `bw`, `freq`
+- Meshtastic receive diagnostics in `MeshtasticRx` (`rxRssi`, `rxSnr`, hops/relay/transport, `rxTime`)
 
 Source-specific/raw fields:
 

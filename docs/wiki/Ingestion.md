@@ -110,6 +110,22 @@ Important:
 - Many Meshtastic packets are non-position telemetry/node-info packets. These can be valid raw events but still normalize with `missing_gps`.
 - If many events show `deviceUid: "unknown"` with `missing_gps`, inspect event detail payload for bridge-side serialization errors (for example `bridgeError` fields).
 
+### GPS quality fields (Measurement)
+
+When position data exists, the worker also stores optional GPS quality/context fields on `Measurement`:
+
+- `alt` / `altitude`
+- `hdop`, `pdop`
+- `satsInView`, `precisionBits`
+- `locationSource`
+- `groundSpeed`, `groundTrack`
+
+PDOP scaling rule (Meshtastic):
+
+- `pdopRaw = position.PDOP ?? position.pdop`
+- if `pdopRaw > 50`, treat it as centi-PDOP and store `pdopRaw / 100`
+- otherwise store `pdopRaw` as-is
+
 ### Radio metadata destination
 
 - Canonical summary fields on `Measurement`:
@@ -120,6 +136,22 @@ Important:
 - In practice:
   - LoRaWAN `rx_metadata` matches this shape and is expanded into `RxMetadata`.
   - Meshtastic metadata is stored on `Measurement.rxMetadata`; row expansion only occurs if entries match the `gateway_ids.gateway_id` shape.
+
+### MeshtasticRx table
+
+For Meshtastic position packets, receive diagnostics are also persisted into `MeshtasticRx` (one row per `Measurement`):
+
+- `rxTime`
+- `rxRssi`, `rxSnr`
+- `hopLimit`, `hopStart`, `relayNode`
+- `transportMechanism`
+- `fromId`, `toId`
+- `raw` (debug subtree)
+
+Notes:
+
+- Not all packets carry `rxRssi`/`rxSnr`; availability depends on the receiver path and transport metadata present in the packet.
+- Rebroadcasted/relayed/bridge-forwarded packets may have partial radio fields.
 
 ## 4) Debugging
 
