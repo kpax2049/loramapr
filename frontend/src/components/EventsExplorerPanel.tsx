@@ -13,6 +13,8 @@ type EventsExplorerPanelProps = {
   hasQueryApiKey: boolean;
   navigationNonce: number;
   navigationRequest: EventsNavigationInput | null;
+  onSelectEventForMap?: (event: UnifiedEventListItem) => void;
+  onDeviceFilterChange?: (deviceUid: string | null) => void;
 };
 
 type TimePreset = 'last15m' | 'last1h' | 'last24h' | 'custom';
@@ -529,7 +531,9 @@ export default function EventsExplorerPanel({
   isActive,
   hasQueryApiKey,
   navigationNonce,
-  navigationRequest
+  navigationRequest,
+  onSelectEventForMap,
+  onDeviceFilterChange
 }: EventsExplorerPanelProps) {
   const queryClient = useQueryClient();
   const [source, setSource] = useState<'' | UnifiedEventSource>('');
@@ -574,6 +578,7 @@ export default function EventsExplorerPanel({
     setSelectedEventId(requestedEventId || null);
     setDetailEventId(requestedEventId || null);
     setDetailSwapPending(false);
+    onDeviceFilterChange?.(requestedDeviceUid || null);
   }, [navigationNonce, navigationRequest, isActive]);
 
   const devicesQuery = useDevices(true, { enabled: isActive && hasQueryApiKey });
@@ -777,11 +782,23 @@ export default function EventsExplorerPanel({
     });
   };
 
-  const handleSelectEvent = (eventId: string) => {
-    setSelectedEventId(eventId);
+  const handleDeviceInputChange = (value: string) => {
+    setDeviceUidInput(value);
+    const normalized = normalizeInputText(value);
+    onDeviceFilterChange?.(normalized || null);
+  };
+
+  const handleSelectEvent = (eventItem: UnifiedEventListItem) => {
+    setSelectedEventId(eventItem.id);
+    const rowDeviceUid = normalizeInputText(eventItem.deviceUid);
+    if (rowDeviceUid) {
+      onDeviceFilterChange?.(rowDeviceUid);
+    }
+    onSelectEventForMap?.(eventItem);
     if (!hasQueryApiKey) {
       return;
     }
+    const eventId = eventItem.id;
     if (!detailEventId) {
       setDetailEventId(eventId);
       setDetailSwapPending(false);
@@ -841,7 +858,7 @@ export default function EventsExplorerPanel({
               Device
               <select
                 value={normalizedDeviceUidFilter}
-                onChange={(event) => setDeviceUidInput(event.target.value)}
+                onChange={(event) => handleDeviceInputChange(event.target.value)}
                 aria-label="Device UID filter"
               >
                 <option value="">All devices</option>
@@ -934,13 +951,13 @@ export default function EventsExplorerPanel({
                   <tr
                     key={item.id}
                     className={`events-explorer__row ${selectedEventId === item.id ? 'is-selected' : ''}`}
-                    onClick={() => handleSelectEvent(item.id)}
+                    onClick={() => handleSelectEvent(item)}
                     onMouseEnter={() => handlePrefetchDetail(item.id)}
                     onFocus={() => handlePrefetchDetail(item.id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        handleSelectEvent(item.id);
+                        handleSelectEvent(item);
                       }
                     }}
                     tabIndex={0}

@@ -1,5 +1,10 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import type { AutoSessionConfig, DeviceLatest, DeviceTelemetrySample } from '../api/types';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  AutoSessionConfig,
+  DeviceLatest,
+  DeviceTelemetrySample,
+  UnifiedEventListItem
+} from '../api/types';
 import { useApiDiagnosticsEntries } from '../api/diagnostics';
 import { getApiBaseUrl } from '../api/http';
 import { ApiError } from '../api/http';
@@ -93,6 +98,7 @@ type ControlsProps = {
   eventsNavigationNonce: number;
   eventsNavigationRequest: EventsNavigationInput | null;
   onOpenEvents: (input: EventsNavigationInput) => void;
+  onSelectEventForMap: (event: UnifiedEventListItem) => void;
 };
 
 export default function Controls({
@@ -147,11 +153,25 @@ export default function Controls({
   sessionSelectionNotice,
   eventsNavigationNonce,
   eventsNavigationRequest,
-  onOpenEvents
+  onOpenEvents,
+  onSelectEventForMap
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = devicesData?.items ?? [];
   const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
+  const handleEventsDeviceFilterChange = useCallback((nextDeviceUid: string | null) => {
+    if (!nextDeviceUid) {
+      return;
+    }
+    const normalizedUid = nextDeviceUid.trim();
+    if (!normalizedUid) {
+      return;
+    }
+    const matchingDevice = devices.find((device) => device.deviceUid === normalizedUid);
+    if (matchingDevice && matchingDevice.id !== deviceId) {
+      onDeviceChange(matchingDevice.id);
+    }
+  }, [devices, deviceId, onDeviceChange]);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [autoSessionForm, setAutoSessionForm] = useState({
@@ -1476,6 +1496,8 @@ export default function Controls({
             hasQueryApiKey={hasQueryApiKey}
             navigationNonce={eventsNavigationNonce}
             navigationRequest={eventsNavigationRequest}
+            onSelectEventForMap={onSelectEventForMap}
+            onDeviceFilterChange={handleEventsDeviceFilterChange}
           />
           <div className="controls__group controls__system-status-panel">
             <span className="controls__label">System status</span>

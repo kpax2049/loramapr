@@ -45,6 +45,7 @@ export type MeasurementQueryParams = {
   gatewayId?: string;
   receiverId?: string;
   rxGatewayId?: string;
+  includeRx?: boolean;
   sample?: number;
   limit?: number;
 };
@@ -148,6 +149,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   }
   if (params.rxGatewayId) {
     searchParams.set('rxGatewayId', params.rxGatewayId);
+  }
+  if (params.includeRx) {
+    searchParams.set('includeRx', 'true');
   }
   if (typeof params.sample === 'number') {
     searchParams.set('sample', String(params.sample));
