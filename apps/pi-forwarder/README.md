@@ -43,9 +43,18 @@ Example pipeline:
 
 ```bash
 /home/kpax/meshtastic-venv/bin/python scripts/meshtastic-json-bridge.py \
-  --port /dev/serial/by-id/usb-Seeed_Studio_TRACKER_L1_... \
+  --port /dev/serial/by-id/<copy-current-value-from-ls-output> \
 | API_BASE_URL=http://localhost:3000 INGEST_API_KEY=... SOURCE=stdin node dist/index.js
 ```
+
+Before running, confirm the current serial path:
+
+```bash
+ls -l /dev/serial/by-id/
+```
+
+On Seeed Tracker L1, by-id labels may change between `usb-Seeed_TRACKER_L1_...` and
+`usb-Seeed_Studio_TRACKER_L1_...` after reboot/replug, so do not assume one fixed string.
 
 ### `SOURCE=cli`
 
@@ -76,3 +85,23 @@ This mode expects JSON object lines from the source stream. If serial is already
 - `npm run dev` - run with `ts-node`
 - `npm run build` - compile to `dist`
 - `npm run start` - run compiled output
+
+## Systemd Note
+
+If you use a systemd override for stdin bridge mode, keep the port dynamic:
+
+```ini
+ExecStart=/bin/bash -lc '/home/kpax/meshtastic-venv/bin/python /opt/loramapr/pi-forwarder/scripts/meshtastic-json-bridge.py --port "${MESHTASTIC_PORT}" | /usr/bin/node /opt/loramapr/pi-forwarder/dist/index.js'
+```
+
+Do not hardcode `--port /dev/...` in `ExecStart`, or env-file updates to `MESHTASTIC_PORT` will be ignored.
+
+## Serial Handshake Check
+
+If ingest is not flowing, verify Meshtastic can connect before starting forwarder:
+
+```bash
+/home/kpax/meshtastic-venv/bin/meshtastic --port "$MESHTASTIC_PORT" --info --timeout 60
+```
+
+If this times out, fix serial ownership/node state first (`lsof /dev/ttyACM0`, replug/power-cycle node).

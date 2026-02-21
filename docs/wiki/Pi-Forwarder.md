@@ -55,7 +55,7 @@ Example:
 
 ```bash
 /home/kpax/meshtastic-venv/bin/python apps/pi-forwarder/scripts/meshtastic-json-bridge.py \
-  --port /dev/serial/by-id/usb-Seeed_Studio_TRACKER_L1_D5BCE63E6E8DE77E-if00 \
+  --port /dev/serial/by-id/<copy-current-value-from-ls-output> \
 | API_BASE_URL=http://192.168.178.22:3000 INGEST_API_KEY=... SOURCE=stdin node apps/pi-forwarder/dist/index.js
 ```
 
@@ -72,6 +72,13 @@ Only one process can own `/dev/ttyACM0` (or the by-id alias) at a time.
 lsof /dev/ttyACM0
 ls -l /dev/serial/by-id/
 ```
+
+On this hardware the by-id name can flip between:
+
+- `usb-Seeed_TRACKER_L1_...`
+- `usb-Seeed_Studio_TRACKER_L1_...`
+
+Always set `MESHTASTIC_PORT` to the current symlink target shown by `ls -l /dev/serial/by-id/`.
 
 Stop competing services (for example `meshtastic-logger`) before running forwarder.
 
@@ -96,13 +103,24 @@ API_BASE_URL=http://192.168.178.22:3000
 INGEST_API_KEY=replace_me
 DEVICE_HINT=pi-home-node
 SOURCE=stdin
-MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Studio_TRACKER_L1_D5BCE63E6E8DE77E-if00
+MESHTASTIC_PORT=/dev/serial/by-id/<copy-current-value-from-ls-output>
 POLL_HEARTBEAT_SECONDS=60
 POST_TIMEOUT_MS=8000
 RETRY_BASE_MS=500
 RETRY_MAX_MS=10000
 MAX_QUEUE=5000
 EOF
+```
+
+Preflight before service restart:
+
+```bash
+sudo bash -lc '
+set -a
+source /etc/loramapr/pi-forwarder.env
+set +a
+/home/kpax/meshtastic-venv/bin/meshtastic --port "$MESHTASTIC_PORT" --info --timeout 60
+'
 ```
 
 For stdin bridge mode, override ExecStart:
@@ -116,6 +134,8 @@ sudo systemctl edit loramapr-pi-forwarder
 ExecStart=
 ExecStart=/bin/bash -lc '/home/kpax/meshtastic-venv/bin/python /opt/loramapr/pi-forwarder/scripts/meshtastic-json-bridge.py --port "${MESHTASTIC_PORT}" | /usr/bin/node /opt/loramapr/pi-forwarder/dist/index.js'
 ```
+
+Do not hardcode `--port /dev/...` in this override. Hardcoded paths bypass `EnvironmentFile` updates.
 
 Repo example:
 
@@ -145,3 +165,12 @@ Then verify:
 1. `GET /api/meshtastic/events` shows new rows.
 2. New rows are not `deviceUid: "unknown"` / `processingError: "missing_gps"` for valid position packets.
 3. Measurements appear for that device in map views.
+
+## Quick Troubleshooting
+
+- `FileNotFoundError` on `/dev/serial/by-id/...`:
+  - Update `MESHTASTIC_PORT` from current `ls -l /dev/serial/by-id/` output.
+- `Timed out waiting for connection completion`:
+  - Confirm no port lock (`lsof /dev/ttyACM0`), run `meshtastic --info --timeout 60`, then restart service.
+- Repeating `stdin reached EOF`:
+  - The bridge process is crashing/exiting; inspect systemd logs and fix upstream error first.

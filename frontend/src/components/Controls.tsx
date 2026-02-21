@@ -28,6 +28,7 @@ import DeviceIcon, {
   DEVICE_ICON_CATALOG,
   type DeviceIconKey,
   buildDeviceIdentityLabel,
+  getDevicePrimaryLabel,
   getDeviceIconDefinition,
   getEffectiveIconKey
 } from './DeviceIcon';
@@ -592,7 +593,7 @@ export default function Controls({
                     title={getDeviceIconDefinition(getEffectiveIconKey(selectedDevice)).label}
                   />
                   <span className="controls__device-picker-label">
-                    {buildDeviceIdentityLabel(selectedDevice)}
+                    {buildCompactDevicePickerLabel(selectedDevice)}
                   </span>
                 </>
               ) : (
@@ -633,7 +634,9 @@ export default function Controls({
                         className="controls__device-picker-icon"
                         title={optionIcon.label}
                       />
-                      <span className="controls__device-picker-label">{buildDeviceIdentityLabel(device)}</span>
+                      <span className="controls__device-picker-label">
+                        {buildCompactDevicePickerLabel(device)}
+                      </span>
                     </button>
                   );
                 })}
@@ -2000,4 +2003,18 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildCompactDevicePickerLabel(device: {
+  deviceUid?: string | null;
+  name?: string | null;
+  longName?: string | null;
+  shortName?: string | null;
+}): string {
+  const primary = getDevicePrimaryLabel(device);
+  const uid = typeof device.deviceUid === 'string' ? device.deviceUid.trim() : '';
+  if (!uid || uid.toLowerCase() === primary.toLowerCase()) {
+    return primary;
+  }
+  return `${primary} (${uid})`;
 }
