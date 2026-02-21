@@ -49,9 +49,15 @@ If you omit the header, backend generates one and returns it in both response he
 
 When points or metadata are missing in the map, check **Debug -> Events** first.
 
-- Filter by `deviceUid` to isolate one node.
-- Narrow by `source` (`meshtastic` vs `lorawan`) when mixed traffic exists.
-- Filter `portnum` to inspect specific packet classes quickly.
+- Use **Device** filter for exact `deviceUid` matching (best first step).
+- Narrow by **Source** (`meshtastic` vs `lorawan`) when mixed traffic exists.
+- Use **Portnum** filter for packet class isolation:
+  - `POSITION_APP` for map points/tracks
+  - `TELEMETRY_APP` for battery/voltage metrics
+  - `NODEINFO_APP` for node metadata (`shortName`, `hwModel`, etc.)
+- Use `q` search for broader lookup:
+  - packet id/uplink id (`123456789` or `packetId:123456789`)
+  - `shortName` / `hwModel` text from node-info payloads (`shortName:ALFA`, `hwModel:RAK4631`)
 
 Useful examples:
 
@@ -61,7 +67,8 @@ Useful examples:
 Notes:
 
 - In v0.10.0, full raw event payloads are retained in `WebhookEvent.payloadJson` so you can inspect original packets even when normalization rules change later.
-- If a measurement does not show an exact event link yet, use the Events filter by `deviceUid` and a narrow time window around `capturedAt` (for example +/- 2 minutes).
+- Exact measurement/event linking now uses `Measurement.sourceEventId` -> `WebhookEvent.id` when available.
+- If `sourceEventId` is missing (for example older/manual rows), use Events filters by `deviceUid` plus a narrow time window around `capturedAt` (for example +/- 2 minutes).
 
 ## 401 / 403 errors (API key or scope)
 

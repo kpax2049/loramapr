@@ -171,12 +171,29 @@ Use the **Events** panel in Debug when you need to inspect raw ingest traffic ac
   - `Time`, `Source`, `Device`, `Portnum`, `rxRssi`, `rxSnr`, and a short summary.
 - Filters:
   - `Source` dropdown (`lorawan`, `meshtastic`, `agent`, `sim`)
-  - `Device` (`deviceUid`; dropdown suggestions + free text)
-  - `Portnum` (result-derived options + free text)
+  - `Device` (`deviceUid`; dropdown suggestions + free text exact match)
+  - `Portnum` (result-derived options + free text exact match, for example `POSITION_APP`)
   - Time range (`15m`, `1h`, `24h`, `custom`)
-  - `q` text search
+  - `q` text search (matches packet id and indexed payload text)
 - Row click opens the event detail drawer with extracted highlights plus full raw `payloadJson`.
 - Raw packets remain available in Events Explorer even when they are promoted to `Device` metadata or `DeviceTelemetrySample`.
+
+Search and filter tips:
+
+- Search by `deviceUid`:
+  - Prefer the **Device** filter for exact matching.
+  - Use `q` when you only know part of the id.
+- Search by packet id:
+  - Use `q` with the packet/uplink id value (for example `321654987` or `packetId:321654987`).
+- Search by Meshtastic node identity fields:
+  - Use `q` with `shortName` / `hwModel` values (for example `shortName:ALFA`, `hwModel:RAK4631`, or plain text like `RAK4631`).
+  - These are searchable because payload text indexing includes tagged fields from raw packet JSON.
+
+Portnum workflow examples:
+
+- `POSITION_APP`: position packets used for map points and tracks.
+- `TELEMETRY_APP`: battery/voltage/device metrics packets.
+- `NODEINFO_APP`: node identity/model packets (`longName`, `shortName`, `hwModel`).
 
 Examples:
 
@@ -234,6 +251,15 @@ These debug endpoints require `X-API-Key` with `QUERY` scope (frontend typically
 
 - v0.10.0 stores full raw ingest payloads on `WebhookEvent.payloadJson` for later normalization, debugging, and reprocessing workflows.
 - Promotions (`NODEINFO_APP` / `TELEMETRY_APP`) are additive: raw packet payloads are still queryable via Events Explorer and `/api/events/:id`.
+
+## 6) Measurement-to-event linking (`sourceEventId`)
+
+- When an incoming webhook event normalizes into a `Measurement`, the worker writes:
+  - `Measurement.sourceEventId = WebhookEvent.id`.
+- This creates an exact measurement -> raw event link.
+- UI behavior:
+  - **View raw packet** first tries exact navigation by `sourceEventId` (`/api/events/:id` detail).
+  - If `sourceEventId` is missing (older rows/manual ingest), UI falls back to `deviceUid + capturedAt` time-window search.
 
 ### Common failure modes
 
