@@ -20,6 +20,7 @@ type MeasurementsQuery = {
   gatewayId?: string | string[];
   receiverId?: string | string[];
   rxGatewayId?: string | string[];
+  includeRx?: string | string[];
 };
 
 const DEFAULT_LIMIT = 500;
@@ -66,6 +67,7 @@ export class MeasurementsController {
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
     const limit = Math.min(requestedLimit, MAX_LIMIT);
     const sample = parseSample(getSingleValue(query.sample, 'sample'));
+    const includeRx = parseBoolean(getSingleValue(query.includeRx, 'includeRx'), 'includeRx');
 
     return this.measurementsService.query({
       deviceId: deviceId ?? undefined,
@@ -77,6 +79,7 @@ export class MeasurementsController {
       sample,
       gatewayId: effectiveGatewayId ?? undefined,
       rxGatewayId: rxGatewayId ?? undefined,
+      includeRx,
       ownerId
     });
   }
@@ -187,6 +190,22 @@ function parseSample(value: string | undefined): number | undefined {
     throw new BadRequestException('sample must be a positive integer');
   }
   return parsed;
+}
+
+function parseBoolean(value: string | undefined, name: string): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+
+  throw new BadRequestException(`${name} must be true or false`);
 }
 
 function parseBbox(value: string): { minLon: number; minLat: number; maxLon: number; maxLat: number } {
