@@ -774,6 +774,7 @@ export default function EventsExplorerPanel({
   const [detailEventId, setDetailEventId] = useState<string | null>(null);
   const [detailSwapPending, setDetailSwapPending] = useState(false);
   const [allowHugePayloadRender, setAllowHugePayloadRender] = useState(false);
+  const [copyEventIdState, setCopyEventIdState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   useEffect(() => {
     if (typeof window === 'undefined' || !isActive) {
@@ -1111,6 +1112,10 @@ export default function EventsExplorerPanel({
     setAllowHugePayloadRender(false);
   }, [selectedEventId]);
 
+  useEffect(() => {
+    setCopyEventIdState('idle');
+  }, [selectedEventId]);
+
   const handlePrefetchDetail = (eventId: string) => {
     if (!hasQueryApiKey) {
       return;
@@ -1246,6 +1251,26 @@ export default function EventsExplorerPanel({
         setDetailEventId(eventId);
         setDetailSwapPending(false);
       });
+  };
+
+  const selectedEventIdentifier = selectedEventDetail?.id ?? selectedEventId;
+
+  const handleCopyEventId = async () => {
+    if (
+      !selectedEventIdentifier ||
+      typeof navigator === 'undefined' ||
+      !navigator.clipboard?.writeText
+    ) {
+      setCopyEventIdState('failed');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedEventIdentifier);
+      setCopyEventIdState('copied');
+    } catch {
+      setCopyEventIdState('failed');
+    }
   };
 
   const virtualRowProps = useMemo<EventVirtualRowProps>(
@@ -1529,9 +1554,25 @@ export default function EventsExplorerPanel({
                 ) : null}
               </div>
             </div>
-            <button type="button" onClick={() => setSelectedEventId(null)}>
-              Close
-            </button>
+            <div className="events-explorer__drawer-actions">
+              <button
+                type="button"
+                onClick={() => void handleCopyEventId()}
+                disabled={!selectedEventIdentifier}
+              >
+                Copy event id
+              </button>
+              <button type="button" onClick={() => setSelectedEventId(null)}>
+                Close
+              </button>
+              <span className="events-explorer__drawer-copy-state" aria-live="polite">
+                {copyEventIdState === 'copied'
+                  ? 'Copied'
+                  : copyEventIdState === 'failed'
+                    ? 'Copy failed'
+                    : ''}
+              </span>
+            </div>
           </div>
 
           {selectedEventDetail ? (

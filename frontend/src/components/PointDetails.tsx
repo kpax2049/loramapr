@@ -47,7 +47,10 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
 }
 
 function getMeasurementEventId(measurement: Measurement): string | null {
-  return normalizeOptionalText(measurement.eventId ?? null);
+  return (
+    normalizeOptionalText(measurement.sourceEventId ?? null) ??
+    normalizeOptionalText(measurement.eventId ?? null)
+  );
 }
 
 function resolveDeviceUid(measurement: Measurement, fallbackDeviceUid?: string | null): string | null {
@@ -132,7 +135,9 @@ export default function PointDetails({ measurement, deviceUid, onOpenEvents }: P
   const canOpenRawEvents = Boolean(measurementEventId || resolvedDeviceUid) && Boolean(onOpenEvents);
   const capturedAtMs = new Date(detailMeasurement.capturedAt).getTime();
   const hasCapturedAt = Number.isFinite(capturedAtMs);
-  const canOpenRawPacket = Boolean(onOpenEvents && resolvedDeviceUid && hasCapturedAt);
+  const canOpenRawPacket = Boolean(
+    onOpenEvents && (measurementEventId || (resolvedDeviceUid && hasCapturedAt))
+  );
 
   const altitude = detailMeasurement.altitude ?? detailMeasurement.alt;
   const gpsQualityRows: DetailRow[] = [];
@@ -206,7 +211,19 @@ export default function PointDetails({ measurement, deviceUid, onOpenEvents }: P
   };
 
   const handleOpenRawPacket = async () => {
-    if (!onOpenEvents || !resolvedDeviceUid || !hasCapturedAt) {
+    if (!onOpenEvents) {
+      return;
+    }
+
+    if (measurementEventId) {
+      onOpenEvents({
+        eventId: measurementEventId,
+        deviceUid: resolvedDeviceUid
+      });
+      return;
+    }
+
+    if (!resolvedDeviceUid || !hasCapturedAt) {
       return;
     }
 

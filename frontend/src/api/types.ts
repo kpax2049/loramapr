@@ -116,6 +116,7 @@ export type Measurement = {
   } | null;
   deviceUid?: string | null;
   eventId?: string | null;
+  sourceEventId?: string | null;
 };
 
 export type Session = {
