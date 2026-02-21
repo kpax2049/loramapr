@@ -44,11 +44,15 @@ export type DeviceDetail = {
   createdAt: Date;
   updatedAt: Date;
   lastSeenAt: Date | null;
+  meshtasticNodeId: string | null;
   longName: string | null;
   shortName: string | null;
   hwModel: string | null;
   firmwareVersion: string | null;
   appVersion: string | null;
+  macaddr: string | null;
+  publicKey: string | null;
+  isUnmessagable: boolean | null;
   role: string | null;
   lastNodeInfoAt: Date | null;
   latestMeasurementAt: Date | null;
@@ -62,6 +66,7 @@ export type DeviceDetail = {
     snr: number | null;
     gatewayId: string | null;
   } | null;
+  latestTelemetry: DeviceTelemetrySampleSummary | null;
 };
 
 export type DeviceMutableSummary = {
@@ -103,6 +108,15 @@ export type DeviceAgentDecision = {
   distanceM: number | null;
   capturedAt: Date | null;
   createdAt: Date;
+};
+
+export type DeviceTelemetrySampleSummary = {
+  capturedAt: Date;
+  batteryLevel: number | null;
+  voltage: number | null;
+  channelUtilization: number | null;
+  airUtilTx: number | null;
+  uptimeSeconds: number | null;
 };
 
 export type AgentAutoSessionConfig = {
@@ -241,11 +255,15 @@ export class DevicesService {
         createdAt: true,
         updatedAt: true,
         lastSeenAt: true,
+        meshtasticNodeId: true,
         longName: true,
         shortName: true,
         hwModel: true,
         firmwareVersion: true,
         appVersion: true,
+        macaddr: true,
+        publicKey: true,
+        isUnmessagable: true,
         role: true,
         lastNodeInfoAt: true
       }
@@ -256,7 +274,7 @@ export class DevicesService {
 
     // lat/lon are required in the current schema, so latest by capturedAt already satisfies
     // "latest measurement with lat/lon not null".
-    const [latestMeasurement, latestStatus] = await Promise.all([
+    const [latestMeasurement, latestTelemetry, latestStatus] = await Promise.all([
       this.prisma.measurement.findFirst({
         where: { deviceId: device.id },
         orderBy: { capturedAt: 'desc' },
@@ -269,6 +287,18 @@ export class DevicesService {
           gatewayId: true
         }
       }),
+      this.prisma.deviceTelemetrySample.findFirst({
+        where: { deviceId: device.id },
+        orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }],
+        select: {
+          capturedAt: true,
+          batteryLevel: true,
+          voltage: true,
+          channelUtilization: true,
+          airUtilTx: true,
+          uptimeSeconds: true
+        }
+      }),
       this.getLatestStatusForDevice(device.id, device.deviceUid)
     ]);
 
@@ -277,8 +307,37 @@ export class DevicesService {
       latestMeasurementAt: latestStatus.latestMeasurementAt,
       latestWebhookReceivedAt: latestStatus.latestWebhookReceivedAt,
       latestWebhookSource: latestStatus.latestWebhookSource,
-      latestMeasurement
+      latestMeasurement,
+      latestTelemetry
     };
+  }
+
+  async listTelemetry(
+    deviceId: string,
+    ownerId: string | undefined,
+    limit: number
+  ): Promise<DeviceTelemetrySampleSummary[] | null> {
+    const device = await this.prisma.device.findFirst({
+      where: ownerId ? { id: deviceId, ownerId } : { id: deviceId },
+      select: { id: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    return this.prisma.deviceTelemetrySample.findMany({
+      where: { deviceId: device.id },
+      orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: {
+        capturedAt: true,
+        batteryLevel: true,
+        voltage: true,
+        channelUtilization: true,
+        airUtilTx: true,
+        uptimeSeconds: true
+      }
+    });
   }
 
   private async getLatestStatusForDevice(

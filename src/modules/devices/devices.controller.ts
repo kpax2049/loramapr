@@ -24,6 +24,7 @@ import {
   DeviceAgentDecision,
   DeviceLatestStatus,
   DeviceListItem,
+  DeviceTelemetrySampleSummary,
   LatestWebhookSource,
   DeviceMutableSummary,
   DeviceSummary,
@@ -116,6 +117,26 @@ export class DevicesController {
       throw new NotFoundException('Device not found');
     }
     return formatLatestResponse(latest);
+  }
+
+  @Get(':id/telemetry')
+  @UseGuards(OwnerGuard)
+  async getTelemetry(
+    @Req() request: OwnerContextRequest,
+    @Param('id') id: string,
+    @Query('limit') limitParam?: string
+  ): Promise<{ items: DeviceTelemetryResponse[]; count: number; limit: number }> {
+    const ownerId = getOwnerIdFromRequest(request);
+    const limit = parseTelemetryLimit(limitParam);
+    const items = await this.devicesService.listTelemetry(id, ownerId, limit);
+    if (!items) {
+      throw new NotFoundException('Device not found');
+    }
+    return {
+      items: items.map(formatTelemetry),
+      count: items.length,
+      limit
+    };
   }
 
   @Get(':id')
@@ -263,11 +284,15 @@ type DeviceDetailResponse = {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string | null;
+  meshtasticNodeId: string | null;
   longName: string | null;
   shortName: string | null;
   hwModel: string | null;
   firmwareVersion: string | null;
   appVersion: string | null;
+  macaddr: string | null;
+  publicKey: string | null;
+  isUnmessagable: boolean | null;
   role: string | null;
   lastNodeInfoAt: string | null;
   latestMeasurementAt: string | null;
@@ -281,6 +306,16 @@ type DeviceDetailResponse = {
     snr: number | null;
     gatewayId: string | null;
   } | null;
+  latestTelemetry: DeviceTelemetryResponse | null;
+};
+
+type DeviceTelemetryResponse = {
+  capturedAt: string;
+  batteryLevel: number | null;
+  voltage: number | null;
+  channelUtilization: number | null;
+  airUtilTx: number | null;
+  uptimeSeconds: number | null;
 };
 
 const DEFAULT_RADIUS_METERS = 20;
@@ -288,6 +323,8 @@ const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
 const DEFAULT_AGENT_DECISIONS_LIMIT = 200;
 const MAX_AGENT_DECISIONS_LIMIT = 5000;
+const DEFAULT_DEVICE_TELEMETRY_LIMIT = 200;
+const MAX_DEVICE_TELEMETRY_LIMIT = 5000;
 const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_DEVICE_NOTES_LENGTH = 2000;
 const DELETE_CONFIRMATION_VALUE = 'DELETE';
@@ -348,6 +385,17 @@ function parseLimit(value?: string): number {
     throw new BadRequestException('limit must be a positive integer');
   }
   return Math.min(parsed, MAX_AGENT_DECISIONS_LIMIT);
+}
+
+function parseTelemetryLimit(value?: string): number {
+  if (value === undefined) {
+    return DEFAULT_DEVICE_TELEMETRY_LIMIT;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  return Math.min(parsed, MAX_DEVICE_TELEMETRY_LIMIT);
 }
 
 function parsePatchBody(body: DevicePatchBody): {
@@ -543,11 +591,15 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
     createdAt: device.createdAt.toISOString(),
     updatedAt: device.updatedAt.toISOString(),
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    meshtasticNodeId: device.meshtasticNodeId ?? null,
     longName: device.longName ?? null,
     shortName: device.shortName ?? null,
     hwModel: device.hwModel ?? null,
     firmwareVersion: device.firmwareVersion ?? null,
     appVersion: device.appVersion ?? null,
+    macaddr: device.macaddr ?? null,
+    publicKey: device.publicKey ?? null,
+    isUnmessagable: device.isUnmessagable ?? null,
     role: device.role ?? null,
     lastNodeInfoAt: device.lastNodeInfoAt ? device.lastNodeInfoAt.toISOString() : null,
     latestMeasurementAt: device.latestMeasurementAt ? device.latestMeasurementAt.toISOString() : null,
@@ -564,6 +616,18 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
           snr: device.latestMeasurement.snr,
           gatewayId: device.latestMeasurement.gatewayId
         }
-      : null
+      : null,
+    latestTelemetry: device.latestTelemetry ? formatTelemetry(device.latestTelemetry) : null
+  };
+}
+
+function formatTelemetry(sample: DeviceTelemetrySampleSummary): DeviceTelemetryResponse {
+  return {
+    capturedAt: sample.capturedAt.toISOString(),
+    batteryLevel: sample.batteryLevel,
+    voltage: sample.voltage,
+    channelUtilization: sample.channelUtilization,
+    airUtilTx: sample.airUtilTx,
+    uptimeSeconds: sample.uptimeSeconds
   };
 }
