@@ -25,6 +25,32 @@ type EventHighlight = {
   value: string;
 };
 
+type EventsQuickFilters = {
+  hasGps: boolean;
+  hasRx: boolean;
+  hasTelemetry: boolean;
+  hasNodeInfo: boolean;
+};
+
+type StoredEventsFilters = {
+  source: '' | UnifiedEventSource;
+  deviceUidInput: string;
+  portnumInput: string;
+  searchQuery: string;
+  timePreset: TimePreset;
+  customSince: string;
+  customUntil: string;
+  quickFilters: EventsQuickFilters;
+};
+
+type SavedEventsView = {
+  id: string;
+  name: string;
+  filters: StoredEventsFilters;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const AUTO_REFRESH_MS = 7000;
 const DEFAULT_LIMIT = 100;
 const EVENT_ROW_HEIGHT = 30;
@@ -49,10 +75,154 @@ const TIME_PRESETS: Array<{ value: TimePreset; label: string }> = [
 ];
 
 const EVENT_COLUMN_HEADERS = ['Time', 'Source', 'Device', 'Portnum', 'rxRssi', 'rxSnr', 'Summary'] as const;
+const EVENTS_FILTERS_STORAGE_KEY = 'eventsExplorer:lastFilters:v1';
+const EVENTS_SAVED_VIEWS_STORAGE_KEY = 'eventsExplorer:savedViews:v1';
+const QUICK_PORTNUM_CHIPS = ['POSITION_APP', 'TELEMETRY_APP', 'NODEINFO_APP'] as const;
+const DEFAULT_QUICK_FILTERS: EventsQuickFilters = {
+  hasGps: false,
+  hasRx: false,
+  hasTelemetry: false,
+  hasNodeInfo: false
+};
 
 function trimOptional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizePortnumValue(value: string | null | undefined): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim().toUpperCase();
+}
+
+function buildStoredFilters(input: Partial<StoredEventsFilters>): StoredEventsFilters {
+  return {
+    source:
+      input.source === 'lorawan' ||
+      input.source === 'meshtastic' ||
+      input.source === 'agent' ||
+      input.source === 'sim'
+        ? input.source
+        : '',
+    deviceUidInput: typeof input.deviceUidInput === 'string' ? input.deviceUidInput : '',
+    portnumInput: typeof input.portnumInput === 'string' ? input.portnumInput : '',
+    searchQuery: typeof input.searchQuery === 'string' ? input.searchQuery : '',
+    timePreset:
+      input.timePreset === 'last15m' ||
+      input.timePreset === 'last1h' ||
+      input.timePreset === 'last24h' ||
+      input.timePreset === 'custom'
+        ? input.timePreset
+        : 'last1h',
+    customSince: typeof input.customSince === 'string' ? input.customSince : '',
+    customUntil: typeof input.customUntil === 'string' ? input.customUntil : '',
+    quickFilters: {
+      hasGps: Boolean(input.quickFilters?.hasGps),
+      hasRx: Boolean(input.quickFilters?.hasRx),
+      hasTelemetry: Boolean(input.quickFilters?.hasTelemetry),
+      hasNodeInfo: Boolean(input.quickFilters?.hasNodeInfo)
+    }
+  };
+}
+
+function readStoredEventsFilters(): StoredEventsFilters | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(EVENTS_FILTERS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<StoredEventsFilters>;
+    return buildStoredFilters(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredEventsFilters(filters: StoredEventsFilters): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(EVENTS_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+}
+
+function readSavedEventsViews(): SavedEventsView[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(EVENTS_SAVED_VIEWS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return null;
+        }
+        const view = entry as Partial<SavedEventsView>;
+        if (typeof view.id !== 'string' || typeof view.name !== 'string' || !view.filters) {
+          return null;
+        }
+        return {
+          id: view.id,
+          name: view.name,
+          filters: buildStoredFilters(view.filters),
+          createdAt: typeof view.createdAt === 'string' ? view.createdAt : new Date().toISOString(),
+          updatedAt: typeof view.updatedAt === 'string' ? view.updatedAt : new Date().toISOString()
+        } satisfies SavedEventsView;
+      })
+      .filter((view): view is SavedEventsView => view !== null);
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedEventsViews(views: SavedEventsView[]): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(EVENTS_SAVED_VIEWS_STORAGE_KEY, JSON.stringify(views));
+}
+
+function hasEventNavigationInput(input: EventsNavigationInput | null, parsed: ReturnType<typeof readEventsNavigationParams>): boolean {
+  if (input) {
+    return true;
+  }
+  return Boolean(parsed.source || parsed.deviceUid || parsed.portnum || parsed.q || parsed.from || parsed.to || parsed.eventId);
+}
+
+function matchesQuickFilters(item: UnifiedEventListItem, quickFilters: EventsQuickFilters): boolean {
+  if (quickFilters.hasRx) {
+    const hasRx = item.rxRssi !== null || item.rxSnr !== null;
+    if (!hasRx) {
+      return false;
+    }
+  }
+
+  const contentChecks: boolean[] = [];
+  if (quickFilters.hasGps) {
+    contentChecks.push(typeof item.lat === 'number' && Number.isFinite(item.lat) && typeof item.lon === 'number' && Number.isFinite(item.lon));
+  }
+  if (quickFilters.hasTelemetry) {
+    contentChecks.push(normalizePortnumValue(item.portnum) === 'TELEMETRY_APP');
+  }
+  if (quickFilters.hasNodeInfo) {
+    contentChecks.push(normalizePortnumValue(item.portnum) === 'NODEINFO_APP');
+  }
+
+  if (contentChecks.length === 0) {
+    return true;
+  }
+  return contentChecks.some(Boolean);
 }
 
 function normalizeInputText(value: string | null | undefined): string {
@@ -597,6 +767,9 @@ export default function EventsExplorerPanel({
   const [timePreset, setTimePreset] = useState<TimePreset>('last1h');
   const [customSince, setCustomSince] = useState('');
   const [customUntil, setCustomUntil] = useState('');
+  const [quickFilters, setQuickFilters] = useState<EventsQuickFilters>(DEFAULT_QUICK_FILTERS);
+  const [savedViews, setSavedViews] = useState<SavedEventsView[]>(() => readSavedEventsViews());
+  const [activeSavedViewId, setActiveSavedViewId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [detailEventId, setDetailEventId] = useState<string | null>(null);
   const [detailSwapPending, setDetailSwapPending] = useState(false);
@@ -615,29 +788,65 @@ export default function EventsExplorerPanel({
     const requestedFrom = normalizeInputText(navigationRequest?.from ?? parsed.from ?? '');
     const requestedTo = normalizeInputText(navigationRequest?.to ?? parsed.to ?? '');
     const requestedEventId = normalizeInputText(navigationRequest?.eventId ?? parsed.eventId ?? '');
+    const hasNavigation = hasEventNavigationInput(navigationRequest, parsed);
+    const storedFilters = hasNavigation ? null : readStoredEventsFilters();
 
-    setSource(requestedSource ?? '');
-    setDeviceUidInput(requestedDeviceUid);
-    setPortnumInput(requestedPortnum);
-    setSearchQuery(requestedSearch);
-    if (requestedFrom || requestedTo) {
-      setTimePreset('custom');
-      setCustomSince(toDateTimeLocalValue(requestedFrom));
-      setCustomUntil(toDateTimeLocalValue(requestedTo));
+    if (hasNavigation) {
+      setSource(requestedSource ?? '');
+      setDeviceUidInput(requestedDeviceUid);
+      setPortnumInput(requestedPortnum);
+      setSearchQuery(requestedSearch);
+      setQuickFilters(DEFAULT_QUICK_FILTERS);
+      if (requestedFrom || requestedTo) {
+        setTimePreset('custom');
+        setCustomSince(toDateTimeLocalValue(requestedFrom));
+        setCustomUntil(toDateTimeLocalValue(requestedTo));
+      } else {
+        setTimePreset('last1h');
+        setCustomSince('');
+        setCustomUntil('');
+      }
+      setActiveSavedViewId('');
+      onDeviceFilterChange?.(requestedDeviceUid || null);
+    } else if (storedFilters) {
+      setSource(storedFilters.source);
+      setDeviceUidInput(storedFilters.deviceUidInput);
+      setPortnumInput(storedFilters.portnumInput);
+      setSearchQuery(storedFilters.searchQuery);
+      setTimePreset(storedFilters.timePreset);
+      setCustomSince(storedFilters.customSince);
+      setCustomUntil(storedFilters.customUntil);
+      setQuickFilters(storedFilters.quickFilters);
+      setActiveSavedViewId('');
+      onDeviceFilterChange?.(normalizeInputText(storedFilters.deviceUidInput) || null);
     } else {
+      setSource('');
+      setDeviceUidInput('');
+      setPortnumInput('');
+      setSearchQuery('');
       setTimePreset('last1h');
       setCustomSince('');
       setCustomUntil('');
+      setQuickFilters(DEFAULT_QUICK_FILTERS);
+      setActiveSavedViewId('');
+      onDeviceFilterChange?.(null);
     }
+
     setSelectedEventId(requestedEventId || null);
     setDetailEventId(requestedEventId || null);
     setDetailSwapPending(false);
-    onDeviceFilterChange?.(requestedDeviceUid || null);
   }, [navigationNonce, navigationRequest, isActive]);
 
   const devicesQuery = useDevices(true, { enabled: isActive && hasQueryApiKey });
   const knownDevices = devicesQuery.data?.items ?? [];
   const normalizedDeviceUidFilter = normalizeInputText(deviceUidInput);
+  const normalizedPortnumInput = normalizePortnumValue(portnumInput);
+  const hasAnyQuickContentFilter =
+    quickFilters.hasGps || quickFilters.hasTelemetry || quickFilters.hasNodeInfo;
+  const activeQuickContentCount =
+    Number(quickFilters.hasGps) +
+    Number(quickFilters.hasTelemetry) +
+    Number(quickFilters.hasNodeInfo);
   const isSmallRange = timePreset === 'last15m' || timePreset === 'last1h';
   const refreshInterval = isActive && hasQueryApiKey && isSmallRange ? AUTO_REFRESH_MS : false;
   const refreshEnabled = typeof refreshInterval === 'number';
@@ -666,16 +875,44 @@ export default function EventsExplorerPanel({
     timePreset === 'custom' &&
     Boolean(range.since && range.until && range.since.getTime() > range.until.getTime());
 
+  const effectiveBackendPortnum = useMemo(() => {
+    if (normalizedPortnumInput) {
+      return normalizedPortnumInput;
+    }
+
+    if (!hasAnyQuickContentFilter || activeQuickContentCount !== 1) {
+      return undefined;
+    }
+    if (quickFilters.hasTelemetry) {
+      return 'TELEMETRY_APP';
+    }
+    if (quickFilters.hasNodeInfo) {
+      return 'NODEINFO_APP';
+    }
+    if (quickFilters.hasGps && source === 'meshtastic') {
+      return 'POSITION_APP';
+    }
+    return undefined;
+  }, [
+    normalizedPortnumInput,
+    hasAnyQuickContentFilter,
+    activeQuickContentCount,
+    quickFilters.hasTelemetry,
+    quickFilters.hasNodeInfo,
+    quickFilters.hasGps,
+    source
+  ]);
+
   const filters = useMemo(
     () => ({
       source: source || undefined,
       deviceUid: trimOptional(deviceUidInput),
-      portnum: trimOptional(portnumInput),
+      portnum: effectiveBackendPortnum,
       q: trimOptional(searchQuery),
       since: range.since,
       until: range.until
     }),
-    [source, deviceUidInput, portnumInput, searchQuery, range.since, range.until]
+    [source, deviceUidInput, effectiveBackendPortnum, searchQuery, range.since, range.until]
   );
 
   const eventsQuery = useUnifiedEvents(filters, {
@@ -689,20 +926,25 @@ export default function EventsExplorerPanel({
     isActive && hasQueryApiKey && Boolean(detailEventId)
   );
 
-  const events = useMemo(
+  const fetchedEvents = useMemo(
     () => eventsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [eventsQuery.data]
   );
 
+  const events = useMemo(
+    () => fetchedEvents.filter((item) => matchesQuickFilters(item, quickFilters)),
+    [fetchedEvents, quickFilters]
+  );
+
   const portnumOptions = useMemo(() => {
     const values = new Set<string>();
-    for (const item of events) {
+    for (const item of fetchedEvents) {
       if (item.portnum) {
         values.add(item.portnum);
       }
     }
     return Array.from(values.values()).sort((a, b) => a.localeCompare(b));
-  }, [events]);
+  }, [fetchedEvents]);
 
   const deviceOptions = useMemo(() => {
     const optionMap = new Map<string, string>();
@@ -712,7 +954,7 @@ export default function EventsExplorerPanel({
         formatDevicePickerLabel(device.name ?? null, device.longName ?? null, device.deviceUid)
       );
     }
-    for (const event of events) {
+    for (const event of fetchedEvents) {
       if (!event.deviceUid) {
         continue;
       }
@@ -726,13 +968,14 @@ export default function EventsExplorerPanel({
     return Array.from(optionMap.entries())
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [knownDevices, events, normalizedDeviceUidFilter]);
+  }, [knownDevices, fetchedEvents, normalizedDeviceUidFilter]);
 
   const requestId = buildRequestId(eventsQuery.error);
+  const isLoadingMoreRows = events.length > 0 && eventsQuery.isFetchingNextPage;
   const selectedEvent = detailQuery.data;
   const selectedEventListItem = useMemo(
-    () => events.find((item) => item.id === selectedEventId) ?? null,
-    [events, selectedEventId]
+    () => fetchedEvents.find((item) => item.id === selectedEventId) ?? null,
+    [fetchedEvents, selectedEventId]
   );
   const selectedEventDetail =
     selectedEvent && detailEventId && selectedEvent.id === detailEventId ? selectedEvent : null;
@@ -813,6 +1056,49 @@ export default function EventsExplorerPanel({
     selectedEventId
   ]);
 
+  const currentStoredFilters = useMemo<StoredEventsFilters>(
+    () =>
+      buildStoredFilters({
+        source,
+        deviceUidInput,
+        portnumInput,
+        searchQuery,
+        timePreset,
+        customSince,
+        customUntil,
+        quickFilters
+      }),
+    [source, deviceUidInput, portnumInput, searchQuery, timePreset, customSince, customUntil, quickFilters]
+  );
+
+  useEffect(() => {
+    writeStoredEventsFilters(currentStoredFilters);
+  }, [currentStoredFilters]);
+
+  useEffect(() => {
+    if (!activeSavedViewId) {
+      return;
+    }
+    const activeView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!activeView) {
+      setActiveSavedViewId('');
+      return;
+    }
+    if (JSON.stringify(activeView.filters) !== JSON.stringify(currentStoredFilters)) {
+      setActiveSavedViewId('');
+    }
+  }, [activeSavedViewId, savedViews, currentStoredFilters]);
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      return;
+    }
+    const stillVisible = events.some((item) => item.id === selectedEventId);
+    if (!stillVisible) {
+      setSelectedEventId(null);
+    }
+  }, [events, selectedEventId]);
+
   useEffect(() => {
     if (selectedEventId) {
       return;
@@ -840,6 +1126,84 @@ export default function EventsExplorerPanel({
     setDeviceUidInput(value);
     const normalized = normalizeInputText(value);
     onDeviceFilterChange?.(normalized || null);
+  };
+
+  const handleToggleSourceChip = (nextSource: UnifiedEventSource) => {
+    setSource((previous) => (previous === nextSource ? '' : nextSource));
+  };
+
+  const handleTogglePortnumChip = (nextPortnum: (typeof QUICK_PORTNUM_CHIPS)[number]) => {
+    setPortnumInput((previous) =>
+      normalizePortnumValue(previous) === nextPortnum ? '' : nextPortnum
+    );
+  };
+
+  const handleToggleQuickFilter = (key: keyof EventsQuickFilters) => {
+    setQuickFilters((previous) => ({
+      ...previous,
+      [key]: !previous[key]
+    }));
+  };
+
+  const handleApplySavedView = (viewId: string) => {
+    if (!viewId) {
+      setActiveSavedViewId('');
+      return;
+    }
+    const view = savedViews.find((entry) => entry.id === viewId);
+    if (!view) {
+      setActiveSavedViewId('');
+      return;
+    }
+    setSource(view.filters.source);
+    setDeviceUidInput(view.filters.deviceUidInput);
+    setPortnumInput(view.filters.portnumInput);
+    setSearchQuery(view.filters.searchQuery);
+    setTimePreset(view.filters.timePreset);
+    setCustomSince(view.filters.customSince);
+    setCustomUntil(view.filters.customUntil);
+    setQuickFilters(view.filters.quickFilters);
+    setActiveSavedViewId(view.id);
+    onDeviceFilterChange?.(normalizeInputText(view.filters.deviceUidInput) || null);
+  };
+
+  const handleSaveCurrentView = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const existingView = savedViews.find((view) => view.id === activeSavedViewId) ?? null;
+    const suggestedName = existingView?.name ?? '';
+    const nameInput = window.prompt('Saved view name', suggestedName);
+    const name = normalizeInputText(nameInput);
+    if (!name) {
+      return;
+    }
+    const now = new Date().toISOString();
+    const nextId =
+      existingView?.id ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const nextView: SavedEventsView = {
+      id: nextId,
+      name,
+      filters: currentStoredFilters,
+      createdAt: existingView?.createdAt ?? now,
+      updatedAt: now
+    };
+    const nextViews = existingView
+      ? savedViews.map((view) => (view.id === existingView.id ? nextView : view))
+      : [...savedViews, nextView];
+    setSavedViews(nextViews);
+    setActiveSavedViewId(nextId);
+    writeSavedEventsViews(nextViews);
+  };
+
+  const handleDeleteActiveView = () => {
+    if (!activeSavedViewId) {
+      return;
+    }
+    const nextViews = savedViews.filter((view) => view.id !== activeSavedViewId);
+    setSavedViews(nextViews);
+    setActiveSavedViewId('');
+    writeSavedEventsViews(nextViews);
   };
 
   const handleSelectEvent = (eventItem: UnifiedEventListItem) => {
@@ -904,6 +1268,103 @@ export default function EventsExplorerPanel({
         <div className="events-explorer__message">Events requires QUERY key.</div>
       ) : (
         <>
+          <div className="events-explorer__saved-views">
+            <label>
+              Saved view
+              <select
+                value={activeSavedViewId}
+                onChange={(event) => handleApplySavedView(event.target.value)}
+                aria-label="Saved events view"
+              >
+                <option value="">Current filters</option>
+                {savedViews.map((view) => (
+                  <option key={view.id} value={view.id}>
+                    {view.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="controls__button controls__button--compact"
+              onClick={handleSaveCurrentView}
+            >
+              Save view
+            </button>
+            <button
+              type="button"
+              className="controls__button controls__button--compact"
+              onClick={handleDeleteActiveView}
+              disabled={!activeSavedViewId}
+            >
+              Delete
+            </button>
+          </div>
+
+          <div className="events-explorer__chips" aria-label="Quick source filters">
+            <span className="events-explorer__chips-label">Source</span>
+            <button
+              type="button"
+              className={`events-explorer__chip ${source === 'meshtastic' ? 'is-active' : ''}`}
+              onClick={() => handleToggleSourceChip('meshtastic')}
+            >
+              Meshtastic
+            </button>
+            <button
+              type="button"
+              className={`events-explorer__chip ${source === 'lorawan' ? 'is-active' : ''}`}
+              onClick={() => handleToggleSourceChip('lorawan')}
+            >
+              LoRaWAN
+            </button>
+          </div>
+
+          <div className="events-explorer__chips" aria-label="Quick portnum filters">
+            <span className="events-explorer__chips-label">Portnum</span>
+            {QUICK_PORTNUM_CHIPS.map((chipPortnum) => (
+              <button
+                key={chipPortnum}
+                type="button"
+                className={`events-explorer__chip ${normalizedPortnumInput === chipPortnum ? 'is-active' : ''}`}
+                onClick={() => handleTogglePortnumChip(chipPortnum)}
+              >
+                {chipPortnum}
+              </button>
+            ))}
+          </div>
+
+          <div className="events-explorer__chips" aria-label="Quick content filters">
+            <span className="events-explorer__chips-label">Signals</span>
+            <button
+              type="button"
+              className={`events-explorer__chip ${quickFilters.hasGps ? 'is-active' : ''}`}
+              onClick={() => handleToggleQuickFilter('hasGps')}
+            >
+              Has GPS
+            </button>
+            <button
+              type="button"
+              className={`events-explorer__chip ${quickFilters.hasRx ? 'is-active' : ''}`}
+              onClick={() => handleToggleQuickFilter('hasRx')}
+            >
+              Has RX RSSI/SNR
+            </button>
+            <button
+              type="button"
+              className={`events-explorer__chip ${quickFilters.hasTelemetry ? 'is-active' : ''}`}
+              onClick={() => handleToggleQuickFilter('hasTelemetry')}
+            >
+              Has Telemetry
+            </button>
+            <button
+              type="button"
+              className={`events-explorer__chip ${quickFilters.hasNodeInfo ? 'is-active' : ''}`}
+              onClick={() => handleToggleQuickFilter('hasNodeInfo')}
+            >
+              Has NodeInfo
+            </button>
+          </div>
+
           <div className="events-explorer__filters">
             <label>
               Source
@@ -1017,7 +1478,16 @@ export default function EventsExplorerPanel({
               />
             </div>
             {!eventsQuery.isLoading && events.length === 0 ? (
-              <div className="events-explorer__empty">No events found for current filters.</div>
+              <div className="events-explorer__empty">
+                {fetchedEvents.length > 0
+                  ? 'No events match active quick chips.'
+                  : 'No events found for current filters.'}
+              </div>
+            ) : null}
+            {isLoadingMoreRows ? (
+              <div className="events-explorer__loading-mask" role="status" aria-live="polite">
+                Loading more events…
+              </div>
             ) : null}
           </div>
 
