@@ -76,7 +76,14 @@ model Measurement {
   lat        Float
   lon        Float
   alt        Float?
+  altitude   Float?
   hdop       Float?
+  pdop       Float?
+  satsInView Int?
+  precisionBits Int?
+  locationSource String?
+  groundSpeed Float?
+  groundTrack Float?
   rssi       Int?
   snr        Float?
   sf         Int?
@@ -90,6 +97,7 @@ model Measurement {
   device         Device        @relation(fields: [deviceId], references: [id])
   session        Session?      @relation(fields: [sessionId], references: [id])
   rxMetadataRows RxMetadata[]
+  meshtasticRxRows MeshtasticRx[]
 
   @@index([deviceId, capturedAt(sort: Desc)])
   @@index([sessionId, capturedAt(sort: Desc)])
@@ -115,6 +123,29 @@ model RxMetadata {
   @@index([gatewayId, measurementId])
   @@index([receivedAt])
   @@unique([measurementId, gatewayId])
+}
+
+model MeshtasticRx {
+  id                 String      @id @default(uuid()) @db.Uuid
+  measurementId      String      @db.Uuid
+  measurement        Measurement @relation(fields: [measurementId], references: [id], onDelete: Cascade)
+
+  rxTime             DateTime?
+  rxRssi             Int?
+  rxSnr              Float?
+  hopLimit           Int?
+  hopStart           Int?
+  relayNode          Int?
+  transportMechanism String?
+
+  fromId             String?
+  toId               String?
+
+  raw                Json?
+
+  @@index([measurementId])
+  @@index([rxTime])
+  @@index([rxRssi])
 }
 
 model ApiKey {
