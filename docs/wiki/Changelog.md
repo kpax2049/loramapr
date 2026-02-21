@@ -22,6 +22,21 @@ For releases with dedicated notes files, those files are linked directly.
 - Data model + ingestion docs now explicitly cover PDOP scaling behavior and receiver/transport-dependent availability of `rxRssi`/`rxSnr`.
 - Release notes: `docs/release-v0.10.2.md`.
 
+## v0.10.1 (2026-02-21)
+
+- Meshtastic device metadata promotion release: `NODEINFO_APP` packets now populate Device identity fields (`meshtasticNodeId`, names, hw model, role, mac/public key flags).
+- Telemetry promotion release: `TELEMETRY_APP` packets persist into `DeviceTelemetrySample` and are exposed via `GET /api/devices/:id/telemetry`.
+- Device Details UX now shows Meshtastic identity, latest telemetry, raw-event deep links, and a lightweight telemetry sparkline.
+- Device picker labels are compacted (name + UID) to reduce truncation in narrow sidebars.
+- Release notes: `docs/release-v0.10.1.md`.
+
+## v0.10.0 (2026-02-20)
+
+- Raw Events Explorer release: added unified QUERY-gated `/api/events` + `/api/events/:id` with source/device/portnum/time/search filters and cursor pagination.
+- Full raw ingest payload retention added for LoRaWAN + Meshtastic (`WebhookEvent.payloadJson`) so future normalization/reprocessing can run against preserved originals.
+- Debug tab now includes Events Explorer filters, detail drawer highlights/JSON tree, and deep links from device/point context into prefiltered raw events.
+- Release notes: `docs/release-v0.10.0.md`.
+
 ## v0.9.17 (2026-02-19)
 
 - Data safety + retention defaults release: added configurable backend raw-event retention scheduling with documented defaults (`WebhookEvent` 30d, `AgentDecision` 90d) and daily cron execution.

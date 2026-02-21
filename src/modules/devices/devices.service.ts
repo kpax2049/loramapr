@@ -44,18 +44,20 @@ export type DeviceDetail = {
   createdAt: Date;
   updatedAt: Date;
   lastSeenAt: Date | null;
+  meshtasticNodeId: string | null;
   longName: string | null;
   shortName: string | null;
   hwModel: string | null;
   firmwareVersion: string | null;
   appVersion: string | null;
-  role: string | null;
   macaddr: string | null;
+  publicKey: string | null;
+  isUnmessagable: boolean | null;
+  role: string | null;
   lastNodeInfoAt: Date | null;
   latestMeasurementAt: Date | null;
   latestWebhookReceivedAt: Date | null;
   latestWebhookSource: LatestWebhookSource | null;
-  latestTelemetry: DeviceTelemetrySample | null;
   latestMeasurement: {
     capturedAt: Date;
     lat: number;
@@ -64,15 +66,7 @@ export type DeviceDetail = {
     snr: number | null;
     gatewayId: string | null;
   } | null;
-};
-
-export type DeviceTelemetrySample = {
-  batteryLevel: number | null;
-  voltage: number | null;
-  channelUtilization: number | null;
-  airUtilTx: number | null;
-  uptimeSeconds: number | null;
-  capturedAt: Date;
+  latestTelemetry: DeviceTelemetrySampleSummary | null;
 };
 
 export type DeviceMutableSummary = {
@@ -114,6 +108,15 @@ export type DeviceAgentDecision = {
   distanceM: number | null;
   capturedAt: Date | null;
   createdAt: Date;
+};
+
+export type DeviceTelemetrySampleSummary = {
+  capturedAt: Date;
+  batteryLevel: number | null;
+  voltage: number | null;
+  channelUtilization: number | null;
+  airUtilTx: number | null;
+  uptimeSeconds: number | null;
 };
 
 export type AgentAutoSessionConfig = {
@@ -252,11 +255,15 @@ export class DevicesService {
         createdAt: true,
         updatedAt: true,
         lastSeenAt: true,
+        meshtasticNodeId: true,
         longName: true,
         shortName: true,
         hwModel: true,
         firmwareVersion: true,
         appVersion: true,
+        macaddr: true,
+        publicKey: true,
+        isUnmessagable: true,
         role: true,
         lastNodeInfoAt: true
       }
@@ -267,7 +274,7 @@ export class DevicesService {
 
     // lat/lon are required in the current schema, so latest by capturedAt already satisfies
     // "latest measurement with lat/lon not null".
-    const [latestMeasurement, latestStatus, latestNodeInfoEvent, latestTelemetryEvent] = await Promise.all([
+    const [latestMeasurement, latestTelemetry, latestStatus] = await Promise.all([
       this.prisma.measurement.findFirst({
         where: { deviceId: device.id },
         orderBy: { capturedAt: 'desc' },
@@ -280,71 +287,57 @@ export class DevicesService {
           gatewayId: true
         }
       }),
-      this.getLatestStatusForDevice(device.id, device.deviceUid),
-      this.prisma.webhookEvent.findFirst({
-        where: {
-          deviceUid: device.deviceUid,
-          portnum: { in: ['NODEINFO_APP', 'NODEINFO', 'MY_NODEINFO_APP', 'MY_NODEINFO'] }
-        },
-        orderBy: { receivedAt: 'desc' },
-        select: { receivedAt: true, payloadJson: true }
+      this.prisma.deviceTelemetrySample.findFirst({
+        where: { deviceId: device.id },
+        orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }],
+        select: {
+          capturedAt: true,
+          batteryLevel: true,
+          voltage: true,
+          channelUtilization: true,
+          airUtilTx: true,
+          uptimeSeconds: true
+        }
       }),
-      this.prisma.webhookEvent.findFirst({
-        where: {
-          deviceUid: device.deviceUid,
-          portnum: { in: ['TELEMETRY_APP', 'TELEMETRY'] }
-        },
-        orderBy: { receivedAt: 'desc' },
-        select: { receivedAt: true, payloadJson: true }
-      })
+      this.getLatestStatusForDevice(device.id, device.deviceUid)
     ]);
-    const latestTelemetry = latestTelemetryEvent
-      ? parseLatestTelemetry(latestTelemetryEvent.payloadJson, latestTelemetryEvent.receivedAt)
-      : null;
 
     return {
       ...device,
-      macaddr: latestNodeInfoEvent ? extractMacaddr(latestNodeInfoEvent.payloadJson) : null,
       latestMeasurementAt: latestStatus.latestMeasurementAt,
       latestWebhookReceivedAt: latestStatus.latestWebhookReceivedAt,
       latestWebhookSource: latestStatus.latestWebhookSource,
-      latestTelemetry,
-      latestMeasurement
+      latestMeasurement,
+      latestTelemetry
     };
   }
 
   async listTelemetry(
     deviceId: string,
-    limit: number,
-    ownerId?: string
-  ): Promise<DeviceTelemetrySample[] | null> {
+    ownerId: string | undefined,
+    limit: number
+  ): Promise<DeviceTelemetrySampleSummary[] | null> {
     const device = await this.prisma.device.findFirst({
       where: ownerId ? { id: deviceId, ownerId } : { id: deviceId },
-      select: { id: true, deviceUid: true }
+      select: { id: true }
     });
     if (!device) {
       return null;
     }
 
-    const rows = await this.prisma.webhookEvent.findMany({
-      where: {
-        deviceUid: device.deviceUid,
-        portnum: { in: ['TELEMETRY_APP', 'TELEMETRY'] }
-      },
-      orderBy: { receivedAt: 'desc' },
-      take: Math.max(1, Math.trunc(limit)),
-      select: { receivedAt: true, payloadJson: true }
-    });
-
-    const items: DeviceTelemetrySample[] = [];
-    for (const row of rows) {
-      const parsed = parseLatestTelemetry(row.payloadJson, row.receivedAt);
-      if (parsed) {
-        items.push(parsed);
+    return this.prisma.deviceTelemetrySample.findMany({
+      where: { deviceId: device.id },
+      orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: {
+        capturedAt: true,
+        batteryLevel: true,
+        voltage: true,
+        channelUtilization: true,
+        airUtilTx: true,
+        uptimeSeconds: true
       }
-    }
-    items.reverse();
-    return items;
+    });
   }
 
   private async getLatestStatusForDevice(
@@ -656,158 +649,4 @@ function normalizeWebhookSource(
     return 'agent';
   }
   return null;
-}
-
-function parseLatestTelemetry(
-  payload: Prisma.JsonValue,
-  capturedAt: Date
-): DeviceTelemetrySample | null {
-  const records = collectRecordCandidates(payload, new Set(['telemetry', 'devicemetrics', 'metrics']));
-  if (records.length === 0) {
-    return null;
-  }
-
-  const batteryLevel = findFirstNumber(records, [
-    'batteryLevel',
-    'battery_level',
-    'battery',
-    'batteryPercent'
-  ]);
-  const voltage = findFirstNumber(records, ['voltage', 'batteryVoltage', 'battery_voltage', 'vbatt']);
-  const channelUtilization = findFirstNumber(records, [
-    'channelUtilization',
-    'channel_utilization',
-    'channelUtilizationPercent'
-  ]);
-  const airUtilTx = findFirstNumber(records, ['airUtilTx', 'air_util_tx', 'airUtilizationTx']);
-  const uptimeSeconds = findFirstNumber(records, ['uptimeSeconds', 'uptime', 'uptime_secs']);
-
-  if (
-    batteryLevel === null &&
-    voltage === null &&
-    channelUtilization === null &&
-    airUtilTx === null &&
-    uptimeSeconds === null
-  ) {
-    return null;
-  }
-
-  return {
-    batteryLevel,
-    voltage,
-    channelUtilization,
-    airUtilTx,
-    uptimeSeconds,
-    capturedAt
-  };
-}
-
-function extractMacaddr(payload: Prisma.JsonValue): string | null {
-  const records = collectRecordCandidates(payload, new Set(['user', 'nodeinfo', 'metadata']));
-  if (records.length === 0) {
-    return null;
-  }
-  return findFirstString(records, ['macaddr', 'macAddr', 'mac_address', 'mac']);
-}
-
-function collectRecordCandidates(
-  payload: Prisma.JsonValue,
-  preferredKeys: Set<string>
-): Array<Record<string, unknown>> {
-  if (!payload || typeof payload !== 'object') {
-    return [];
-  }
-
-  const preferred: Array<Record<string, unknown>> = [];
-  const all: Array<Record<string, unknown>> = [];
-  const stack: unknown[] = [payload];
-  const seen = new Set<Record<string, unknown>>();
-
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (!current || typeof current !== 'object') {
-      continue;
-    }
-    if (Array.isArray(current)) {
-      for (const item of current) {
-        stack.push(item);
-      }
-      continue;
-    }
-
-    const record = current as Record<string, unknown>;
-    if (seen.has(record)) {
-      continue;
-    }
-    seen.add(record);
-    all.push(record);
-
-    for (const [key, value] of Object.entries(record)) {
-      const normalizedKey = normalizeKey(key);
-      if (preferredKeys.has(normalizedKey) && value && typeof value === 'object' && !Array.isArray(value)) {
-        preferred.push(value as Record<string, unknown>);
-      }
-      if (value && typeof value === 'object') {
-        stack.push(value);
-      }
-    }
-  }
-
-  return dedupeRecords([...preferred, ...all]);
-}
-
-function dedupeRecords(records: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const unique: Array<Record<string, unknown>> = [];
-  const seen = new Set<Record<string, unknown>>();
-  for (const record of records) {
-    if (seen.has(record)) {
-      continue;
-    }
-    seen.add(record);
-    unique.push(record);
-  }
-  return unique;
-}
-
-function findFirstNumber(records: Array<Record<string, unknown>>, keys: string[]): number | null {
-  const normalizedKeys = new Set(keys.map(normalizeKey));
-  for (const record of records) {
-    for (const [key, value] of Object.entries(record)) {
-      if (!normalizedKeys.has(normalizeKey(key))) {
-        continue;
-      }
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        return value;
-      }
-      if (typeof value === 'string') {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) {
-          return parsed;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function findFirstString(records: Array<Record<string, unknown>>, keys: string[]): string | null {
-  const normalizedKeys = new Set(keys.map(normalizeKey));
-  for (const record of records) {
-    for (const [key, value] of Object.entries(record)) {
-      if (!normalizedKeys.has(normalizeKey(key))) {
-        continue;
-      }
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (trimmed.length > 0) {
-          return trimmed;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function normalizeKey(key: string): string {
-  return key.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }

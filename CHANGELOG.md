@@ -46,6 +46,60 @@
 ### Notes
 - No breaking API changes; fields are additive/optional.
 
+## v0.10.1 - 2026-02-21
+
+### Title
+- Meshtastic device metadata + telemetry UX
+
+### Added
+- Added richer device identity fields in API/detail payloads (`meshtasticNodeId`, `macaddr`, `publicKey`, `isUnmessagable`) populated from Meshtastic `NODEINFO_APP` events.
+- Added device telemetry persistence and API exposure (`DeviceTelemetrySample`, `GET /api/devices/:id/telemetry`) with bounded history for UI timelines.
+- Added Device Details UI sections for Meshtastic identity and latest telemetry, including deep links to filtered raw `NODEINFO_APP` / `TELEMETRY_APP` events.
+- Added compact battery/voltage sparkline in Device Details using lightweight inline SVG (no heavy chart library).
+
+### Changed
+- Meshtastic ingest processing now promotes node-info and telemetry packets into first-class device/telemetry records for faster operator visibility.
+- Device picker labels are now compact (name + UID) and no longer include device type text.
+- Pi-forwarder and wiki ingestion docs were updated to reflect stdin-bridge behavior and NODEINFO/TELEMETRY promotion flow.
+
+### Milestone
+- Operators can identify device type/identity, inspect recent telemetry trends, and pivot to raw events from a single Device Details workflow.
+
+### Acceptance
+- Device Details renders Meshtastic identity and telemetry sections only when data exists.
+- "View raw nodeinfo event" and "View raw telemetry event" open Events Explorer with prefilled device+port filters.
+- Telemetry sparkline appears for devices with telemetry history and is hidden when no telemetry is available.
+
+### Notes
+- No breaking API changes for existing map/session/event consumers.
+
+## v0.10.0 - 2026-02-20
+
+### Title
+- Raw Events Explorer + payload retention
+
+### Added
+- Added unified QUERY-scoped raw events endpoints (`GET /api/events`, `GET /api/events/:id`) with filters for source/deviceUid/portnum/time/q plus cursor pagination.
+- Added raw payload retention for LoRaWAN and Meshtastic ingest in `WebhookEvent.payloadJson`, including schema migrations for source normalization and raw-event fields.
+- Added Debug-tab Events Explorer UI with filter controls, paged results, and a detail drawer showing extracted highlights plus a collapsible/copyable JSON tree view.
+- Added deep links (`View raw event(s)`) from Device Details and Point Details into Debug > Events with URL-backed filters.
+
+### Changed
+- Updated Meshtastic and LoRaWAN ingest paths to persist richer event metadata (`source`, `portnum`, payload context) for normalization/reprocessing workflows.
+- Updated Pi forwarder ingestion robustness with stdin bridge support and accompanying operator docs/runbook updates.
+- Updated ingestion/troubleshooting docs with Raw Events Explorer usage examples for `TELEMETRY_APP` and `NODEINFO_APP` triage.
+
+### Milestone
+- Operators can diagnose ingest and normalization issues from the app UI without tailing backend logs.
+
+### Acceptance
+- Debug > Events supports filterable/cursor-paginated raw-event exploration and detail inspection with full payload visibility.
+- Raw-event navigation from selected device or point context opens Events with preselected filters.
+- Full raw payload retention is in place for v0.10.0 to support later normalization passes.
+
+### Notes
+- No breaking API changes for existing measurement/session consumers.
+
 ## v0.9.18 - 2026-02-19
 
 ### Title

@@ -22,9 +22,9 @@ import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-c
 import {
   DeviceDetail,
   DeviceAgentDecision,
-  DeviceTelemetrySample,
   DeviceLatestStatus,
   DeviceListItem,
+  DeviceTelemetrySampleSummary,
   LatestWebhookSource,
   DeviceMutableSummary,
   DeviceSummary,
@@ -119,6 +119,26 @@ export class DevicesController {
     return formatLatestResponse(latest);
   }
 
+  @Get(':id/telemetry')
+  @UseGuards(OwnerGuard)
+  async getTelemetry(
+    @Req() request: OwnerContextRequest,
+    @Param('id') id: string,
+    @Query('limit') limitParam?: string
+  ): Promise<{ items: DeviceTelemetryResponse[]; count: number; limit: number }> {
+    const ownerId = getOwnerIdFromRequest(request);
+    const limit = parseTelemetryLimit(limitParam);
+    const items = await this.devicesService.listTelemetry(id, ownerId, limit);
+    if (!items) {
+      throw new NotFoundException('Device not found');
+    }
+    return {
+      items: items.map(formatTelemetry),
+      count: items.length,
+      limit
+    };
+  }
+
   @Get(':id')
   @UseGuards(OwnerGuard)
   async getById(
@@ -131,23 +151,6 @@ export class DevicesController {
       throw new NotFoundException('Device not found');
     }
     return formatDeviceDetail(device);
-  }
-
-  @Get(':id/telemetry')
-  @UseGuards(OwnerGuard)
-  async telemetry(
-    @Req() request: OwnerContextRequest,
-    @Param('id') id: string,
-    @Query('limit') limitParam?: string
-  ): Promise<{ items: DeviceTelemetrySampleResponse[]; count: number; limit: number }> {
-    const ownerId = getOwnerIdFromRequest(request);
-    const limit = parseTelemetryLimit(limitParam);
-    const samples = await this.devicesService.listTelemetry(id, limit, ownerId);
-    if (!samples) {
-      throw new NotFoundException('Device not found');
-    }
-    const items = samples.map(formatTelemetrySample);
-    return { items, count: items.length, limit };
   }
 
   @Get('by-uid/:deviceUid')
@@ -281,25 +284,20 @@ type DeviceDetailResponse = {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string | null;
+  meshtasticNodeId: string | null;
   longName: string | null;
   shortName: string | null;
   hwModel: string | null;
   firmwareVersion: string | null;
   appVersion: string | null;
-  role: string | null;
   macaddr: string | null;
+  publicKey: string | null;
+  isUnmessagable: boolean | null;
+  role: string | null;
   lastNodeInfoAt: string | null;
   latestMeasurementAt: string | null;
   latestWebhookReceivedAt: string | null;
   latestWebhookSource: LatestWebhookSource | null;
-  latestTelemetry: {
-    batteryLevel: number | null;
-    voltage: number | null;
-    channelUtilization: number | null;
-    airUtilTx: number | null;
-    uptimeSeconds: number | null;
-    capturedAt: string;
-  } | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;
@@ -308,15 +306,16 @@ type DeviceDetailResponse = {
     snr: number | null;
     gatewayId: string | null;
   } | null;
+  latestTelemetry: DeviceTelemetryResponse | null;
 };
 
-type DeviceTelemetrySampleResponse = {
+type DeviceTelemetryResponse = {
+  capturedAt: string;
   batteryLevel: number | null;
   voltage: number | null;
   channelUtilization: number | null;
   airUtilTx: number | null;
   uptimeSeconds: number | null;
-  capturedAt: string;
 };
 
 const DEFAULT_RADIUS_METERS = 20;
@@ -324,8 +323,8 @@ const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
 const DEFAULT_AGENT_DECISIONS_LIMIT = 200;
 const MAX_AGENT_DECISIONS_LIMIT = 5000;
-const DEFAULT_TELEMETRY_LIMIT = 48;
-const MAX_TELEMETRY_LIMIT = 500;
+const DEFAULT_DEVICE_TELEMETRY_LIMIT = 200;
+const MAX_DEVICE_TELEMETRY_LIMIT = 5000;
 const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_DEVICE_NOTES_LENGTH = 2000;
 const DELETE_CONFIRMATION_VALUE = 'DELETE';
@@ -390,13 +389,13 @@ function parseLimit(value?: string): number {
 
 function parseTelemetryLimit(value?: string): number {
   if (value === undefined) {
-    return DEFAULT_TELEMETRY_LIMIT;
+    return DEFAULT_DEVICE_TELEMETRY_LIMIT;
   }
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new BadRequestException('limit must be a positive integer');
   }
-  return Math.min(parsed, MAX_TELEMETRY_LIMIT);
+  return Math.min(parsed, MAX_DEVICE_TELEMETRY_LIMIT);
 }
 
 function parsePatchBody(body: DevicePatchBody): {
@@ -592,29 +591,22 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
     createdAt: device.createdAt.toISOString(),
     updatedAt: device.updatedAt.toISOString(),
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    meshtasticNodeId: device.meshtasticNodeId ?? null,
     longName: device.longName ?? null,
     shortName: device.shortName ?? null,
     hwModel: device.hwModel ?? null,
     firmwareVersion: device.firmwareVersion ?? null,
     appVersion: device.appVersion ?? null,
-    role: device.role ?? null,
     macaddr: device.macaddr ?? null,
+    publicKey: device.publicKey ?? null,
+    isUnmessagable: device.isUnmessagable ?? null,
+    role: device.role ?? null,
     lastNodeInfoAt: device.lastNodeInfoAt ? device.lastNodeInfoAt.toISOString() : null,
     latestMeasurementAt: device.latestMeasurementAt ? device.latestMeasurementAt.toISOString() : null,
     latestWebhookReceivedAt: device.latestWebhookReceivedAt
       ? device.latestWebhookReceivedAt.toISOString()
       : null,
     latestWebhookSource: device.latestWebhookSource ?? null,
-    latestTelemetry: device.latestTelemetry
-      ? {
-          batteryLevel: device.latestTelemetry.batteryLevel,
-          voltage: device.latestTelemetry.voltage,
-          channelUtilization: device.latestTelemetry.channelUtilization,
-          airUtilTx: device.latestTelemetry.airUtilTx,
-          uptimeSeconds: device.latestTelemetry.uptimeSeconds,
-          capturedAt: device.latestTelemetry.capturedAt.toISOString()
-        }
-      : null,
     latestMeasurement: device.latestMeasurement
       ? {
           capturedAt: device.latestMeasurement.capturedAt.toISOString(),
@@ -624,17 +616,18 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
           snr: device.latestMeasurement.snr,
           gatewayId: device.latestMeasurement.gatewayId
         }
-      : null
+      : null,
+    latestTelemetry: device.latestTelemetry ? formatTelemetry(device.latestTelemetry) : null
   };
 }
 
-function formatTelemetrySample(sample: DeviceTelemetrySample): DeviceTelemetrySampleResponse {
+function formatTelemetry(sample: DeviceTelemetrySampleSummary): DeviceTelemetryResponse {
   return {
+    capturedAt: sample.capturedAt.toISOString(),
     batteryLevel: sample.batteryLevel,
     voltage: sample.voltage,
     channelUtilization: sample.channelUtilization,
     airUtilTx: sample.airUtilTx,
-    uptimeSeconds: sample.uptimeSeconds,
-    capturedAt: sample.capturedAt.toISOString()
+    uptimeSeconds: sample.uptimeSeconds
   };
 }
