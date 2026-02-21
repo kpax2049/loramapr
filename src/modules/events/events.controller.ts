@@ -2,7 +2,7 @@ import { BadRequestException, Controller, Get, NotFoundException, Param, Query, 
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
-import { decodeCursor, EventDetail, EventListItem, EventsService, EventsSource } from './events.service';
+import { decodeCursor, EventDetail, EventsListResponse, EventsService, EventsSource } from './events.service';
 
 @UseGuards(ApiKeyGuard)
 @RequireApiKeyScope(ApiKeyScope.QUERY)
@@ -20,7 +20,7 @@ export class EventsController {
     @Query('q') qRaw?: string,
     @Query('limit') limitRaw?: string,
     @Query('cursor') cursorRaw?: string
-  ): Promise<{ items: EventListItem[]; nextCursor?: string }> {
+  ): Promise<EventsListResponse> {
     const source = parseSource(sourceRaw);
     const deviceUid = parseOptionalText(deviceUidRaw);
     const portnum = parseOptionalText(portnumRaw);

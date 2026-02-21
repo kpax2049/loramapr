@@ -50,45 +50,64 @@ export type EventDetail = {
   payloadJson: Prisma.JsonValue;
 };
 
+export type EventsListResponse = {
+  items: EventListItem[];
+  nextCursor?: string;
+  returnedCount: number;
+  totalFilteredCount?: number;
+};
+
 @Injectable()
 export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(params: ListEventsParams): Promise<{
-    items: EventListItem[];
-    nextCursor?: string;
-  }> {
+  async list(params: ListEventsParams): Promise<EventsListResponse> {
     if (params.q) {
       return this.listWithSearch(params);
     }
 
     const where = buildWhereClause(params);
-    const rows = await this.prisma.webhookEvent.findMany({
-      where,
-      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
-      take: params.limit + 1,
-      select: {
-        id: true,
-        source: true,
-        receivedAt: true,
-        deviceUid: true,
-        portnum: true,
-        packetId: true,
-        payloadJson: true
-      }
+    const countWhere = buildWhereClause({
+      ...params,
+      cursor: undefined
     });
+    const [rows, totalFilteredCount] = await Promise.all([
+      this.prisma.webhookEvent.findMany({
+        where,
+        orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
+        take: params.limit + 1,
+        select: {
+          id: true,
+          source: true,
+          receivedAt: true,
+          deviceUid: true,
+          portnum: true,
+          packetId: true,
+          payloadJson: true
+        }
+      }),
+      this.prisma.webhookEvent.count({
+        where: countWhere
+      })
+    ]);
 
     const hasMore = rows.length > params.limit;
     const sliced = hasMore ? rows.slice(0, params.limit) : rows;
     const items = sliced.map((row) => formatListItem(row));
 
     if (!hasMore || items.length === 0) {
-      return { items };
+      return {
+        items,
+        returnedCount: items.length,
+        totalFilteredCount
+      };
     }
 
     const last = items[items.length - 1];
     return {
       items,
+      returnedCount: items.length,
+      totalFilteredCount,
       nextCursor: encodeCursor({
         receivedAt: last.receivedAt,
         id: last.id
@@ -96,13 +115,10 @@ export class EventsService {
     };
   }
 
-  private async listWithSearch(params: ListEventsParams): Promise<{
-    items: EventListItem[];
-    nextCursor?: string;
-  }> {
+  private async listWithSearch(params: ListEventsParams): Promise<EventsListResponse> {
     const q = params.q?.trim();
     if (!q) {
-      return { items: [] };
+      return { items: [], returnedCount: 0 };
     }
 
     const qLike = `%${escapeLikePattern(q)}%`;
@@ -175,12 +191,16 @@ export class EventsService {
     const items = sliced.map((row) => formatListItem(row));
 
     if (!hasMore || items.length === 0) {
-      return { items };
+      return {
+        items,
+        returnedCount: items.length
+      };
     }
 
     const last = items[items.length - 1];
     return {
       items,
+      returnedCount: items.length,
       nextCursor: encodeCursor({
         receivedAt: last.receivedAt,
         id: last.id
