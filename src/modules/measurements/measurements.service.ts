@@ -14,6 +14,8 @@ export type CanonicalMeasurementInput = {
   capturedAt: string | Date;
   lat: number;
   lon: number;
+  sourceEventId?: string;
+  source?: string;
   alt?: number;
   altitude?: number;
   hdop?: number;
@@ -68,6 +70,8 @@ export type MeasurementQueryResult = {
     id: string;
     deviceId: string;
     sessionId: string | null;
+    sourceEventId: string | null;
+    source: string | null;
     capturedAt: Date;
     lat: number;
     lon: number;
@@ -219,6 +223,8 @@ export class MeasurementsService {
               item.sessionId && validSessionIds.has(item.sessionId)
                 ? item.sessionId
                 : fallbackSessionId,
+            sourceEventId: item.sourceEventId,
+            source: item.source,
             capturedAt,
             lat: item.lat,
             lon: item.lon,
@@ -325,6 +331,8 @@ export class MeasurementsService {
       capturedAt: true,
       lat: true,
       lon: true,
+      sourceEventId: true,
+      source: true,
       alt: true,
       altitude: true,
       pdop: true,

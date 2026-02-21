@@ -366,7 +366,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         return;
       }
 
-      await this.processTtsEvent(id, deviceUid, payload, processedAt);
+      await this.processTtsEvent(id, source, deviceUid, payload, processedAt);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'processing_failed';
       await this.prisma.webhookEvent.update({
@@ -387,6 +387,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
 
   private async processTtsEvent(
     id: string,
+    source: WebhookEventSource,
     deviceUid: string | undefined,
     payload: Prisma.JsonValue,
     processedAt: Date
@@ -412,7 +413,11 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     }
 
     await this.measurementsService.ingestCanonical(deviceUid ?? normalized.item.deviceUid, [
-      normalized.item
+      {
+        ...normalized.item,
+        sourceEventId: id,
+        source: normalizeMeasurementSource(source)
+      }
     ]);
 
     await this.prisma.webhookEvent.update({
@@ -470,6 +475,8 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     if (normalized) {
       const ingestResult = await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
         {
+          sourceEventId: id,
+          source: normalizeMeasurementSource(WebhookEventSource.MESHTASTIC),
           capturedAt: normalized.capturedAt,
           lat: normalized.lat,
           lon: normalized.lon,
@@ -1376,6 +1383,19 @@ function normalizeSource(source: WebhookEventSource): 'lorawan' | 'meshtastic' |
   }
   if (source === WebhookEventSource.AGENT) {
     return 'agent';
+  }
+  return 'lorawan';
+}
+
+function normalizeMeasurementSource(source: WebhookEventSource): 'lorawan' | 'meshtastic' | 'agent' | 'sim' {
+  if (source === WebhookEventSource.MESHTASTIC) {
+    return 'meshtastic';
+  }
+  if (source === WebhookEventSource.AGENT) {
+    return 'agent';
+  }
+  if (source === WebhookEventSource.SIM) {
+    return 'sim';
   }
   return 'lorawan';
 }
