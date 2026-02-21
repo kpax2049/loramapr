@@ -8,6 +8,7 @@ import {
   getAutoSession,
   getAgentDecisions,
   getDeviceById,
+  getDeviceTelemetry,
   getCoverageBins,
   getDeviceLatest,
   getGatewayStats,
@@ -39,6 +40,7 @@ import type {
   Device,
   DeviceDetail,
   DeviceLatest,
+  DeviceTelemetryResponse,
   GatewayStats,
   GatewaySummary,
   ReceiverSummary,
@@ -190,6 +192,29 @@ export function useDeviceDetail(deviceId?: string | null, options?: QueryOptions
     queryFn: ({ signal }) => getDeviceById(deviceId as string, { signal }),
     ...options,
     enabled
+  });
+}
+
+export function useDeviceTelemetry(deviceId?: string | null, limit = 48) {
+  const [unsupported, setUnsupported] = useState(false);
+  const enabled = Boolean(deviceId) && !unsupported;
+
+  return useQuery<DeviceTelemetryResponse>({
+    queryKey: ['device-telemetry', deviceId ?? null, limit],
+    queryFn: ({ signal }) => getDeviceTelemetry(deviceId as string, { limit }, { signal }),
+    enabled,
+    refetchInterval: enabled ? 30_000 : false,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        setUnsupported(true);
+      }
+    }
   });
 }
 

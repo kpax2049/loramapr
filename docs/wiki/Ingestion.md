@@ -14,6 +14,9 @@
   - `POST /api/meshtastic/event`
 - Backend stores payloads as `WebhookEvent` (`source: 'meshtastic'`) and processes them in `LorawanService` worker.
 - Forwarder should send full packet JSON as received (plus `_forwarder` metadata). Do not pre-normalize GPS fields in the forwarder.
+- Worker promotion rules for common Meshtastic app ports:
+  - `NODEINFO_APP` + `decoded.user`: updates `Device` metadata (no `Measurement` row created).
+  - `TELEMETRY_APP` + `decoded.telemetry.deviceMetrics`: inserts `DeviceTelemetrySample` (no `Measurement` row created).
 
 ### Simulator (`simulate:walk`)
 
@@ -74,6 +77,27 @@ Meshtastic (`normalizeMeshtasticPayload`):
     - top-level `lat/lon` and `latitude/longitude`
 - Missing GPS (and no node-info fields) => `processingError: 'missing_gps'`.
 
+### Meshtastic non-position promotions
+
+`NODEINFO_APP`:
+
+- Detects packets where `decoded.portnum == 'NODEINFO_APP'` and `decoded.user` exists.
+- Resolves device identity from `fromId`/`decoded.user.id`/`from` (best effort).
+- Upserts `Device` metadata fields when present (for example `hwModel`, `longName`, `shortName`, `macaddr`, `publicKey`, `isUnmessagable`), sets `lastNodeInfoAt` and `lastSeenAt`.
+- Marks `WebhookEvent` processed and clears `processingError`.
+- Does not create `Measurement` rows for node-info packets.
+
+`TELEMETRY_APP`:
+
+- Detects packets where `decoded.portnum == 'TELEMETRY_APP'` and `decoded.telemetry.deviceMetrics` exists.
+- Inserts `DeviceTelemetrySample` from telemetry metrics:
+  - `batteryLevel`, `voltage`, `channelUtilization`, `airUtilTx`, `uptimeSeconds`
+  - `raw` stores the `decoded.telemetry` subtree for debugging.
+- `capturedAt` precedence:
+  - `decoded.telemetry.time` (seconds), else `rxTime`, else event `receivedAt`.
+- Updates `Device.lastSeenAt`, marks `WebhookEvent` processed, and clears `processingError`.
+- Does not create `Measurement` rows for telemetry packets.
+
 ### Coordinate scaling (`lat_i` / `lon_i` style values)
 
 Meshtastic coordinates are passed through `normalizeCoordinate(value, limit)`:
@@ -120,6 +144,7 @@ Use the **Events** panel in Debug when you need to inspect raw ingest traffic ac
   - Time range (`15m`, `1h`, `24h`, `custom`)
   - `q` text search
 - Row click opens the event detail drawer with extracted highlights plus full raw `payloadJson`.
+- Raw packets remain available in Events Explorer even when they are promoted to `Device` metadata or `DeviceTelemetrySample`.
 
 Examples:
 
@@ -176,6 +201,7 @@ These debug endpoints require `X-API-Key` with `QUERY` scope (frontend typically
 ## 5) Raw payload retention note (v0.10.0)
 
 - v0.10.0 stores full raw ingest payloads on `WebhookEvent.payloadJson` for later normalization, debugging, and reprocessing workflows.
+- Promotions (`NODEINFO_APP` / `TELEMETRY_APP`) are additive: raw packet payloads are still queryable via Events Explorer and `/api/events/:id`.
 
 ### Common failure modes
 

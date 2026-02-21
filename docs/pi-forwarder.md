@@ -5,8 +5,10 @@
 This document reflects the exact recovery path used in production on the Pi:
 
 - serial lock conflicts
+- serial by-id path label changes after reboot/replug
 - `SOURCE=cli` vs `SOURCE=stdin`
 - systemd EOF loops when stdin producer is missing
+- Meshtastic handshake timeout (`Timed out waiting for connection completion`)
 - bridge serialization errors (`Telemetry` / `Position` not JSON serializable)
 
 ## What it does
@@ -63,6 +65,14 @@ Use stable by-id paths:
 ls -l /dev/serial/by-id/
 ```
 
+On this hardware, the symlink label can change between boots:
+
+- `usb-Seeed_TRACKER_L1_...`
+- `usb-Seeed_Studio_TRACKER_L1_...`
+
+Always copy the current path from `ls -l /dev/serial/by-id/` into `MESHTASTIC_PORT`.
+If by-id naming keeps changing, use `/dev/ttyACM0` as a fallback.
+
 Check lock owner:
 
 ```bash
@@ -103,13 +113,28 @@ API_BASE_URL=http://192.168.178.22:3000
 INGEST_API_KEY=replace_me
 DEVICE_HINT=pi-home-node
 SOURCE=stdin
-MESHTASTIC_PORT=/dev/serial/by-id/usb-Seeed_Studio_TRACKER_L1_D5BCE63E6E8DE77E-if00
+MESHTASTIC_PORT=/dev/serial/by-id/<copy-current-value-from-ls-output>
 POLL_HEARTBEAT_SECONDS=60
 POST_TIMEOUT_MS=8000
 RETRY_BASE_MS=500
 RETRY_MAX_MS=10000
 MAX_QUEUE=5000
 ```
+
+## Preflight serial handshake
+
+Before restarting the service, verify Meshtastic can connect on the configured port:
+
+```bash
+sudo bash -lc '
+set -a
+source /etc/loramapr/pi-forwarder.env
+set +a
+/home/kpax/meshtastic-venv/bin/meshtastic --port "$MESHTASTIC_PORT" --info --timeout 60
+'
+```
+
+If this command times out, fix node/USB/port ownership first. Forwarder cannot ingest until this succeeds.
 
 ## systemd setup
 
@@ -146,6 +171,11 @@ sudo systemctl edit loramapr-pi-forwarder
 ExecStart=
 ExecStart=/bin/bash -lc '/home/kpax/meshtastic-venv/bin/python /opt/loramapr/pi-forwarder/scripts/meshtastic-json-bridge.py --port "${MESHTASTIC_PORT}" | /usr/bin/node /opt/loramapr/pi-forwarder/dist/index.js'
 ```
+
+Important:
+
+- Do not hardcode `--port /dev/...` inside `ExecStart`.
+- If `ExecStart` hardcodes the port, updates in `/etc/loramapr/pi-forwarder.env` are ignored.
 
 Example override file in repo:
 
@@ -193,6 +223,9 @@ curl -s -H "X-API-Key: $QUERY_API_KEY" \
 |---|---|---|
 | `successfulPosts=0` forever in CLI mode | Source stream has no JSON object lines | Use `SOURCE=stdin` + bridge or adapt CLI source parser. |
 | `stdin reached EOF` every restart | stdin producer missing/crashed | Fix `ExecStart` pipeline and bridge path. |
+| `FileNotFoundError: ... /dev/serial/by-id/...` | `MESHTASTIC_PORT` points to stale by-id path | Run `ls -l /dev/serial/by-id/`, update env, restart service. |
+| `MeshInterfaceError: Timed out waiting for connection completion` | Serial device exists but node handshake failed | Stop competing processes, run `meshtastic --info --timeout 60`, power-cycle/replug node, then restart forwarder. |
+| Env edit had no effect | `ExecStart` override hardcodes `--port` | Change override to `--port "${MESHTASTIC_PORT}"`, `daemon-reload`, restart. |
 | `can't open file ... meshtastic-json-bridge.py` | Bridge script not deployed | Copy `apps/pi-forwarder/scripts/meshtastic-json-bridge.py` to `/opt/.../scripts/`. |
 | `bridgeError: Object of type Telemetry/Position is not JSON serializable` | Old/incomplete bridge serializer | Use repo bridge script with protobuf/object conversion. |
 | `deviceUid: "unknown"` + `processingError: "missing_gps"` | Bridge emitted error object instead of packet, or non-position event | Inspect event payload via `/api/meshtastic/events/:id`; fix bridge output shape. |

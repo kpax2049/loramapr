@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import type { AutoSessionConfig, DeviceLatest } from '../api/types';
+import type { AutoSessionConfig, DeviceLatest, DeviceTelemetrySample } from '../api/types';
 import { useApiDiagnosticsEntries } from '../api/diagnostics';
 import { getApiBaseUrl } from '../api/http';
 import { ApiError } from '../api/http';
@@ -7,6 +7,7 @@ import {
   useAgentDecisions,
   useAutoSession,
   useDeviceDetail,
+  useDeviceTelemetry,
   useDevices,
   useGateways,
   useReceivers,
@@ -27,6 +28,7 @@ import DeviceIcon, {
   DEVICE_ICON_CATALOG,
   type DeviceIconKey,
   buildDeviceIdentityLabel,
+  getDevicePrimaryLabel,
   getDeviceIconDefinition,
   getEffectiveIconKey
 } from './DeviceIcon';
@@ -175,6 +177,7 @@ export default function Controls({
   const updateAutoSessionMutation = useUpdateAutoSession(deviceId);
   const updateDeviceMutation = useUpdateDevice();
   const deviceDetailQuery = useDeviceDetail(deviceId, { enabled: Boolean(deviceId) });
+  const telemetryQuery = useDeviceTelemetry(deviceId, 48);
   const deviceDetail = deviceDetailQuery.data;
   const deviceDetailErrorStatus = getErrorStatus(deviceDetailQuery.error);
   const autoSessionStatus = getErrorStatus(autoSessionQuery.error);
@@ -410,10 +413,14 @@ export default function Controls({
   const meshtasticLongName = normalizeOptionalText(deviceDetail?.longName);
   const meshtasticShortName = normalizeOptionalText(deviceDetail?.shortName);
   const meshtasticHwModel = normalizeOptionalText(deviceDetail?.hwModel);
-  const meshtasticFirmwareVersion = normalizeOptionalText(deviceDetail?.firmwareVersion);
-  const meshtasticAppVersion = normalizeOptionalText(deviceDetail?.appVersion);
-  const meshtasticRole = normalizeOptionalText(deviceDetail?.role);
+  const meshtasticMacaddr = normalizeOptionalText(deviceDetail?.macaddr);
   const meshtasticLastNodeInfoAt = deviceDetail?.lastNodeInfoAt ?? null;
+  const latestTelemetry = deviceDetail?.latestTelemetry ?? null;
+  const telemetrySamples = telemetryQuery.data?.items ?? [];
+  const telemetrySeries = useMemo(
+    () => buildTelemetrySeries(telemetrySamples),
+    [telemetrySamples]
+  );
   const detailIconInput = useMemo(
     () => ({
       deviceUid: deviceDetail?.deviceUid ?? selectedDevice?.deviceUid ?? null,
@@ -439,9 +446,7 @@ export default function Controls({
     meshtasticLongName ||
       meshtasticShortName ||
       meshtasticHwModel ||
-      meshtasticFirmwareVersion ||
-      meshtasticAppVersion ||
-      meshtasticRole ||
+      meshtasticMacaddr ||
       meshtasticLastNodeInfoAt
   );
   const detailsNameDirty = (detailsNameDraft ?? '').trim() !== (deviceDetail?.name ?? '').trim();
@@ -588,7 +593,7 @@ export default function Controls({
                     title={getDeviceIconDefinition(getEffectiveIconKey(selectedDevice)).label}
                   />
                   <span className="controls__device-picker-label">
-                    {buildDeviceIdentityLabel(selectedDevice)}
+                    {buildCompactDevicePickerLabel(selectedDevice)}
                   </span>
                 </>
               ) : (
@@ -629,7 +634,9 @@ export default function Controls({
                         className="controls__device-picker-icon"
                         title={optionIcon.label}
                       />
-                      <span className="controls__device-picker-label">{buildDeviceIdentityLabel(device)}</span>
+                      <span className="controls__device-picker-label">
+                        {buildCompactDevicePickerLabel(device)}
+                      </span>
                     </button>
                   );
                 })}
@@ -776,17 +783,19 @@ export default function Controls({
                   </div>
                   <div className="device-details__row">
                     <span>Raw events</span>
-                    <button
-                      type="button"
-                      className="device-details__events-link"
-                      onClick={() =>
-                        onOpenEvents({
-                          deviceUid: deviceDetail.deviceUid
-                        })
-                      }
-                    >
-                      View raw event(s)
-                    </button>
+                    <div className="device-details__events-links">
+                      <button
+                        type="button"
+                        className="device-details__events-link"
+                        onClick={() =>
+                          onOpenEvents({
+                            deviceUid: deviceDetail.deviceUid
+                          })
+                        }
+                      >
+                        View raw event(s)
+                      </button>
+                    </div>
                   </div>
                   <div className="device-details__row">
                     <span>Status</span>
@@ -851,22 +860,10 @@ export default function Controls({
                           <strong>{meshtasticShortName}</strong>
                         </div>
                       ) : null}
-                      {meshtasticFirmwareVersion ? (
+                      {meshtasticMacaddr ? (
                         <div className="device-details__row">
-                          <span>firmwareVersion</span>
-                          <strong>{meshtasticFirmwareVersion}</strong>
-                        </div>
-                      ) : null}
-                      {meshtasticAppVersion ? (
-                        <div className="device-details__row">
-                          <span>appVersion</span>
-                          <strong>{meshtasticAppVersion}</strong>
-                        </div>
-                      ) : null}
-                      {meshtasticRole ? (
-                        <div className="device-details__row">
-                          <span>role</span>
-                          <strong>{meshtasticRole}</strong>
+                          <span>macaddr</span>
+                          <strong>{meshtasticMacaddr}</strong>
                         </div>
                       ) : null}
                       {meshtasticLastNodeInfoAt ? (
@@ -875,6 +872,78 @@ export default function Controls({
                           <strong>{formatRelativeTime(meshtasticLastNodeInfoAt)}</strong>
                         </div>
                       ) : null}
+                      <div className="device-details__row">
+                        <span>Raw node info</span>
+                        <div className="device-details__events-links">
+                          <button
+                            type="button"
+                            className="device-details__events-link"
+                            onClick={() =>
+                              onOpenEvents({
+                                deviceUid: deviceDetail.deviceUid,
+                                source: 'meshtastic',
+                                portnum: 'NODEINFO_APP'
+                              })
+                            }
+                          >
+                            View raw nodeinfo event
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {latestTelemetry ? (
+                    <>
+                      <div className="device-details__section-title">Latest telemetry</div>
+                      <div className="device-details__row">
+                        <span>batteryLevel</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.batteryLevel, '%')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>voltage</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.voltage, 'V')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>channelUtilization</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.channelUtilization, '%')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>airUtilTx</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.airUtilTx, '%')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>uptimeSeconds</span>
+                        <strong>{formatTelemetrySeconds(latestTelemetry.uptimeSeconds)}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>capturedAt</span>
+                        <strong>{formatRelativeTime(latestTelemetry.capturedAt)}</strong>
+                      </div>
+                      {telemetrySeries ? (
+                        <div className="device-details__row">
+                          <span>trend</span>
+                          <TelemetrySparkline series={telemetrySeries} />
+                        </div>
+                      ) : null}
+                      <div className="device-details__row">
+                        <span>Raw telemetry</span>
+                        <div className="device-details__events-links">
+                          <button
+                            type="button"
+                            className="device-details__events-link"
+                            onClick={() =>
+                              onOpenEvents({
+                                deviceUid: deviceDetail.deviceUid,
+                                source: 'meshtastic',
+                                portnum: 'TELEMETRY_APP'
+                              })
+                            }
+                          >
+                            View raw telemetry event
+                          </button>
+                        </div>
+                      </div>
                     </>
                   ) : null}
 
@@ -1760,6 +1829,112 @@ function formatDeviceStatusBucket(status: DeviceStatusBucket): 'Online' | 'Recen
   return 'Unknown';
 }
 
+function formatTelemetryMetric(value: number | null | undefined, unit: string): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—';
+  }
+  const decimals = Math.abs(value) >= 100 ? 0 : 2;
+  const formatted = Number(value.toFixed(decimals)).toString();
+  return `${formatted}${unit ? ` ${unit}` : ''}`;
+}
+
+function formatTelemetrySeconds(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—';
+  }
+  return `${Math.max(0, Math.round(value))}s`;
+}
+
+type TelemetrySeries = {
+  metric: 'batteryLevel' | 'voltage';
+  label: string;
+  unit: string;
+  values: number[];
+  min: number;
+  max: number;
+  latest: number;
+};
+
+function buildTelemetrySeries(samples: DeviceTelemetrySample[]): TelemetrySeries | null {
+  if (samples.length === 0) {
+    return null;
+  }
+
+  const batteryValues = samples
+    .map((sample) => sample.batteryLevel)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (batteryValues.length >= 2) {
+    return createTelemetrySeries('batteryLevel', 'Battery', '%', batteryValues);
+  }
+
+  const voltageValues = samples
+    .map((sample) => sample.voltage)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (voltageValues.length >= 2) {
+    return createTelemetrySeries('voltage', 'Voltage', 'V', voltageValues);
+  }
+
+  return null;
+}
+
+function createTelemetrySeries(
+  metric: TelemetrySeries['metric'],
+  label: string,
+  unit: string,
+  values: number[]
+): TelemetrySeries | null {
+  if (values.length < 2) {
+    return null;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const latest = values[values.length - 1];
+  return {
+    metric,
+    label,
+    unit,
+    values,
+    min,
+    max,
+    latest
+  };
+}
+
+function TelemetrySparkline({ series }: { series: TelemetrySeries }) {
+  const width = 148;
+  const height = 34;
+  const padding = 2;
+  const range = series.max - series.min || 1;
+  const denominator = Math.max(1, series.values.length - 1);
+
+  const points = series.values
+    .map((value, index) => {
+      const x = padding + (index / denominator) * (width - padding * 2);
+      const y =
+        padding + (1 - (value - series.min) / range) * (height - padding * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  return (
+    <div className="device-details__sparkline">
+      <svg
+        className="device-details__sparkline-svg"
+        viewBox={`0 0 ${width} ${height}`}
+        aria-label={`${series.label} trend`}
+        role="img"
+      >
+        <polyline className="device-details__sparkline-line" points={points} />
+      </svg>
+      <div className="device-details__sparkline-meta">
+        <span>{series.label}</span>
+        <strong>{formatTelemetryMetric(series.latest, series.unit)}</strong>
+      </div>
+    </div>
+  );
+}
+
 type CoverageLegendItem = {
   label: string;
   bucket: 'low' | 'med' | 'high';
@@ -1828,4 +2003,18 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildCompactDevicePickerLabel(device: {
+  deviceUid?: string | null;
+  name?: string | null;
+  longName?: string | null;
+  shortName?: string | null;
+}): string {
+  const primary = getDevicePrimaryLabel(device);
+  const uid = typeof device.deviceUid === 'string' ? device.deviceUid.trim() : '';
+  if (!uid || uid.toLowerCase() === primary.toLowerCase()) {
+    return primary;
+  }
+  return `${primary} (${uid})`;
 }

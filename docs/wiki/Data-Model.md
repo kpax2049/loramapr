@@ -10,13 +10,14 @@ Key fields:
 
 - `id` (UUID, PK)
 - `deviceUid` (unique)
-- metadata: `name`, `notes`, `hwModel`, `firmwareVersion`, `appVersion`, `longName`, `shortName`, `role`
+- metadata: `name`, `notes`, `meshtasticNodeId`, `hwModel`, `firmwareVersion`, `appVersion`, `longName`, `shortName`, `macaddr`, `publicKey`, `isUnmessagable`, `role`
 - lifecycle/status: `lastNodeInfoAt`, `iconKey`, `iconOverride`, `isArchived`, `createdAt`, `updatedAt`, `lastSeenAt`
 
 Relations:
 
 - 1 -> many `Session` (`sessions`)
 - 1 -> many `Measurement` (`measurements`)
+- 1 -> many `DeviceTelemetrySample` (`telemetrySamples`)
 - 1 -> many `CoverageBin` (`coverageBins`)
 - 1 -> many `AgentDecision` (`agentDecisions`)
 - optional 1 -> 1 `DeviceAutoSessionConfig` (`autoSessionConfig`)
@@ -66,6 +67,29 @@ Indexes:
 
 - `@@index([deviceId, capturedAt])`
 - `@@index([sessionId, capturedAt])`
+- `@@index([sessionId])`
+- `@@index([gatewayId])`
+
+### `DeviceTelemetrySample`
+
+Key fields:
+
+- `id`
+- `deviceId` (FK -> `Device.id`)
+- `capturedAt`
+- `source` (`'meshtastic'` currently)
+- telemetry metrics: `batteryLevel`, `voltage`, `channelUtilization`, `airUtilTx`, `uptimeSeconds`
+- `raw` (JSON telemetry subtree for debugging)
+- `createdAt`
+
+Relation:
+
+- many -> 1 `Device` (`onDelete: Cascade`)
+
+Indexes:
+
+- `@@index([deviceId, capturedAt])`
+- `@@index([capturedAt])`
 
 ### `RxMetadata`
 
@@ -95,15 +119,19 @@ Key fields:
 - `id`
 - `source`
 - `receivedAt`
-- `payload` (JSON)
+- `payloadJson` (JSON; mapped to DB column `payload`)
 - processing lifecycle: `processingStartedAt`, `processingWorkerId`, `processedAt`, `processingError`
-- identity/mapping: `eventType`, `deviceUid`, `uplinkId` (unique)
+- identity/mapping: `eventType`, `deviceUid`, `portnum`, `packetId` (unique; mapped to DB column `uplinkId`)
 
 Indexes:
 
 - `@@index([receivedAt])`
 - `@@index([processedAt])`
-- `@unique(uplinkId)`
+- `@@index([source, receivedAt])`
+- `@@index([deviceUid])`
+- `@@index([deviceUid, receivedAt])`
+- `@@index([portnum, receivedAt])`
+- `@unique(packetId)`
 
 ### `AgentDecision`
 
@@ -150,6 +178,7 @@ Indexes / constraints:
 - `Session` 1 -> many `Measurement`
 - `Measurement.sessionId` is nullable (supports detached measurements after session delete)
 - `Measurement` 1 -> many `RxMetadata`
+- `Device` 1 -> many `DeviceTelemetrySample`
 - `WebhookEvent` maps to devices primarily by `deviceUid` (string), while `Measurement`/`Session` use `deviceId` UUID FKs.
 
 ## Device UID Mapping Assumptions
@@ -174,3 +203,9 @@ Source-specific/raw fields:
 - `payloadRaw` (raw payload string)
 - `rxMetadata` (JSON payload-side metadata)
 - expanded receiver rows in `RxMetadata` (especially relevant for LoRaWAN multi-gateway metadata)
+
+## Meshtastic Promotions
+
+- `NODEINFO_APP` packets update `Device` metadata fields (for example `hwModel`, `longName`, `shortName`, `macaddr`, `publicKey`, `isUnmessagable`) and timestamps (`lastNodeInfoAt`, `lastSeenAt`).
+- `TELEMETRY_APP` packets create `DeviceTelemetrySample` rows from `decoded.telemetry.deviceMetrics`.
+- Raw packets remain stored in `WebhookEvent.payloadJson`, so promoted events are still visible in Events Explorer.
