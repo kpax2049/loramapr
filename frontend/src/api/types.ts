@@ -42,10 +42,19 @@ export type DeviceDetail = {
   firmwareVersion: string | null;
   appVersion: string | null;
   role: string | null;
+  macaddr: string | null;
   lastNodeInfoAt: string | null;
   latestMeasurementAt: string | null;
   latestWebhookReceivedAt: string | null;
   latestWebhookSource: 'lorawan' | 'meshtastic' | 'agent' | null;
+  latestTelemetry: {
+    batteryLevel: number | null;
+    voltage: number | null;
+    channelUtilization: number | null;
+    airUtilTx: number | null;
+    uptimeSeconds: number | null;
+    capturedAt: string;
+  } | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;

@@ -269,10 +269,19 @@ type DeviceDetailResponse = {
   firmwareVersion: string | null;
   appVersion: string | null;
   role: string | null;
+  macaddr: string | null;
   lastNodeInfoAt: string | null;
   latestMeasurementAt: string | null;
   latestWebhookReceivedAt: string | null;
   latestWebhookSource: LatestWebhookSource | null;
+  latestTelemetry: {
+    batteryLevel: number | null;
+    voltage: number | null;
+    channelUtilization: number | null;
+    airUtilTx: number | null;
+    uptimeSeconds: number | null;
+    capturedAt: string;
+  } | null;
   latestMeasurement: {
     capturedAt: string;
     lat: number;
@@ -549,12 +558,23 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
     firmwareVersion: device.firmwareVersion ?? null,
     appVersion: device.appVersion ?? null,
     role: device.role ?? null,
+    macaddr: device.macaddr ?? null,
     lastNodeInfoAt: device.lastNodeInfoAt ? device.lastNodeInfoAt.toISOString() : null,
     latestMeasurementAt: device.latestMeasurementAt ? device.latestMeasurementAt.toISOString() : null,
     latestWebhookReceivedAt: device.latestWebhookReceivedAt
       ? device.latestWebhookReceivedAt.toISOString()
       : null,
     latestWebhookSource: device.latestWebhookSource ?? null,
+    latestTelemetry: device.latestTelemetry
+      ? {
+          batteryLevel: device.latestTelemetry.batteryLevel,
+          voltage: device.latestTelemetry.voltage,
+          channelUtilization: device.latestTelemetry.channelUtilization,
+          airUtilTx: device.latestTelemetry.airUtilTx,
+          uptimeSeconds: device.latestTelemetry.uptimeSeconds,
+          capturedAt: device.latestTelemetry.capturedAt.toISOString()
+        }
+      : null,
     latestMeasurement: device.latestMeasurement
       ? {
           capturedAt: device.latestMeasurement.capturedAt.toISOString(),

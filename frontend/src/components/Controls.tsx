@@ -410,10 +410,9 @@ export default function Controls({
   const meshtasticLongName = normalizeOptionalText(deviceDetail?.longName);
   const meshtasticShortName = normalizeOptionalText(deviceDetail?.shortName);
   const meshtasticHwModel = normalizeOptionalText(deviceDetail?.hwModel);
-  const meshtasticFirmwareVersion = normalizeOptionalText(deviceDetail?.firmwareVersion);
-  const meshtasticAppVersion = normalizeOptionalText(deviceDetail?.appVersion);
-  const meshtasticRole = normalizeOptionalText(deviceDetail?.role);
+  const meshtasticMacaddr = normalizeOptionalText(deviceDetail?.macaddr);
   const meshtasticLastNodeInfoAt = deviceDetail?.lastNodeInfoAt ?? null;
+  const latestTelemetry = deviceDetail?.latestTelemetry ?? null;
   const detailIconInput = useMemo(
     () => ({
       deviceUid: deviceDetail?.deviceUid ?? selectedDevice?.deviceUid ?? null,
@@ -439,9 +438,7 @@ export default function Controls({
     meshtasticLongName ||
       meshtasticShortName ||
       meshtasticHwModel ||
-      meshtasticFirmwareVersion ||
-      meshtasticAppVersion ||
-      meshtasticRole ||
+      meshtasticMacaddr ||
       meshtasticLastNodeInfoAt
   );
   const detailsNameDirty = (detailsNameDraft ?? '').trim() !== (deviceDetail?.name ?? '').trim();
@@ -776,17 +773,19 @@ export default function Controls({
                   </div>
                   <div className="device-details__row">
                     <span>Raw events</span>
-                    <button
-                      type="button"
-                      className="device-details__events-link"
-                      onClick={() =>
-                        onOpenEvents({
-                          deviceUid: deviceDetail.deviceUid
-                        })
-                      }
-                    >
-                      View raw event(s)
-                    </button>
+                    <div className="device-details__events-links">
+                      <button
+                        type="button"
+                        className="device-details__events-link"
+                        onClick={() =>
+                          onOpenEvents({
+                            deviceUid: deviceDetail.deviceUid
+                          })
+                        }
+                      >
+                        View raw event(s)
+                      </button>
+                    </div>
                   </div>
                   <div className="device-details__row">
                     <span>Status</span>
@@ -851,22 +850,10 @@ export default function Controls({
                           <strong>{meshtasticShortName}</strong>
                         </div>
                       ) : null}
-                      {meshtasticFirmwareVersion ? (
+                      {meshtasticMacaddr ? (
                         <div className="device-details__row">
-                          <span>firmwareVersion</span>
-                          <strong>{meshtasticFirmwareVersion}</strong>
-                        </div>
-                      ) : null}
-                      {meshtasticAppVersion ? (
-                        <div className="device-details__row">
-                          <span>appVersion</span>
-                          <strong>{meshtasticAppVersion}</strong>
-                        </div>
-                      ) : null}
-                      {meshtasticRole ? (
-                        <div className="device-details__row">
-                          <span>role</span>
-                          <strong>{meshtasticRole}</strong>
+                          <span>macaddr</span>
+                          <strong>{meshtasticMacaddr}</strong>
                         </div>
                       ) : null}
                       {meshtasticLastNodeInfoAt ? (
@@ -875,6 +862,72 @@ export default function Controls({
                           <strong>{formatRelativeTime(meshtasticLastNodeInfoAt)}</strong>
                         </div>
                       ) : null}
+                      <div className="device-details__row">
+                        <span>Raw node info</span>
+                        <div className="device-details__events-links">
+                          <button
+                            type="button"
+                            className="device-details__events-link"
+                            onClick={() =>
+                              onOpenEvents({
+                                deviceUid: deviceDetail.deviceUid,
+                                source: 'meshtastic',
+                                portnum: 'NODEINFO_APP'
+                              })
+                            }
+                          >
+                            View raw nodeinfo event
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {latestTelemetry ? (
+                    <>
+                      <div className="device-details__section-title">Latest telemetry</div>
+                      <div className="device-details__row">
+                        <span>batteryLevel</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.batteryLevel, '%')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>voltage</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.voltage, 'V')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>channelUtilization</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.channelUtilization, '%')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>airUtilTx</span>
+                        <strong>{formatTelemetryMetric(latestTelemetry.airUtilTx, '%')}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>uptimeSeconds</span>
+                        <strong>{formatTelemetrySeconds(latestTelemetry.uptimeSeconds)}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>capturedAt</span>
+                        <strong>{formatRelativeTime(latestTelemetry.capturedAt)}</strong>
+                      </div>
+                      <div className="device-details__row">
+                        <span>Raw telemetry</span>
+                        <div className="device-details__events-links">
+                          <button
+                            type="button"
+                            className="device-details__events-link"
+                            onClick={() =>
+                              onOpenEvents({
+                                deviceUid: deviceDetail.deviceUid,
+                                source: 'meshtastic',
+                                portnum: 'TELEMETRY_APP'
+                              })
+                            }
+                          >
+                            View raw telemetry event
+                          </button>
+                        </div>
+                      </div>
                     </>
                   ) : null}
 
@@ -1758,6 +1811,22 @@ function formatDeviceStatusBucket(status: DeviceStatusBucket): 'Online' | 'Recen
     return 'Offline';
   }
   return 'Unknown';
+}
+
+function formatTelemetryMetric(value: number | null | undefined, unit: string): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—';
+  }
+  const decimals = Math.abs(value) >= 100 ? 0 : 2;
+  const formatted = Number(value.toFixed(decimals)).toString();
+  return `${formatted}${unit ? ` ${unit}` : ''}`;
+}
+
+function formatTelemetrySeconds(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—';
+  }
+  return `${Math.max(0, Math.round(value))}s`;
 }
 
 type CoverageLegendItem = {

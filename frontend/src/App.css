@@ -1499,6 +1499,13 @@
   opacity: 0.6;
 }
 
+.device-details__events-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
 .device-details__row--notes {
   align-items: center;
 }
