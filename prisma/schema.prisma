@@ -97,7 +97,7 @@ model Measurement {
   device         Device        @relation(fields: [deviceId], references: [id])
   session        Session?      @relation(fields: [sessionId], references: [id])
   rxMetadataRows RxMetadata[]
-  meshtasticRxRows MeshtasticRx[]
+  meshtasticRx MeshtasticRx?
 
   @@index([deviceId, capturedAt(sort: Desc)])
   @@index([sessionId, capturedAt(sort: Desc)])
@@ -143,7 +143,7 @@ model MeshtasticRx {
 
   raw                Json?
 
-  @@index([measurementId])
+  @@unique([measurementId])
   @@index([rxTime])
   @@index([rxRssi])
 }

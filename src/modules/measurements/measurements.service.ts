@@ -37,6 +37,7 @@ export type CanonicalMeasurementInput = {
 export type CanonicalIngestResult = {
   inserted: number;
   deviceId: string;
+  measurementIds: string[];
 };
 
 export type MeasurementQueryParams = {
@@ -261,7 +262,8 @@ export class MeasurementsService {
 
       return {
         inserted: result.count,
-        deviceId: device.id
+        deviceId: device.id,
+        measurementIds: records.map((record) => record.id)
       };
     });
   }

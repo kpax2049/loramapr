@@ -468,7 +468,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     }
 
     if (normalized) {
-      await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
+      const ingestResult = await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
         {
           capturedAt: normalized.capturedAt,
           lat: normalized.lat,
@@ -487,6 +487,38 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           payloadRaw: normalized.payloadRaw
         }
       ]);
+
+      const measurementId = ingestResult.measurementIds[0];
+      if (measurementId && normalized.meshtasticRx) {
+        await this.prisma.meshtasticRx.upsert({
+          where: { measurementId },
+          update: {
+            rxTime: normalized.meshtasticRx.rxTime,
+            rxRssi: normalized.meshtasticRx.rxRssi,
+            rxSnr: normalized.meshtasticRx.rxSnr,
+            hopLimit: normalized.meshtasticRx.hopLimit,
+            hopStart: normalized.meshtasticRx.hopStart,
+            relayNode: normalized.meshtasticRx.relayNode,
+            transportMechanism: normalized.meshtasticRx.transportMechanism,
+            fromId: normalized.meshtasticRx.fromId,
+            toId: normalized.meshtasticRx.toId,
+            raw: normalized.meshtasticRx.raw as Prisma.InputJsonValue
+          },
+          create: {
+            measurementId,
+            rxTime: normalized.meshtasticRx.rxTime,
+            rxRssi: normalized.meshtasticRx.rxRssi,
+            rxSnr: normalized.meshtasticRx.rxSnr,
+            hopLimit: normalized.meshtasticRx.hopLimit,
+            hopStart: normalized.meshtasticRx.hopStart,
+            relayNode: normalized.meshtasticRx.relayNode,
+            transportMechanism: normalized.meshtasticRx.transportMechanism,
+            fromId: normalized.meshtasticRx.fromId,
+            toId: normalized.meshtasticRx.toId,
+            raw: normalized.meshtasticRx.raw as Prisma.InputJsonValue
+          }
+        });
+      }
     }
 
     await this.prisma.webhookEvent.update({
@@ -577,7 +609,21 @@ type MeshtasticNormalized = {
     snr?: number;
     hop?: number;
   }>;
+  meshtasticRx?: MeshtasticRxInput;
   payloadRaw: Record<string, unknown>;
+};
+
+type MeshtasticRxInput = {
+  rxTime?: Date;
+  rxRssi?: number;
+  rxSnr?: number;
+  hopLimit?: number;
+  hopStart?: number;
+  relayNode?: number;
+  transportMechanism?: string;
+  fromId?: string;
+  toId?: string;
+  raw: Record<string, unknown>;
 };
 
 type MeshtasticNodeInfoFields = {
@@ -643,6 +689,7 @@ function normalizeMeshtasticPayload(
   const snr = findFirstMeshtasticNumber(packet.packet, ['rxSnr', 'rx_snr', 'snr']);
   const gatewayId = getGatewayId(packet.packet);
   const rxMetadata = buildMeshtasticRxMetadata(packet.packet, gatewayId, rssi, snr);
+  const meshtasticRx = extractMeshtasticRxInput(packet.packet);
 
   const capturedAt = resolvePositionCapturedAt(packet.position, packet.packet, receivedAt);
   const deviceUid = resolvePreferredDeviceUid(
@@ -680,6 +727,7 @@ function normalizeMeshtasticPayload(
     snr: snr ?? undefined,
     gatewayId: gatewayId ?? null,
     rxMetadata,
+    meshtasticRx: meshtasticRx ?? undefined,
     payloadRaw: packet.packet
   };
 }
@@ -765,6 +813,64 @@ function resolvePositionCapturedAt(
   }
 
   return receivedAt;
+}
+
+function extractMeshtasticRxInput(packet: Record<string, unknown>): MeshtasticRxInput | null {
+  const rxTimeSeconds = getNumber(packet.rxTime) ?? getNumber(packet.rx_time);
+  const rxRssiRaw = getNumber(packet.rxRssi) ?? getNumber(packet.rx_rssi);
+  const rxSnrRaw = getNumber(packet.rxSnr) ?? getNumber(packet.rx_snr);
+  const hopLimitRaw = getNumber(packet.hopLimit) ?? getNumber(packet.hop_limit);
+  const hopStartRaw = getNumber(packet.hopStart) ?? getNumber(packet.hop_start);
+  const relayNodeRaw = getNumber(packet.relayNode) ?? getNumber(packet.relay_node);
+  const transportMechanism = toNonEmptyString(packet.transportMechanism ?? packet.transport_mechanism);
+  const fromId = toNonEmptyString(packet.fromId ?? packet.from_id);
+  const toId = toNonEmptyString(packet.toId ?? packet.to_id);
+
+  const raw: Record<string, unknown> = {};
+  if (rxTimeSeconds !== null) {
+    raw.rxTime = rxTimeSeconds;
+  }
+  if (rxRssiRaw !== null) {
+    raw.rxRssi = Math.trunc(rxRssiRaw);
+  }
+  if (rxSnrRaw !== null) {
+    raw.rxSnr = rxSnrRaw;
+  }
+  if (hopLimitRaw !== null) {
+    raw.hopLimit = Math.trunc(hopLimitRaw);
+  }
+  if (hopStartRaw !== null) {
+    raw.hopStart = Math.trunc(hopStartRaw);
+  }
+  if (relayNodeRaw !== null) {
+    raw.relayNode = Math.trunc(relayNodeRaw);
+  }
+  if (transportMechanism !== null) {
+    raw.transportMechanism = transportMechanism;
+  }
+  if (fromId !== null) {
+    raw.fromId = fromId;
+  }
+  if (toId !== null) {
+    raw.toId = toId;
+  }
+
+  if (Object.keys(raw).length === 0) {
+    return null;
+  }
+
+  return {
+    rxTime: rxTimeSeconds !== null ? new Date(rxTimeSeconds * 1000) : undefined,
+    rxRssi: rxRssiRaw !== null ? Math.trunc(rxRssiRaw) : undefined,
+    rxSnr: rxSnrRaw !== null ? rxSnrRaw : undefined,
+    hopLimit: hopLimitRaw !== null ? Math.trunc(hopLimitRaw) : undefined,
+    hopStart: hopStartRaw !== null ? Math.trunc(hopStartRaw) : undefined,
+    relayNode: relayNodeRaw !== null ? Math.trunc(relayNodeRaw) : undefined,
+    transportMechanism: transportMechanism ?? undefined,
+    fromId: fromId ?? undefined,
+    toId: toId ?? undefined,
+    raw
+  };
 }
 
 function extractMeshtasticNodeInfo(payload: Prisma.JsonValue): MeshtasticNodeInfoDetected {
