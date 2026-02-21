@@ -2,7 +2,12 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { flushSync } from 'react-dom';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
-import type { CoverageBin, Measurement, SessionWindowPoint } from './api/types';
+import type {
+  CoverageBin,
+  Measurement,
+  SessionWindowPoint,
+  UnifiedEventListItem
+} from './api/types';
 import Controls from './components/Controls';
 import { buildDeviceIdentityLabel } from './components/DeviceIcon';
 import Layout from './components/Layout';
@@ -308,6 +313,26 @@ function formatRelativeTime(value: string): string {
   }
   const days = Math.round(hours / 24);
   return `${days}d ago`;
+}
+
+function toTimestampMs(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getApproxDistanceMeters(
+  fromLat: number,
+  fromLon: number,
+  toLat: number,
+  toLon: number
+): number {
+  const latMeters = (fromLat - toLat) * 111_320;
+  const avgLatRad = ((fromLat + toLat) / 2) * (Math.PI / 180);
+  const lonMeters = (fromLon - toLon) * 111_320 * Math.cos(avgLatRad);
+  return Math.hypot(latMeters, lonMeters);
 }
 
 function getDeviceMarkerSortTimestamp(device: {
@@ -1308,6 +1333,102 @@ function App() {
       .map((point) => normalizeLatLonItem(point))
       .filter((point): point is NonNullable<typeof point> => point !== null);
   }, [playbackOverviewTrack]);
+  const handleSelectEventForMap = useCallback((event: UnifiedEventListItem) => {
+    const candidates = mapMeasurements as Array<{
+      id: string;
+      lat: number;
+      lon: number;
+      capturedAt?: string;
+      deviceUid?: string | null;
+      eventId?: string | null;
+    }>;
+    if (candidates.length === 0) {
+      setSelectedPointId(null);
+      return;
+    }
+
+    const exactMatch = candidates.find((point) => point.eventId === event.id);
+    if (exactMatch) {
+      setSelectedPointId(exactMatch.id);
+      return;
+    }
+
+    const targetTimeMs = toTimestampMs(event.time) ?? toTimestampMs(event.receivedAt);
+    const targetLat =
+      typeof event.lat === 'number' && Number.isFinite(event.lat) ? event.lat : null;
+    const targetLon =
+      typeof event.lon === 'number' && Number.isFinite(event.lon) ? event.lon : null;
+    const targetDeviceUid = typeof event.deviceUid === 'string' ? event.deviceUid.trim() : '';
+    const hasTargetCoordinates = targetLat !== null && targetLon !== null;
+
+    const hasPointDeviceUid = candidates.some((point) => {
+      const pointDeviceUid =
+        typeof point.deviceUid === 'string' ? point.deviceUid.trim() : '';
+      return pointDeviceUid.length > 0;
+    });
+    const byDevice = targetDeviceUid
+      ? candidates.filter((point) => {
+          const pointDeviceUid =
+            typeof point.deviceUid === 'string' ? point.deviceUid.trim() : '';
+          return pointDeviceUid === targetDeviceUid;
+        })
+      : [];
+    if (targetDeviceUid && hasPointDeviceUid && byDevice.length === 0) {
+      setSelectedPointId(null);
+      return;
+    }
+    const pool = byDevice.length > 0 ? byDevice : candidates;
+
+    let bestPoint: (typeof pool)[number] | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    let bestTimeDeltaMs = Number.POSITIVE_INFINITY;
+    let bestDistanceMeters = Number.POSITIVE_INFINITY;
+
+    for (const point of pool) {
+      const pointTimeMs = toTimestampMs(point.capturedAt);
+      const timeDeltaMs =
+        targetTimeMs !== null && pointTimeMs !== null
+          ? Math.abs(pointTimeMs - targetTimeMs)
+          : Number.POSITIVE_INFINITY;
+      const distanceMeters =
+        hasTargetCoordinates && targetLat !== null && targetLon !== null
+          ? getApproxDistanceMeters(targetLat, targetLon, point.lat, point.lon)
+          : Number.POSITIVE_INFINITY;
+      const score =
+        (Number.isFinite(timeDeltaMs) ? timeDeltaMs : 20 * 60 * 1000) +
+        (Number.isFinite(distanceMeters) ? distanceMeters * 20 : 0);
+      if (score >= bestScore) {
+        continue;
+      }
+      bestScore = score;
+      bestPoint = point;
+      bestTimeDeltaMs = timeDeltaMs;
+      bestDistanceMeters = distanceMeters;
+    }
+
+    if (!bestPoint) {
+      setSelectedPointId(null);
+      return;
+    }
+
+    const withinTightTime = Number.isFinite(bestTimeDeltaMs) && bestTimeDeltaMs <= 2 * 60 * 1000;
+    const withinTimeAndDistance =
+      Number.isFinite(bestTimeDeltaMs) &&
+      bestTimeDeltaMs <= 15 * 60 * 1000 &&
+      Number.isFinite(bestDistanceMeters) &&
+      bestDistanceMeters <= 750;
+    const withinDistanceOnly =
+      targetTimeMs === null &&
+      Number.isFinite(bestDistanceMeters) &&
+      bestDistanceMeters <= 500;
+
+    if (withinTightTime || withinTimeAndDistance || withinDistanceOnly) {
+      setSelectedPointId(bestPoint.id);
+      return;
+    }
+
+    setSelectedPointId(null);
+  }, [mapMeasurements]);
   const safePlaybackCursorPosition = useMemo<LatLonPoint | null>(() => {
     if (!playbackCursorPosition) {
       return null;
@@ -1771,7 +1892,15 @@ function App() {
         ...point,
         deviceId: playbackTimelineQuery.data?.deviceId ?? deviceId ?? '',
         sessionId: playbackSessionId ?? null,
-        alt: null
+        alt: null,
+        altitude: null,
+        pdop: null,
+        satsInView: null,
+        locationSource: null,
+        precisionBits: null,
+        groundSpeed: null,
+        groundTrack: null,
+        meshtasticRx: null
       };
     }
     return (activeMeasurements as Measurement[]).find((item) => item.id === selectedPointId) ?? null;
@@ -2334,6 +2463,7 @@ function App() {
       eventsNavigationNonce={eventsNavigationNonce}
       eventsNavigationRequest={eventsNavigationRequest}
       onOpenEvents={handleOpenEvents}
+      onSelectEventForMap={handleSelectEventForMap}
     />
   );
 

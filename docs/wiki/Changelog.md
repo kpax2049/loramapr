@@ -8,6 +8,20 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.10.3 (2026-02-21)
+
+- Events Explorer performance release: large event feeds now use virtualized rows with smoother scroll behavior and stable selection during incremental page loads.
+- Filtering/provenance UX improvements: saved views, quick chips, persisted filters, and sourceEventId-first raw packet linking from Point Details.
+- Event detail JSON inspection now supports search and JSON-path copy for faster payload debugging at scale.
+- Release notes: `docs/release-v0.10.3.md`.
+
+## v0.10.2 (2026-02-21)
+
+- GPS quality + Meshtastic RX release: ingestion and measurement detail APIs now include extended GPS quality/context fields and optional per-measurement Meshtastic receive diagnostics.
+- Debug/Events to map flow now supports best-effort event-to-point highlighting with stale-selection clearing, plus device-filter sync so Events device selection aligns with main map scope.
+- Data model + ingestion docs now explicitly cover PDOP scaling behavior and receiver/transport-dependent availability of `rxRssi`/`rxSnr`.
+- Release notes: `docs/release-v0.10.2.md`.
+
 ## v0.10.1 (2026-02-21)
 
 - Meshtastic device metadata promotion release: `NODEINFO_APP` packets now populate Device identity fields (`meshtasticNodeId`, names, hw model, role, mac/public key flags).

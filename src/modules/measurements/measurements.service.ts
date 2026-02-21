@@ -14,8 +14,17 @@ export type CanonicalMeasurementInput = {
   capturedAt: string | Date;
   lat: number;
   lon: number;
+  sourceEventId?: string;
+  source?: string;
   alt?: number;
+  altitude?: number;
   hdop?: number;
+  pdop?: number;
+  satsInView?: number;
+  precisionBits?: number;
+  locationSource?: string;
+  groundSpeed?: number;
+  groundTrack?: number;
   rssi?: number;
   snr?: number;
   sf?: number;
@@ -30,6 +39,7 @@ export type CanonicalMeasurementInput = {
 export type CanonicalIngestResult = {
   inserted: number;
   deviceId: string;
+  measurementIds: string[];
 };
 
 export type MeasurementQueryParams = {
@@ -45,6 +55,7 @@ export type MeasurementQueryParams = {
   };
   gatewayId?: string;
   rxGatewayId?: string;
+  includeRx?: boolean;
   sample?: number;
   limit: number;
   ownerId?: string;
@@ -59,10 +70,19 @@ export type MeasurementQueryResult = {
     id: string;
     deviceId: string;
     sessionId: string | null;
+    sourceEventId: string | null;
+    source: string | null;
     capturedAt: Date;
     lat: number;
     lon: number;
     alt: number | null;
+    altitude: number | null;
+    pdop: number | null;
+    satsInView: number | null;
+    precisionBits: number | null;
+    locationSource: string | null;
+    groundSpeed: number | null;
+    groundTrack: number | null;
     rssi: number | null;
     snr: number | null;
     sf: number | null;
@@ -70,6 +90,14 @@ export type MeasurementQueryResult = {
     freq: number | null;
     gatewayId: string | null;
     rxMetadata: Prisma.JsonValue | null;
+    meshtasticRx?: {
+      rxRssi: number | null;
+      rxSnr: number | null;
+      hopLimit: number | null;
+      relayNode: number | null;
+      transportMechanism: string | null;
+      rxTime: Date | null;
+    } | null;
   }>;
 };
 
@@ -195,11 +223,20 @@ export class MeasurementsService {
               item.sessionId && validSessionIds.has(item.sessionId)
                 ? item.sessionId
                 : fallbackSessionId,
+            sourceEventId: item.sourceEventId,
+            source: item.source,
             capturedAt,
             lat: item.lat,
             lon: item.lon,
             alt: item.alt,
+            altitude: item.altitude,
             hdop: item.hdop,
+            pdop: item.pdop,
+            satsInView: item.satsInView,
+            precisionBits: item.precisionBits,
+            locationSource: item.locationSource,
+            groundSpeed: item.groundSpeed,
+            groundTrack: item.groundTrack,
             rssi,
             snr,
             sf: item.sf,
@@ -247,7 +284,8 @@ export class MeasurementsService {
 
       return {
         inserted: result.count,
-        deviceId: device.id
+        deviceId: device.id,
+        measurementIds: records.map((record) => record.id)
       };
     });
   }
@@ -288,26 +326,81 @@ export class MeasurementsService {
       where.rxMetadataRows = { some: { gatewayId: params.rxGatewayId } };
     }
 
-  const items = await this.prisma.measurement.findMany({
+    const baseSelect = {
+      id: true,
+      capturedAt: true,
+      lat: true,
+      lon: true,
+      sourceEventId: true,
+      source: true,
+      alt: true,
+      altitude: true,
+      pdop: true,
+      satsInView: true,
+      precisionBits: true,
+      locationSource: true,
+      groundSpeed: true,
+      groundTrack: true,
+      rssi: true,
+      snr: true,
+      sf: true,
+      bw: true,
+      freq: true,
+      gatewayId: true,
+      rxMetadata: true,
+      deviceId: true,
+      sessionId: true
+    } satisfies Prisma.MeasurementSelect;
+
+    if (params.includeRx) {
+      const items = await this.prisma.measurement.findMany({
+        where,
+        orderBy: { capturedAt: 'asc' },
+        take: params.limit,
+        select: {
+          ...baseSelect,
+          meshtasticRx: {
+            select: {
+              rxRssi: true,
+              rxSnr: true,
+              hopLimit: true,
+              relayNode: true,
+              transportMechanism: true,
+              rxTime: true
+            }
+          }
+        }
+      });
+
+      const totalBeforeSample = items.length;
+      const sampled = params.sample ? sampleItems(items, params.sample) : items;
+
+      return {
+        count: sampled.length,
+        limit: params.limit,
+        totalBeforeSample,
+        returnedAfterSample: sampled.length,
+        items: sampled.map((item) => ({
+          ...item,
+          meshtasticRx: item.meshtasticRx
+            ? {
+                rxRssi: item.meshtasticRx.rxRssi,
+                rxSnr: item.meshtasticRx.rxSnr,
+                hopLimit: item.meshtasticRx.hopLimit,
+                relayNode: item.meshtasticRx.relayNode,
+                transportMechanism: item.meshtasticRx.transportMechanism,
+                rxTime: item.meshtasticRx.rxTime
+              }
+            : null
+        }))
+      };
+    }
+
+    const items = await this.prisma.measurement.findMany({
       where,
       orderBy: { capturedAt: 'asc' },
       take: params.limit,
-      select: {
-        id: true,
-        capturedAt: true,
-        lat: true,
-        lon: true,
-        alt: true,
-        rssi: true,
-        snr: true,
-        sf: true,
-        bw: true,
-        freq: true,
-        gatewayId: true,
-        rxMetadata: true,
-        deviceId: true,
-        sessionId: true
-      }
+      select: baseSelect
     });
 
     const totalBeforeSample = items.length;

@@ -4,6 +4,7 @@ import { ApiKeyScope, Prisma, WebhookEventSource } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { hashApiKey } from '../src/common/security/apiKey';
+import { buildWebhookPayloadText } from '../src/modules/events/payload-text';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('Events API e2e', () => {
@@ -245,6 +246,39 @@ describe('Events API e2e', () => {
     });
   });
 
+  it('supports q filtering by payloadText tokens', async () => {
+    const token = `payloadtoken${Date.now()}`;
+    const event = await createEvent({
+      source: WebhookEventSource.MESHTASTIC,
+      deviceUid: 'events-device-payload',
+      portnum: 'TELEMETRY_APP',
+      packetId: `events-payload-${Date.now()}`,
+      payloadJson: {
+        fromId: '!abcd1234',
+        decoded: {
+          portnum: 'TELEMETRY_APP',
+          user: {
+            longName: token
+          },
+          telemetry: {
+            deviceMetrics: {
+              batteryLevel: 87
+            }
+          }
+        }
+      }
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/api/events')
+      .query({ q: token })
+      .set('x-api-key', queryKeyPlaintext)
+      .expect(200);
+
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0].id).toBe(event.id);
+  });
+
   it('rejects invalid cursor format', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/events?cursor=invalid')
@@ -268,6 +302,12 @@ describe('Events API e2e', () => {
         deviceUid: input.deviceUid,
         portnum: input.portnum,
         packetId: input.packetId,
+        payloadText: buildWebhookPayloadText({
+          deviceUid: input.deviceUid,
+          portnum: input.portnum,
+          packetId: input.packetId,
+          payload: input.payloadJson
+        }),
         payloadJson: input.payloadJson,
         receivedAt: input.receivedAt
       },

@@ -32,6 +32,10 @@ export type EventListItem = {
   hopLimit: number | null;
   relayNode: string | null;
   transportMechanism: string | null;
+  batteryLevel: number | null;
+  voltage: number | null;
+  hwModel: string | null;
+  shortName: string | null;
   lat: number | null;
   lon: number | null;
   time: string | null;
@@ -50,41 +54,157 @@ export type EventDetail = {
   payloadJson: Prisma.JsonValue;
 };
 
+export type EventsListResponse = {
+  items: EventListItem[];
+  nextCursor?: string;
+  returnedCount: number;
+  totalFilteredCount?: number;
+};
+
 @Injectable()
 export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(params: ListEventsParams): Promise<{
-    items: EventListItem[];
-    nextCursor?: string;
-  }> {
+  async list(params: ListEventsParams): Promise<EventsListResponse> {
+    if (params.q) {
+      return this.listWithSearch(params);
+    }
+
     const where = buildWhereClause(params);
-    const rows = await this.prisma.webhookEvent.findMany({
-      where,
-      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
-      take: params.limit + 1,
-      select: {
-        id: true,
-        source: true,
-        receivedAt: true,
-        deviceUid: true,
-        portnum: true,
-        packetId: true,
-        payloadJson: true
-      }
+    const countWhere = buildWhereClause({
+      ...params,
+      cursor: undefined
     });
+    const [rows, totalFilteredCount] = await Promise.all([
+      this.prisma.webhookEvent.findMany({
+        where,
+        orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
+        take: params.limit + 1,
+        select: {
+          id: true,
+          source: true,
+          receivedAt: true,
+          deviceUid: true,
+          portnum: true,
+          packetId: true,
+          payloadJson: true
+        }
+      }),
+      this.prisma.webhookEvent.count({
+        where: countWhere
+      })
+    ]);
 
     const hasMore = rows.length > params.limit;
     const sliced = hasMore ? rows.slice(0, params.limit) : rows;
     const items = sliced.map((row) => formatListItem(row));
 
     if (!hasMore || items.length === 0) {
-      return { items };
+      return {
+        items,
+        returnedCount: items.length,
+        totalFilteredCount
+      };
     }
 
     const last = items[items.length - 1];
     return {
       items,
+      returnedCount: items.length,
+      totalFilteredCount,
+      nextCursor: encodeCursor({
+        receivedAt: last.receivedAt,
+        id: last.id
+      })
+    };
+  }
+
+  private async listWithSearch(params: ListEventsParams): Promise<EventsListResponse> {
+    const q = params.q?.trim();
+    if (!q) {
+      return { items: [], returnedCount: 0 };
+    }
+
+    const qLike = `%${escapeLikePattern(q)}%`;
+    const conditions: Prisma.Sql[] = [];
+
+    if (params.source) {
+      conditions.push(
+        Prisma.sql`"source" = ${normalizeSourceForDb(params.source)}::"WebhookEventSource"`
+      );
+    }
+    if (params.deviceUid) {
+      conditions.push(Prisma.sql`"deviceUid" = ${params.deviceUid}`);
+    }
+    if (params.portnum) {
+      conditions.push(Prisma.sql`"portnum" = ${params.portnum}`);
+    }
+    if (params.since) {
+      conditions.push(Prisma.sql`"receivedAt" >= ${params.since}`);
+    }
+    if (params.until) {
+      conditions.push(Prisma.sql`"receivedAt" <= ${params.until}`);
+    }
+    if (params.cursor) {
+      conditions.push(
+        Prisma.sql`("receivedAt" < ${params.cursor.receivedAt} OR ("receivedAt" = ${params.cursor.receivedAt} AND "id" < ${params.cursor.id}))`
+      );
+    }
+
+    conditions.push(
+      Prisma.sql`(
+        "deviceUid" ILIKE ${qLike} ESCAPE '\\'
+        OR "portnum" ILIKE ${qLike} ESCAPE '\\'
+        OR "uplinkId" ILIKE ${qLike} ESCAPE '\\'
+        OR to_tsvector('english', COALESCE("payloadText", '')) @@ plainto_tsquery('english', ${q})
+      )`
+    );
+
+    const whereSql =
+      conditions.length > 0
+        ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+        : Prisma.empty;
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        source: WebhookEventSource;
+        receivedAt: Date;
+        deviceUid: string | null;
+        portnum: string | null;
+        packetId: string | null;
+        payloadJson: Prisma.JsonValue;
+      }>
+    >(Prisma.sql`
+      SELECT
+        "id",
+        "source",
+        "receivedAt",
+        "deviceUid",
+        "portnum",
+        "uplinkId" AS "packetId",
+        "payload" AS "payloadJson"
+      FROM "WebhookEvent"
+      ${whereSql}
+      ORDER BY "receivedAt" DESC, "id" DESC
+      LIMIT ${params.limit + 1}
+    `);
+
+    const hasMore = rows.length > params.limit;
+    const sliced = hasMore ? rows.slice(0, params.limit) : rows;
+    const items = sliced.map((row) => formatListItem(row));
+
+    if (!hasMore || items.length === 0) {
+      return {
+        items,
+        returnedCount: items.length
+      };
+    }
+
+    const last = items[items.length - 1];
+    return {
+      items,
+      returnedCount: items.length,
       nextCursor: encodeCursor({
         receivedAt: last.receivedAt,
         id: last.id
@@ -187,27 +307,41 @@ function formatListItem(row: {
   payloadJson: Prisma.JsonValue;
 }): EventListItem {
   const payload = toRecord(row.payloadJson);
-  const position = extractPositionSummary(payload);
+  const candidates = payload ? collectCandidateRecords(payload) : [];
+  const position = extractPositionSummary(payload, candidates);
+  const portnum =
+    normalizePortnum(row.portnum) ??
+    normalizePortnum(extractStringFromCandidates(candidates, ['portnum']));
+  const packetId =
+    row.packetId ??
+    extractStringFromCandidates(candidates, ['packetId', 'uplinkId', 'id']);
 
   return {
     id: row.id,
     source: normalizeSourceForApi(row.source),
     receivedAt: row.receivedAt,
     deviceUid: row.deviceUid,
-    portnum: row.portnum,
-    packetId: row.packetId,
-    rxRssi: extractNumber(payload, ['rxRssi', 'rx_rssi', 'rssi']),
-    rxSnr: extractNumber(payload, ['rxSnr', 'rx_snr', 'snr']),
-    hopLimit: extractInteger(payload, ['hopLimit', 'hop_limit']),
-    relayNode: extractString(payload, ['relayNode', 'relay_node']),
-    transportMechanism: extractString(payload, ['transportMechanism', 'transport_mechanism']),
+    portnum,
+    packetId,
+    rxRssi: extractNumberFromCandidates(candidates, ['rxRssi', 'rx_rssi', 'rssi']),
+    rxSnr: extractNumberFromCandidates(candidates, ['rxSnr', 'rx_snr', 'snr']),
+    hopLimit: extractIntegerFromCandidates(candidates, ['hopLimit', 'hop_limit']),
+    relayNode: extractStringFromCandidates(candidates, ['relayNode', 'relay_node']),
+    transportMechanism: extractStringFromCandidates(candidates, ['transportMechanism', 'transport_mechanism']),
+    batteryLevel: extractIntegerFromCandidates(candidates, ['batteryLevel', 'battery_level']),
+    voltage: extractNumberFromCandidates(candidates, ['voltage']),
+    hwModel: extractStringFromCandidates(candidates, ['hwModel', 'hardwareModel', 'hw_model']),
+    shortName: extractStringFromCandidates(candidates, ['shortName', 'short_name']),
     lat: position.lat,
     lon: position.lon,
     time: position.time
   };
 }
 
-function extractPositionSummary(payload: Record<string, unknown> | null): {
+function extractPositionSummary(
+  payload: Record<string, unknown> | null,
+  candidatesOverride?: Record<string, unknown>[]
+): {
   lat: number | null;
   lon: number | null;
   time: string | null;
@@ -216,7 +350,7 @@ function extractPositionSummary(payload: Record<string, unknown> | null): {
     return { lat: null, lon: null, time: null };
   }
 
-  const candidates = collectCandidateRecords(payload);
+  const candidates = candidatesOverride ?? collectCandidateRecords(payload);
   for (const candidate of candidates) {
     const lat = extractNumber(candidate, ['lat', 'latitude', 'latitudeI', 'latitude_i']);
     const lon = extractNumber(candidate, ['lon', 'longitude', 'longitudeI', 'longitude_i']);
@@ -238,6 +372,40 @@ function extractPositionSummary(payload: Record<string, unknown> | null): {
   }
 
   return { lat: null, lon: null, time: null };
+}
+
+function extractNumberFromCandidates(
+  candidates: Record<string, unknown>[],
+  keys: string[]
+): number | null {
+  for (const candidate of candidates) {
+    const value = extractNumber(candidate, keys);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function extractIntegerFromCandidates(
+  candidates: Record<string, unknown>[],
+  keys: string[]
+): number | null {
+  const value = extractNumberFromCandidates(candidates, keys);
+  return value === null ? null : Math.trunc(value);
+}
+
+function extractStringFromCandidates(
+  candidates: Record<string, unknown>[],
+  keys: string[]
+): string | null {
+  for (const candidate of candidates) {
+    const value = extractString(candidate, keys);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function collectCandidateRecords(root: Record<string, unknown>): Record<string, unknown>[] {
@@ -436,6 +604,21 @@ function normalizeSourceForApi(source: WebhookEventSource): EventsSource {
     return 'sim';
   }
   return 'lorawan';
+}
+
+function normalizePortnum(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return trimmed.toUpperCase();
+}
+
+function escapeLikePattern(input: string): string {
+  return input.replace(/[\\%_]/g, '\\$&');
 }
 
 export function encodeCursor(cursor: EventsCursor): string {

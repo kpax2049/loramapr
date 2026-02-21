@@ -93,14 +93,30 @@ export type Measurement = {
   lat: number;
   lon: number;
   alt: number | null;
+  altitude?: number | null;
+  pdop?: number | null;
+  satsInView?: number | null;
+  locationSource?: string | null;
+  precisionBits?: number | null;
+  groundSpeed?: number | null;
+  groundTrack?: number | null;
   rssi: number | null;
   snr: number | null;
   sf: number | null;
   bw: number | null;
   freq: number | null;
   gatewayId: string | null;
+  meshtasticRx?: {
+    rxRssi: number | null;
+    rxSnr: number | null;
+    hopLimit: number | null;
+    relayNode: number | null;
+    transportMechanism: string | null;
+    rxTime: string | null;
+  } | null;
   deviceUid?: string | null;
   eventId?: string | null;
+  sourceEventId?: string | null;
 };
 
 export type Session = {

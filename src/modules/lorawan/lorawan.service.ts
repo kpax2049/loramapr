@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { Prisma, WebhookEventSource } from '@prisma/client';
 import { logError, logInfo, logWarn } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildWebhookPayloadText } from '../events/payload-text';
 import { MeasurementsService } from '../measurements/measurements.service';
 import { normalizeTtsUplinkToMeasurement } from './tts-normalize';
 import type { TtsUplink } from './tts-uplink.schema';
@@ -66,6 +67,12 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       parsed.end_device_ids?.dev_eui ?? parsed.end_device_ids?.device_id ?? undefined;
     const uplinkId = deriveUplinkId(parsed);
     const portnum = getLorawanPortnum(parsed);
+    const payloadText = buildWebhookPayloadText({
+      deviceUid: deviceUid ?? null,
+      portnum,
+      packetId: uplinkId,
+      payload: parsed
+    });
 
     try {
       await this.prisma.webhookEvent.create({
@@ -75,7 +82,8 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           deviceUid,
           portnum,
           packetId: uplinkId,
-          payloadJson: parsed as Prisma.InputJsonValue
+          payloadJson: parsed as Prisma.InputJsonValue,
+          payloadText
         }
       });
       logInfo('webhook.ingest.accepted', {
@@ -366,7 +374,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
         return;
       }
 
-      await this.processTtsEvent(id, deviceUid, payload, processedAt);
+      await this.processTtsEvent(id, source, deviceUid, payload, processedAt);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'processing_failed';
       await this.prisma.webhookEvent.update({
@@ -387,6 +395,7 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
 
   private async processTtsEvent(
     id: string,
+    source: WebhookEventSource,
     deviceUid: string | undefined,
     payload: Prisma.JsonValue,
     processedAt: Date
@@ -412,7 +421,11 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     }
 
     await this.measurementsService.ingestCanonical(deviceUid ?? normalized.item.deviceUid, [
-      normalized.item
+      {
+        ...normalized.item,
+        sourceEventId: id,
+        source: normalizeMeasurementSource(source)
+      }
     ]);
 
     await this.prisma.webhookEvent.update({
@@ -437,98 +450,9 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     receivedAt: Date,
     processedAt: Date
   ): Promise<void> {
-    const telemetry = extractMeshtasticTelemetry(payload, receivedAt);
-    if (telemetry.found) {
-      const resolvedTelemetryDeviceUid = resolveNodeInfoDeviceUid(telemetry.deviceUid, deviceUid);
-      if (resolvedTelemetryDeviceUid !== 'unknown') {
-        const device = await this.prisma.device.upsert({
-          where: { deviceUid: resolvedTelemetryDeviceUid },
-          update: {
-            lastSeenAt: processedAt
-          },
-          create: {
-            deviceUid: resolvedTelemetryDeviceUid,
-            lastSeenAt: processedAt,
-            iconOverride: false
-          },
-          select: { id: true }
-        });
-
-        await this.prisma.deviceTelemetrySample.create({
-          data: {
-            deviceId: device.id,
-            capturedAt: telemetry.capturedAt,
-            source: 'meshtastic',
-            batteryLevel: telemetry.metrics.batteryLevel,
-            voltage: telemetry.metrics.voltage,
-            channelUtilization: telemetry.metrics.channelUtilization,
-            airUtilTx: telemetry.metrics.airUtilTx,
-            uptimeSeconds: telemetry.metrics.uptimeSeconds,
-            raw: telemetry.raw as Prisma.InputJsonValue
-          }
-        });
-      }
-
-      await this.prisma.webhookEvent.update({
-        where: { id },
-        data: {
-          processedAt,
-          error: null,
-          deviceUid:
-            resolvedTelemetryDeviceUid !== 'unknown'
-              ? resolvedTelemetryDeviceUid
-              : (deviceUid ?? null)
-        }
-      });
-      logInfo('webhook.normalize.accepted', {
-        source: 'meshtastic',
-        webhookEventId: id,
-        deviceUid:
-          resolvedTelemetryDeviceUid !== 'unknown'
-            ? resolvedTelemetryDeviceUid
-            : (deviceUid ?? null),
-        normalizedToMeasurement: false,
-        reason: 'telemetry'
-      });
-      return;
-    }
-
     const nodeInfo = extractMeshtasticNodeInfo(payload);
-    if (nodeInfo.found) {
-      const resolvedNodeInfoDeviceUid = resolveNodeInfoDeviceUid(nodeInfo.deviceUid, deviceUid);
-      if (resolvedNodeInfoDeviceUid !== 'unknown') {
-        await this.upsertMeshtasticNodeInfo(
-          resolvedNodeInfoDeviceUid,
-          nodeInfo.fields,
-          processedAt
-        );
-      }
-      await this.prisma.webhookEvent.update({
-        where: { id },
-        data: {
-          processedAt,
-          error: null,
-          deviceUid:
-            resolvedNodeInfoDeviceUid !== 'unknown'
-              ? resolvedNodeInfoDeviceUid
-              : (deviceUid ?? null)
-        }
-      });
-      logInfo('webhook.normalize.accepted', {
-        source: 'meshtastic',
-        webhookEventId: id,
-        deviceUid:
-          resolvedNodeInfoDeviceUid !== 'unknown'
-            ? resolvedNodeInfoDeviceUid
-            : (deviceUid ?? null),
-        normalizedToMeasurement: false,
-        reason: 'node_info'
-      });
-      return;
-    }
-
     const normalized = normalizeMeshtasticPayload(payload, receivedAt);
-    if (!normalized) {
+    if (!normalized && !nodeInfo.found) {
       await this.prisma.webhookEvent.update({
         where: { id },
         data: {
@@ -546,19 +470,71 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       return;
     }
 
-    const effectiveDeviceUid = resolveNodeInfoDeviceUid(normalized.deviceUid, deviceUid);
-    await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
-      {
-        capturedAt: normalized.capturedAt,
-        lat: normalized.lat,
-        lon: normalized.lon,
-        rssi: normalized.rssi,
-        snr: normalized.snr,
-        gatewayId: normalized.gatewayId ?? undefined,
-        rxMetadata: normalized.rxMetadata,
-        payloadRaw: normalized.payloadRaw
+    const effectiveDeviceUid = resolvePreferredDeviceUid(
+      normalized?.deviceUid,
+      deviceUid,
+      nodeInfo.deviceUid
+    );
+
+    if (nodeInfo.found) {
+      await this.upsertMeshtasticNodeInfo(effectiveDeviceUid, nodeInfo.fields, processedAt);
+    }
+
+    if (normalized) {
+      const ingestResult = await this.measurementsService.ingestCanonical(effectiveDeviceUid, [
+        {
+          sourceEventId: id,
+          source: normalizeMeasurementSource(WebhookEventSource.MESHTASTIC),
+          capturedAt: normalized.capturedAt,
+          lat: normalized.lat,
+          lon: normalized.lon,
+          altitude: normalized.altitude,
+          pdop: normalized.pdop,
+          satsInView: normalized.satsInView,
+          precisionBits: normalized.precisionBits,
+          locationSource: normalized.locationSource,
+          groundSpeed: normalized.groundSpeed,
+          groundTrack: normalized.groundTrack,
+          rssi: normalized.rssi,
+          snr: normalized.snr,
+          gatewayId: normalized.gatewayId ?? undefined,
+          rxMetadata: normalized.rxMetadata,
+          payloadRaw: normalized.payloadRaw
+        }
+      ]);
+
+      const measurementId = ingestResult.measurementIds[0];
+      if (measurementId && normalized.meshtasticRx) {
+        await this.prisma.meshtasticRx.upsert({
+          where: { measurementId },
+          update: {
+            rxTime: normalized.meshtasticRx.rxTime,
+            rxRssi: normalized.meshtasticRx.rxRssi,
+            rxSnr: normalized.meshtasticRx.rxSnr,
+            hopLimit: normalized.meshtasticRx.hopLimit,
+            hopStart: normalized.meshtasticRx.hopStart,
+            relayNode: normalized.meshtasticRx.relayNode,
+            transportMechanism: normalized.meshtasticRx.transportMechanism,
+            fromId: normalized.meshtasticRx.fromId,
+            toId: normalized.meshtasticRx.toId,
+            raw: normalized.meshtasticRx.raw as Prisma.InputJsonValue
+          },
+          create: {
+            measurementId,
+            rxTime: normalized.meshtasticRx.rxTime,
+            rxRssi: normalized.meshtasticRx.rxRssi,
+            rxSnr: normalized.meshtasticRx.rxSnr,
+            hopLimit: normalized.meshtasticRx.hopLimit,
+            hopStart: normalized.meshtasticRx.hopStart,
+            relayNode: normalized.meshtasticRx.relayNode,
+            transportMechanism: normalized.meshtasticRx.transportMechanism,
+            fromId: normalized.meshtasticRx.fromId,
+            toId: normalized.meshtasticRx.toId,
+            raw: normalized.meshtasticRx.raw as Prisma.InputJsonValue
+          }
+        });
       }
-    ]);
+    }
 
     await this.prisma.webhookEvent.update({
       where: { id },
@@ -571,7 +547,8 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       source: 'meshtastic',
       webhookEventId: id,
       deviceUid: effectiveDeviceUid,
-      normalizedToMeasurement: true
+      normalizedToMeasurement: Boolean(normalized),
+      reason: normalized ? undefined : 'node_info_only'
     });
   }
 
@@ -597,10 +574,6 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       updateData.hwModel = fields.hwModel;
       createData.hwModel = fields.hwModel;
     }
-    if (fields.meshtasticNodeId !== undefined) {
-      updateData.meshtasticNodeId = fields.meshtasticNodeId;
-      createData.meshtasticNodeId = fields.meshtasticNodeId;
-    }
     if (fields.firmwareVersion !== undefined) {
       updateData.firmwareVersion = fields.firmwareVersion;
       createData.firmwareVersion = fields.firmwareVersion;
@@ -616,18 +589,6 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     if (fields.shortName !== undefined) {
       updateData.shortName = fields.shortName;
       createData.shortName = fields.shortName;
-    }
-    if (fields.macaddr !== undefined) {
-      updateData.macaddr = fields.macaddr;
-      createData.macaddr = fields.macaddr;
-    }
-    if (fields.publicKey !== undefined) {
-      updateData.publicKey = fields.publicKey;
-      createData.publicKey = fields.publicKey;
-    }
-    if (fields.isUnmessagable !== undefined) {
-      updateData.isUnmessagable = fields.isUnmessagable;
-      createData.isUnmessagable = fields.isUnmessagable;
     }
     if (fields.role !== undefined) {
       updateData.role = fields.role;
@@ -647,6 +608,13 @@ type MeshtasticNormalized = {
   capturedAt: Date;
   lat: number;
   lon: number;
+  altitude?: number;
+  pdop?: number;
+  satsInView?: number;
+  precisionBits?: number;
+  locationSource?: string;
+  groundSpeed?: number;
+  groundTrack?: number;
   rssi?: number;
   snr?: number;
   gatewayId?: string | null;
@@ -656,54 +624,62 @@ type MeshtasticNormalized = {
     snr?: number;
     hop?: number;
   }>;
+  meshtasticRx?: MeshtasticRxInput;
   payloadRaw: Record<string, unknown>;
 };
 
+type MeshtasticRxInput = {
+  rxTime?: Date;
+  rxRssi?: number;
+  rxSnr?: number;
+  hopLimit?: number;
+  hopStart?: number;
+  relayNode?: number;
+  transportMechanism?: string;
+  fromId?: string;
+  toId?: string;
+  raw: Record<string, unknown>;
+};
+
 type MeshtasticNodeInfoFields = {
-  meshtasticNodeId?: string;
   hwModel?: string;
   firmwareVersion?: string;
   appVersion?: string;
   longName?: string;
   shortName?: string;
-  macaddr?: string;
-  publicKey?: string;
-  isUnmessagable?: boolean;
   role?: string;
 };
 
 type MeshtasticNodeInfoDetected = {
   found: boolean;
-  deviceUid?: string;
+  deviceUid: string;
   fields: MeshtasticNodeInfoFields;
 };
 
-type MeshtasticNodeInfoPacket = {
+type MeshtasticPositionPacket = {
   packet: Record<string, unknown>;
-  user: Record<string, unknown>;
+  decoded: Record<string, unknown>;
+  position: Record<string, unknown>;
+  user: Record<string, unknown> | null;
 };
 
-type MeshtasticTelemetryMetrics = {
-  batteryLevel?: number;
-  voltage?: number;
-  channelUtilization?: number;
-  airUtilTx?: number;
-  uptimeSeconds?: number;
-};
+const MESH_NODE_INFO_CONTAINER_KEYS = new Set([
+  'devicemetrics',
+  'telemetry',
+  'nodeinfo',
+  'user',
+  'mynodeinfo',
+  'metadata'
+]);
 
-type MeshtasticTelemetryDetected = {
-  found: boolean;
-  deviceUid?: string;
-  capturedAt: Date;
-  metrics: MeshtasticTelemetryMetrics;
-  raw: Record<string, unknown>;
-};
-
-type MeshtasticTelemetryPacket = {
-  packet: Record<string, unknown>;
-  telemetry: Record<string, unknown>;
-  deviceMetrics: Record<string, unknown>;
-};
+const MESH_NODE_INFO_HINT_KEYS = new Set([
+  'longname',
+  'shortname',
+  'hwmodel',
+  'hardwaremodel',
+  'firmwareversion',
+  'role'
+]);
 
 function normalizeMeshtasticPayload(
   payload: Prisma.JsonValue,
@@ -714,190 +690,64 @@ function normalizeMeshtasticPayload(
     return null;
   }
 
-  const position = extractPosition(record);
-  if (!position) {
+  const packet = findPositionPacket(record);
+  if (!packet) {
     return null;
   }
 
-  const lat = normalizeCoordinate(position.lat, 90);
-  const lon = normalizeCoordinate(position.lon, 180);
-  if (lat === null || lon === null) {
+  const latLon = resolvePositionLatLon(packet.position);
+  if (!latLon) {
     return null;
   }
 
-  const rssi = findFirstMeshtasticNumber(record, ['rxRssi', 'rx_rssi', 'rssi']);
-  const snr = findFirstMeshtasticNumber(record, ['rxSnr', 'rx_snr', 'snr']);
-  const gatewayId = getGatewayId(record);
-  const rxMetadata = buildMeshtasticRxMetadata(record, gatewayId, rssi, snr);
+  const rssi = findFirstMeshtasticNumber(packet.packet, ['rxRssi', 'rx_rssi', 'rssi']);
+  const snr = findFirstMeshtasticNumber(packet.packet, ['rxSnr', 'rx_snr', 'snr']);
+  const gatewayId = getGatewayId(packet.packet);
+  const rxMetadata = buildMeshtasticRxMetadata(packet.packet, gatewayId, rssi, snr);
+  const meshtasticRx = extractMeshtasticRxInput(packet.packet);
 
-  const capturedAt = resolveCapturedAt(record, receivedAt);
-  const deviceUid = getMeshtasticDeviceUid(record);
+  const capturedAt = resolvePositionCapturedAt(packet.position, packet.packet, receivedAt);
+  const deviceUid = resolvePreferredDeviceUid(
+    toNonEmptyString(packet.packet.fromId),
+    toNonEmptyString(packet.user?.id),
+    toNonEmptyString(packet.packet.from)
+  );
+
+  const altitude = getNumber(packet.position.altitude);
+  const pdopRaw = getNumber(packet.position.PDOP) ?? getNumber(packet.position.pdop);
+  const pdop = pdopRaw === null ? undefined : pdopRaw > 50 ? pdopRaw / 100 : pdopRaw;
+  const satsInViewRaw = getNumber(packet.position.satsInView);
+  const satsInView =
+    satsInViewRaw === null ? undefined : Math.trunc(satsInViewRaw);
+  const precisionBitsRaw = getNumber(packet.position.precisionBits);
+  const precisionBits =
+    precisionBitsRaw === null ? undefined : Math.trunc(precisionBitsRaw);
+  const locationSource = toNonEmptyString(packet.position.locationSource) ?? undefined;
+  const groundSpeed = getNumber(packet.position.groundSpeed) ?? undefined;
+  const groundTrack = getNumber(packet.position.groundTrack) ?? undefined;
 
   return {
     deviceUid,
     capturedAt,
-    lat,
-    lon,
+    lat: latLon.lat,
+    lon: latLon.lon,
+    altitude: altitude ?? undefined,
+    pdop,
+    satsInView,
+    precisionBits,
+    locationSource,
+    groundSpeed,
+    groundTrack,
     rssi: rssi ?? undefined,
     snr: snr ?? undefined,
     gatewayId: gatewayId ?? null,
     rxMetadata,
-    payloadRaw: record
+    meshtasticRx: meshtasticRx ?? undefined,
+    payloadRaw: packet.packet
   };
 }
 
-function extractMeshtasticNodeInfo(payload: Prisma.JsonValue): MeshtasticNodeInfoDetected {
-  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
-  if (!record) {
-    return {
-      found: false,
-      fields: {}
-    };
-  }
-
-  const nodeInfoPacket = findNodeInfoPacket(record);
-  if (!nodeInfoPacket) {
-    return {
-      found: false,
-      fields: {}
-    };
-  }
-
-  const fromId = readStringField(nodeInfoPacket.packet, ['fromId', 'from_id']);
-  const from = readStringField(nodeInfoPacket.packet, ['from']);
-  const userId = readStringField(nodeInfoPacket.user, ['id', 'nodeId', 'node_id']);
-
-  // Node id metadata can come from decoded.user.id, fromId, or from.
-  const nodeId = resolveNodeInfoDeviceUid(userId, fromId, from);
-  // Device resolution prefers fromId over decoded.user.id, then from.
-  const resolvedDeviceUid = resolveNodeInfoDeviceUid(fromId, userId, from);
-
-  const fields: MeshtasticNodeInfoFields = {};
-  if (nodeId !== 'unknown') {
-    fields.meshtasticNodeId = nodeId;
-  }
-
-  const hwModel = readStringField(nodeInfoPacket.user, ['hwModel', 'hardwareModel']);
-  if (hwModel !== undefined) {
-    fields.hwModel = hwModel;
-  }
-
-  const firmwareVersion = readStringField(nodeInfoPacket.user, [
-    'firmwareversion',
-    'firmware',
-    'fwversion',
-    'fwver'
-  ]);
-  if (firmwareVersion !== undefined) {
-    fields.firmwareVersion = firmwareVersion;
-  }
-
-  const appVersion = readStringField(nodeInfoPacket.user, ['appVersion', 'appVer']);
-  if (appVersion !== undefined) {
-    fields.appVersion = appVersion;
-  }
-
-  const longName = readStringField(nodeInfoPacket.user, ['longName']);
-  if (longName !== undefined) {
-    fields.longName = longName;
-  }
-
-  const shortName = readStringField(nodeInfoPacket.user, ['shortName']);
-  if (shortName !== undefined) {
-    fields.shortName = shortName;
-  }
-
-  const macaddr = readStringField(nodeInfoPacket.user, ['macaddr', 'macAddr', 'mac_address']);
-  if (macaddr !== undefined) {
-    fields.macaddr = macaddr;
-  }
-
-  const publicKey = readStringField(nodeInfoPacket.user, ['publicKey', 'public_key']);
-  if (publicKey !== undefined) {
-    fields.publicKey = publicKey;
-  }
-
-  const isUnmessagable = readBooleanField(nodeInfoPacket.user, [
-    'isUnmessagable',
-    'is_unmessagable',
-    'unmessagable'
-  ]);
-  if (isUnmessagable !== undefined) {
-    fields.isUnmessagable = isUnmessagable;
-  }
-
-  const role = readStringField(nodeInfoPacket.user, ['role']);
-  if (role !== undefined) {
-    fields.role = role;
-  }
-
-  return {
-    found: true,
-    deviceUid: resolvedDeviceUid !== 'unknown' ? resolvedDeviceUid : undefined,
-    fields
-  };
-}
-
-function extractMeshtasticTelemetry(
-  payload: Prisma.JsonValue,
-  receivedAt: Date
-): MeshtasticTelemetryDetected {
-  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
-  if (!record) {
-    return {
-      found: false,
-      capturedAt: receivedAt,
-      metrics: {},
-      raw: {}
-    };
-  }
-
-  const telemetryPacket = findTelemetryPacket(record);
-  if (!telemetryPacket) {
-    return {
-      found: false,
-      capturedAt: receivedAt,
-      metrics: {},
-      raw: {}
-    };
-  }
-
-  const fromId = readStringField(telemetryPacket.packet, ['fromId', 'from_id']);
-  const from = readStringField(telemetryPacket.packet, ['from']);
-  const resolvedDeviceUid = resolveNodeInfoDeviceUid(fromId, from);
-
-  const telemetryTime = readNumberField(telemetryPacket.telemetry, ['time']);
-  const rxTime = readNumberField(telemetryPacket.packet, ['rxTime', 'rx_time']);
-  const capturedAtSeconds = telemetryTime ?? rxTime;
-  const capturedAt =
-    capturedAtSeconds !== undefined ? new Date(toEpochMs(capturedAtSeconds)) : receivedAt;
-
-  const batteryLevel = readNumberField(telemetryPacket.deviceMetrics, ['batteryLevel']);
-  const voltage = readNumberField(telemetryPacket.deviceMetrics, ['voltage']);
-  const channelUtilization = readNumberField(telemetryPacket.deviceMetrics, [
-    'channelUtilization'
-  ]);
-  const airUtilTx = readNumberField(telemetryPacket.deviceMetrics, ['airUtilTx']);
-  const uptimeSeconds = readNumberField(telemetryPacket.deviceMetrics, ['uptimeSeconds']);
-
-  return {
-    found: true,
-    deviceUid: resolvedDeviceUid !== 'unknown' ? resolvedDeviceUid : undefined,
-    capturedAt,
-    metrics: {
-      batteryLevel:
-        batteryLevel !== undefined ? Math.trunc(batteryLevel) : undefined,
-      voltage,
-      channelUtilization,
-      airUtilTx,
-      uptimeSeconds:
-        uptimeSeconds !== undefined ? Math.trunc(uptimeSeconds) : undefined
-    },
-    raw: telemetryPacket.telemetry
-  };
-}
-
-function findTelemetryPacket(root: Record<string, unknown>): MeshtasticTelemetryPacket | null {
+function findPositionPacket(root: Record<string, unknown>): MeshtasticPositionPacket | null {
   const stack: unknown[] = [root];
   const seen = new Set<Record<string, unknown>>();
 
@@ -906,7 +756,6 @@ function findTelemetryPacket(root: Record<string, unknown>): MeshtasticTelemetry
     if (!current || typeof current !== 'object') {
       continue;
     }
-
     if (Array.isArray(current)) {
       for (const entry of current) {
         stack.push(entry);
@@ -921,14 +770,14 @@ function findTelemetryPacket(root: Record<string, unknown>): MeshtasticTelemetry
     seen.add(record);
 
     const decoded = asRecord(record.decoded);
-    const telemetry = decoded ? asRecord(decoded.telemetry) : null;
-    const deviceMetrics = telemetry ? asRecord(telemetry.deviceMetrics) : null;
-    const portnum = decoded ? readStringField(decoded, ['portnum']) : undefined;
-    if (telemetry && deviceMetrics && portnum === 'TELEMETRY_APP') {
+    const position = decoded ? asRecord(decoded.position) : null;
+    const portnum = decoded ? toNonEmptyString(decoded.portnum) : null;
+    if (decoded && position && portnum === 'POSITION_APP') {
       return {
         packet: record,
-        telemetry,
-        deviceMetrics
+        decoded,
+        position,
+        user: asRecord(decoded.user)
       };
     }
 
@@ -942,9 +791,167 @@ function findTelemetryPacket(root: Record<string, unknown>): MeshtasticTelemetry
   return null;
 }
 
-function findNodeInfoPacket(root: Record<string, unknown>): MeshtasticNodeInfoPacket | null {
-  const stack: unknown[] = [root];
+function resolvePositionLatLon(
+  position: Record<string, unknown>
+): { lat: number; lon: number } | null {
+  const latitude = getNumber(position.latitude);
+  const longitude = getNumber(position.longitude);
+  if (latitude !== null && longitude !== null) {
+    return { lat: latitude, lon: longitude };
+  }
+
+  const latitudeI = getNumber(position.latitudeI) ?? getNumber(position.latitude_i);
+  const longitudeI = getNumber(position.longitudeI) ?? getNumber(position.longitude_i);
+  if (latitudeI !== null && longitudeI !== null) {
+    return {
+      lat: latitudeI / 1e7,
+      lon: longitudeI / 1e7
+    };
+  }
+
+  return null;
+}
+
+function resolvePositionCapturedAt(
+  position: Record<string, unknown>,
+  packet: Record<string, unknown>,
+  receivedAt: Date
+): Date {
+  const positionTime = getNumber(position.time);
+  if (positionTime !== null) {
+    return new Date(toEpochMs(positionTime));
+  }
+
+  const rxTime = getNumber(packet.rxTime) ?? getNumber(packet.rx_time);
+  if (rxTime !== null) {
+    return new Date(toEpochMs(rxTime));
+  }
+
+  return receivedAt;
+}
+
+function extractMeshtasticRxInput(packet: Record<string, unknown>): MeshtasticRxInput | null {
+  const rxTimeSeconds = getNumber(packet.rxTime) ?? getNumber(packet.rx_time);
+  const rxRssiRaw = getNumber(packet.rxRssi) ?? getNumber(packet.rx_rssi);
+  const rxSnrRaw = getNumber(packet.rxSnr) ?? getNumber(packet.rx_snr);
+  const hopLimitRaw = getNumber(packet.hopLimit) ?? getNumber(packet.hop_limit);
+  const hopStartRaw = getNumber(packet.hopStart) ?? getNumber(packet.hop_start);
+  const relayNodeRaw = getNumber(packet.relayNode) ?? getNumber(packet.relay_node);
+  const transportMechanism = toNonEmptyString(packet.transportMechanism ?? packet.transport_mechanism);
+  const fromId = toNonEmptyString(packet.fromId ?? packet.from_id);
+  const toId = toNonEmptyString(packet.toId ?? packet.to_id);
+
+  const raw: Record<string, unknown> = {};
+  if (rxTimeSeconds !== null) {
+    raw.rxTime = rxTimeSeconds;
+  }
+  if (rxRssiRaw !== null) {
+    raw.rxRssi = Math.trunc(rxRssiRaw);
+  }
+  if (rxSnrRaw !== null) {
+    raw.rxSnr = rxSnrRaw;
+  }
+  if (hopLimitRaw !== null) {
+    raw.hopLimit = Math.trunc(hopLimitRaw);
+  }
+  if (hopStartRaw !== null) {
+    raw.hopStart = Math.trunc(hopStartRaw);
+  }
+  if (relayNodeRaw !== null) {
+    raw.relayNode = Math.trunc(relayNodeRaw);
+  }
+  if (transportMechanism !== null) {
+    raw.transportMechanism = transportMechanism;
+  }
+  if (fromId !== null) {
+    raw.fromId = fromId;
+  }
+  if (toId !== null) {
+    raw.toId = toId;
+  }
+
+  if (Object.keys(raw).length === 0) {
+    return null;
+  }
+
+  return {
+    rxTime: rxTimeSeconds !== null ? new Date(rxTimeSeconds * 1000) : undefined,
+    rxRssi: rxRssiRaw !== null ? Math.trunc(rxRssiRaw) : undefined,
+    rxSnr: rxSnrRaw !== null ? rxSnrRaw : undefined,
+    hopLimit: hopLimitRaw !== null ? Math.trunc(hopLimitRaw) : undefined,
+    hopStart: hopStartRaw !== null ? Math.trunc(hopStartRaw) : undefined,
+    relayNode: relayNodeRaw !== null ? Math.trunc(relayNodeRaw) : undefined,
+    transportMechanism: transportMechanism ?? undefined,
+    fromId: fromId ?? undefined,
+    toId: toId ?? undefined,
+    raw
+  };
+}
+
+function extractMeshtasticNodeInfo(payload: Prisma.JsonValue): MeshtasticNodeInfoDetected {
+  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+  if (!record) {
+    return {
+      found: false,
+      deviceUid: 'unknown',
+      fields: {}
+    };
+  }
+
+  const { candidates, foundHint } = collectNodeInfoCandidates(record);
+  const fields: MeshtasticNodeInfoFields = {};
+
+  const hwModel = findFirstString(candidates, ['hwmodel', 'hardwaremodel']);
+  if (hwModel !== undefined) {
+    fields.hwModel = hwModel;
+  }
+
+  const firmwareVersion = findFirstString(candidates, [
+    'firmwareversion',
+    'firmware',
+    'fwversion',
+    'fwver'
+  ]);
+  if (firmwareVersion !== undefined) {
+    fields.firmwareVersion = firmwareVersion;
+  }
+
+  const appVersion = findFirstString(candidates, ['appversion', 'appver']);
+  if (appVersion !== undefined) {
+    fields.appVersion = appVersion;
+  }
+
+  const longName = findFirstString(candidates, ['longname']);
+  if (longName !== undefined) {
+    fields.longName = longName;
+  }
+
+  const shortName = findFirstString(candidates, ['shortname']);
+  if (shortName !== undefined) {
+    fields.shortName = shortName;
+  }
+
+  const role = findFirstString(candidates, ['role']);
+  if (role !== undefined) {
+    fields.role = role;
+  }
+
+  return {
+    found: foundHint || Object.keys(fields).length > 0,
+    deviceUid: getMeshtasticDeviceUid(record),
+    fields
+  };
+}
+
+function collectNodeInfoCandidates(root: Record<string, unknown>): {
+  candidates: Array<Record<string, unknown>>;
+  foundHint: boolean;
+} {
+  const preferred: Array<Record<string, unknown>> = [];
+  const allRecords: Array<Record<string, unknown>> = [];
   const seen = new Set<Record<string, unknown>>();
+  const stack: unknown[] = [root];
+  let foundHint = false;
 
   while (stack.length > 0) {
     const current = stack.pop();
@@ -964,100 +971,68 @@ function findNodeInfoPacket(root: Record<string, unknown>): MeshtasticNodeInfoPa
       continue;
     }
     seen.add(record);
+    allRecords.push(record);
 
-    const decoded = asRecord(record.decoded);
-    const user = decoded ? asRecord(decoded.user) : null;
-    const portnum = decoded ? readStringField(decoded, ['portnum']) : undefined;
-    if (user && portnum === 'NODEINFO_APP') {
-      return { packet: record, user };
-    }
+    for (const [key, value] of Object.entries(record)) {
+      const normalizedKey = normalizeLookupKey(key);
+      if (MESH_NODE_INFO_CONTAINER_KEYS.has(normalizedKey)) {
+        foundHint = true;
+        if (value && typeof value === 'object') {
+          if (Array.isArray(value)) {
+            for (const entry of value) {
+              if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+                preferred.push(entry as Record<string, unknown>);
+              }
+            }
+          } else {
+            preferred.push(value as Record<string, unknown>);
+          }
+        }
+      }
 
-    for (const value of Object.values(record)) {
+      if (MESH_NODE_INFO_HINT_KEYS.has(normalizedKey)) {
+        foundHint = true;
+      }
+
       if (value && typeof value === 'object') {
         stack.push(value);
       }
     }
   }
 
-  return null;
-}
-
-function readStringField(record: Record<string, unknown>, aliases: string[]): string | undefined {
-  const aliasSet = new Set(aliases.map((key) => normalizeLookupKey(key)));
-  for (const [key, value] of Object.entries(record)) {
-    if (!aliasSet.has(normalizeLookupKey(key))) {
+  const ordered: Array<Record<string, unknown>> = [];
+  const orderedSeen = new Set<Record<string, unknown>>();
+  for (const record of [...preferred, ...allRecords]) {
+    if (orderedSeen.has(record)) {
       continue;
     }
-    const normalized = toNonEmptyString(value);
-    if (normalized !== null) {
-      return normalized;
-    }
+    orderedSeen.add(record);
+    ordered.push(record);
   }
-  return undefined;
+
+  return {
+    candidates: ordered,
+    foundHint
+  };
 }
 
-function readNumberField(record: Record<string, unknown>, aliases: string[]): number | undefined {
+function findFirstString(
+  records: Array<Record<string, unknown>>,
+  aliases: string[]
+): string | undefined {
   const aliasSet = new Set(aliases.map((key) => normalizeLookupKey(key)));
-  for (const [key, value] of Object.entries(record)) {
-    if (!aliasSet.has(normalizeLookupKey(key))) {
-      continue;
-    }
-    const normalized = getNumber(value);
-    if (normalized !== null) {
-      return normalized;
-    }
-  }
-  return undefined;
-}
-
-function readBooleanField(record: Record<string, unknown>, aliases: string[]): boolean | undefined {
-  const aliasSet = new Set(aliases.map((key) => normalizeLookupKey(key)));
-  for (const [key, value] of Object.entries(record)) {
-    if (!aliasSet.has(normalizeLookupKey(key))) {
-      continue;
-    }
-    if (typeof value === 'boolean') {
-      return value;
-    }
-    if (typeof value === 'string') {
-      const normalized = value.trim().toLowerCase();
-      if (normalized === 'true') {
-        return true;
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      if (!aliasSet.has(normalizeLookupKey(key))) {
+        continue;
       }
-      if (normalized === 'false') {
-        return false;
-      }
-    }
-    if (typeof value === 'number') {
-      if (value === 1) {
-        return true;
-      }
-      if (value === 0) {
-        return false;
+      const normalized = toNonEmptyString(value);
+      if (normalized !== null) {
+        return normalized;
       }
     }
   }
   return undefined;
-}
-
-function resolveNodeInfoDeviceUid(...values: Array<string | undefined | null>): string {
-  for (const value of values) {
-    if (!value) {
-      continue;
-    }
-    const trimmed = value.trim();
-    if (trimmed.length > 0 && trimmed !== 'unknown') {
-      return trimmed;
-    }
-  }
-  return 'unknown';
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
 }
 
 function toNonEmptyString(value: unknown): string | null {
@@ -1069,6 +1044,26 @@ function toNonEmptyString(value: unknown): string | null {
     return String(value);
   }
   return null;
+}
+
+function resolvePreferredDeviceUid(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return 'unknown';
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
 }
 
 function normalizeLookupKey(key: string): string {
@@ -1396,6 +1391,19 @@ function normalizeSource(source: WebhookEventSource): 'lorawan' | 'meshtastic' |
   }
   if (source === WebhookEventSource.AGENT) {
     return 'agent';
+  }
+  return 'lorawan';
+}
+
+function normalizeMeasurementSource(source: WebhookEventSource): 'lorawan' | 'meshtastic' | 'agent' | 'sim' {
+  if (source === WebhookEventSource.MESHTASTIC) {
+    return 'meshtastic';
+  }
+  if (source === WebhookEventSource.AGENT) {
+    return 'agent';
+  }
+  if (source === WebhookEventSource.SIM) {
+    return 'sim';
   }
   return 'lorawan';
 }

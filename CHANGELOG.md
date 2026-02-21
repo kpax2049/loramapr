@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.10.3 - 2026-02-21
+
+### Title
+- Events Explorer Performance + Provenance
+
+### Added
+- Added Events table row virtualization for large result sets, preserving row selection/highlight during scrolling and `Load more` growth.
+- Added saved event filter views, quick filter chips, and persisted filter state for faster repeated investigations.
+- Added JSON detail viewer quality-of-life tools: key/value search, per-key `Copy JSON path`, and improved copy feedback in the event drawer.
+
+### Changed
+- Improved Events Explorer loading UX with a bottom loading mask while additional pages are being fetched.
+- Improved raw packet provenance flow: Point Details now prefers exact event linking via `Measurement.sourceEventId` and falls back to time-window search only when exact link is unavailable.
+- Improved event triage docs with concrete portnum/device/search workflows and explicit measurement-to-event linkage behavior.
+
+### Acceptance
+- Events Explorer remains responsive with large event histories and supports continuous scrolling without row-jump regressions on append.
+- Operators can move from point details to exact raw events when `sourceEventId` exists, and still use deterministic fallback search otherwise.
+- Event detail inspection supports targeted payload search plus JSON-path copying for reproducible debugging.
+
+### Notes
+- No breaking API changes; improvements are additive across UI and docs.
+
+## v0.10.2 - 2026-02-21
+
+### Title
+- GPS Quality + Meshtastic RX + Event-to-Point Linking
+
+### Added
+- Added new `Measurement` GPS quality fields in ingestion and API responses: `altitude`, `hdop`, `pdop`, `satsInView`, `precisionBits`, `locationSource`, `groundSpeed`, and `groundTrack`.
+- Added `MeshtasticRx` persistence (one row per measurement) with receive diagnostics (`rxTime`, `rxRssi`, `rxSnr`, hops, relay, transport, and raw packet slice) and idempotent upsert behavior.
+- Added point-level raw packet navigation and closest-packet targeting from Point Details into Events Explorer.
+
+### Changed
+- Improved Debug/Events to map coupling: selecting an events row now performs best-effort point selection/highlight on map and clears stale point selection when no reliable match exists.
+- Synced Events device filtering with global device context so debug device selection drives the same map/measurement scope as the main device picker.
+- Updated data model and ingestion docs for GPS quality fields, PDOP scaling, and Meshtastic RX metadata caveats.
+
+### Acceptance
+- Measurement detail payloads include GPS quality fields when present, plus optional `meshtasticRx` data when available.
+- Events-to-map linking highlights matching points when confidence is sufficient and does not leave stale Point Details on non-matches.
+- Docs cover PDOP scaling and clarify that `rxRssi`/`rxSnr` are transport/receiver dependent.
+
+### Notes
+- No breaking API changes; fields are additive/optional.
+
 ## v0.10.1 - 2026-02-21
 
 ### Title
