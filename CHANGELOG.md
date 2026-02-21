@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.10.2 - 2026-02-21
+
+### Title
+- GPS Quality + Meshtastic RX + Event-to-Point Linking
+
+### Added
+- Added new `Measurement` GPS quality fields in ingestion and API responses: `altitude`, `hdop`, `pdop`, `satsInView`, `precisionBits`, `locationSource`, `groundSpeed`, and `groundTrack`.
+- Added `MeshtasticRx` persistence (one row per measurement) with receive diagnostics (`rxTime`, `rxRssi`, `rxSnr`, hops, relay, transport, and raw packet slice) and idempotent upsert behavior.
+- Added point-level raw packet navigation and closest-packet targeting from Point Details into Events Explorer.
+
+### Changed
+- Improved Debug/Events to map coupling: selecting an events row now performs best-effort point selection/highlight on map and clears stale point selection when no reliable match exists.
+- Synced Events device filtering with global device context so debug device selection drives the same map/measurement scope as the main device picker.
+- Updated data model and ingestion docs for GPS quality fields, PDOP scaling, and Meshtastic RX metadata caveats.
+
+### Acceptance
+- Measurement detail payloads include GPS quality fields when present, plus optional `meshtasticRx` data when available.
+- Events-to-map linking highlights matching points when confidence is sufficient and does not leave stale Point Details on non-matches.
+- Docs cover PDOP scaling and clarify that `rxRssi`/`rxSnr` are transport/receiver dependent.
+
+### Notes
+- No breaking API changes; fields are additive/optional.
+
 ## v0.9.18 - 2026-02-19
 
 ### Title

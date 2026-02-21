@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.10.2 (2026-02-21)
+
+- GPS quality + Meshtastic RX release: ingestion and measurement detail APIs now include extended GPS quality/context fields and optional per-measurement Meshtastic receive diagnostics.
+- Debug/Events to map flow now supports best-effort event-to-point highlighting with stale-selection clearing, plus device-filter sync so Events device selection aligns with main map scope.
+- Data model + ingestion docs now explicitly cover PDOP scaling behavior and receiver/transport-dependent availability of `rxRssi`/`rxSnr`.
+- Release notes: `docs/release-v0.10.2.md`.
+
 ## v0.9.17 (2026-02-19)
 
 - Data safety + retention defaults release: added configurable backend raw-event retention scheduling with documented defaults (`WebhookEvent` 30d, `AgentDecision` 90d) and daily cron execution.
