@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.10.1 - 2026-02-21
+
+### Title
+- Meshtastic device metadata + telemetry UX
+
+### Added
+- Added richer device identity fields in API/detail payloads (`meshtasticNodeId`, `macaddr`, `publicKey`, `isUnmessagable`) populated from Meshtastic `NODEINFO_APP` events.
+- Added device telemetry persistence and API exposure (`DeviceTelemetrySample`, `GET /api/devices/:id/telemetry`) with bounded history for UI timelines.
+- Added Device Details UI sections for Meshtastic identity and latest telemetry, including deep links to filtered raw `NODEINFO_APP` / `TELEMETRY_APP` events.
+- Added compact battery/voltage sparkline in Device Details using lightweight inline SVG (no heavy chart library).
+
+### Changed
+- Meshtastic ingest processing now promotes node-info and telemetry packets into first-class device/telemetry records for faster operator visibility.
+- Device picker labels are now compact (name + UID) and no longer include device type text.
+- Pi-forwarder and wiki ingestion docs were updated to reflect stdin-bridge behavior and NODEINFO/TELEMETRY promotion flow.
+
+### Milestone
+- Operators can identify device type/identity, inspect recent telemetry trends, and pivot to raw events from a single Device Details workflow.
+
+### Acceptance
+- Device Details renders Meshtastic identity and telemetry sections only when data exists.
+- "View raw nodeinfo event" and "View raw telemetry event" open Events Explorer with prefilled device+port filters.
+- Telemetry sparkline appears for devices with telemetry history and is hidden when no telemetry is available.
+
+### Notes
+- No breaking API changes for existing map/session/event consumers.
+
 ## v0.10.0 - 2026-02-20
 
 ### Title
