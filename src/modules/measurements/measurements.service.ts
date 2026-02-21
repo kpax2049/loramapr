@@ -15,7 +15,14 @@ export type CanonicalMeasurementInput = {
   lat: number;
   lon: number;
   alt?: number;
+  altitude?: number;
   hdop?: number;
+  pdop?: number;
+  satsInView?: number;
+  precisionBits?: number;
+  locationSource?: string;
+  groundSpeed?: number;
+  groundTrack?: number;
   rssi?: number;
   snr?: number;
   sf?: number;
@@ -199,7 +206,14 @@ export class MeasurementsService {
             lat: item.lat,
             lon: item.lon,
             alt: item.alt,
+            altitude: item.altitude,
             hdop: item.hdop,
+            pdop: item.pdop,
+            satsInView: item.satsInView,
+            precisionBits: item.precisionBits,
+            locationSource: item.locationSource,
+            groundSpeed: item.groundSpeed,
+            groundTrack: item.groundTrack,
             rssi,
             snr,
             sf: item.sf,

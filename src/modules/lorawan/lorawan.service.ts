@@ -457,7 +457,11 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
       return;
     }
 
-    const effectiveDeviceUid = deviceUid ?? normalized?.deviceUid ?? nodeInfo.deviceUid;
+    const effectiveDeviceUid = resolvePreferredDeviceUid(
+      normalized?.deviceUid,
+      deviceUid,
+      nodeInfo.deviceUid
+    );
 
     if (nodeInfo.found) {
       await this.upsertMeshtasticNodeInfo(effectiveDeviceUid, nodeInfo.fields, processedAt);
@@ -469,6 +473,13 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
           capturedAt: normalized.capturedAt,
           lat: normalized.lat,
           lon: normalized.lon,
+          altitude: normalized.altitude,
+          pdop: normalized.pdop,
+          satsInView: normalized.satsInView,
+          precisionBits: normalized.precisionBits,
+          locationSource: normalized.locationSource,
+          groundSpeed: normalized.groundSpeed,
+          groundTrack: normalized.groundTrack,
           rssi: normalized.rssi,
           snr: normalized.snr,
           gatewayId: normalized.gatewayId ?? undefined,
@@ -550,6 +561,13 @@ type MeshtasticNormalized = {
   capturedAt: Date;
   lat: number;
   lon: number;
+  altitude?: number;
+  pdop?: number;
+  satsInView?: number;
+  precisionBits?: number;
+  locationSource?: string;
+  groundSpeed?: number;
+  groundTrack?: number;
   rssi?: number;
   snr?: number;
   gatewayId?: string | null;
@@ -575,6 +593,13 @@ type MeshtasticNodeInfoDetected = {
   found: boolean;
   deviceUid: string;
   fields: MeshtasticNodeInfoFields;
+};
+
+type MeshtasticPositionPacket = {
+  packet: Record<string, unknown>;
+  decoded: Record<string, unknown>;
+  position: Record<string, unknown>;
+  user: Record<string, unknown> | null;
 };
 
 const MESH_NODE_INFO_CONTAINER_KEYS = new Set([
@@ -604,36 +629,142 @@ function normalizeMeshtasticPayload(
     return null;
   }
 
-  const position = extractPosition(record);
-  if (!position) {
+  const packet = findPositionPacket(record);
+  if (!packet) {
     return null;
   }
 
-  const lat = normalizeCoordinate(position.lat, 90);
-  const lon = normalizeCoordinate(position.lon, 180);
-  if (lat === null || lon === null) {
+  const latLon = resolvePositionLatLon(packet.position);
+  if (!latLon) {
     return null;
   }
 
-  const rssi = findFirstMeshtasticNumber(record, ['rxRssi', 'rx_rssi', 'rssi']);
-  const snr = findFirstMeshtasticNumber(record, ['rxSnr', 'rx_snr', 'snr']);
-  const gatewayId = getGatewayId(record);
-  const rxMetadata = buildMeshtasticRxMetadata(record, gatewayId, rssi, snr);
+  const rssi = findFirstMeshtasticNumber(packet.packet, ['rxRssi', 'rx_rssi', 'rssi']);
+  const snr = findFirstMeshtasticNumber(packet.packet, ['rxSnr', 'rx_snr', 'snr']);
+  const gatewayId = getGatewayId(packet.packet);
+  const rxMetadata = buildMeshtasticRxMetadata(packet.packet, gatewayId, rssi, snr);
 
-  const capturedAt = resolveCapturedAt(record, receivedAt);
-  const deviceUid = getMeshtasticDeviceUid(record);
+  const capturedAt = resolvePositionCapturedAt(packet.position, packet.packet, receivedAt);
+  const deviceUid = resolvePreferredDeviceUid(
+    toNonEmptyString(packet.packet.fromId),
+    toNonEmptyString(packet.user?.id),
+    toNonEmptyString(packet.packet.from)
+  );
+
+  const altitude = getNumber(packet.position.altitude);
+  const pdopRaw = getNumber(packet.position.PDOP) ?? getNumber(packet.position.pdop);
+  const pdop = pdopRaw === null ? undefined : pdopRaw > 50 ? pdopRaw / 100 : pdopRaw;
+  const satsInViewRaw = getNumber(packet.position.satsInView);
+  const satsInView =
+    satsInViewRaw === null ? undefined : Math.trunc(satsInViewRaw);
+  const precisionBitsRaw = getNumber(packet.position.precisionBits);
+  const precisionBits =
+    precisionBitsRaw === null ? undefined : Math.trunc(precisionBitsRaw);
+  const locationSource = toNonEmptyString(packet.position.locationSource) ?? undefined;
+  const groundSpeed = getNumber(packet.position.groundSpeed) ?? undefined;
+  const groundTrack = getNumber(packet.position.groundTrack) ?? undefined;
 
   return {
     deviceUid,
     capturedAt,
-    lat,
-    lon,
+    lat: latLon.lat,
+    lon: latLon.lon,
+    altitude: altitude ?? undefined,
+    pdop,
+    satsInView,
+    precisionBits,
+    locationSource,
+    groundSpeed,
+    groundTrack,
     rssi: rssi ?? undefined,
     snr: snr ?? undefined,
     gatewayId: gatewayId ?? null,
     rxMetadata,
-    payloadRaw: record
+    payloadRaw: packet.packet
   };
+}
+
+function findPositionPacket(root: Record<string, unknown>): MeshtasticPositionPacket | null {
+  const stack: unknown[] = [root];
+  const seen = new Set<Record<string, unknown>>();
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const entry of current) {
+        stack.push(entry);
+      }
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    if (seen.has(record)) {
+      continue;
+    }
+    seen.add(record);
+
+    const decoded = asRecord(record.decoded);
+    const position = decoded ? asRecord(decoded.position) : null;
+    const portnum = decoded ? toNonEmptyString(decoded.portnum) : null;
+    if (decoded && position && portnum === 'POSITION_APP') {
+      return {
+        packet: record,
+        decoded,
+        position,
+        user: asRecord(decoded.user)
+      };
+    }
+
+    for (const value of Object.values(record)) {
+      if (value && typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolvePositionLatLon(
+  position: Record<string, unknown>
+): { lat: number; lon: number } | null {
+  const latitude = getNumber(position.latitude);
+  const longitude = getNumber(position.longitude);
+  if (latitude !== null && longitude !== null) {
+    return { lat: latitude, lon: longitude };
+  }
+
+  const latitudeI = getNumber(position.latitudeI) ?? getNumber(position.latitude_i);
+  const longitudeI = getNumber(position.longitudeI) ?? getNumber(position.longitude_i);
+  if (latitudeI !== null && longitudeI !== null) {
+    return {
+      lat: latitudeI / 1e7,
+      lon: longitudeI / 1e7
+    };
+  }
+
+  return null;
+}
+
+function resolvePositionCapturedAt(
+  position: Record<string, unknown>,
+  packet: Record<string, unknown>,
+  receivedAt: Date
+): Date {
+  const positionTime = getNumber(position.time);
+  if (positionTime !== null) {
+    return new Date(toEpochMs(positionTime));
+  }
+
+  const rxTime = getNumber(packet.rxTime) ?? getNumber(packet.rx_time);
+  if (rxTime !== null) {
+    return new Date(toEpochMs(rxTime));
+  }
+
+  return receivedAt;
 }
 
 function extractMeshtasticNodeInfo(payload: Prisma.JsonValue): MeshtasticNodeInfoDetected {
@@ -792,6 +923,26 @@ function toNonEmptyString(value: unknown): string | null {
     return String(value);
   }
   return null;
+}
+
+function resolvePreferredDeviceUid(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return 'unknown';
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
 }
 
 function normalizeLookupKey(key: string): string {
