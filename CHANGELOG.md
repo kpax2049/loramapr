@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.10.3 - 2026-02-21
+
+### Title
+- Events Explorer Performance + Provenance
+
+### Added
+- Added Events table row virtualization for large result sets, preserving row selection/highlight during scrolling and `Load more` growth.
+- Added saved event filter views, quick filter chips, and persisted filter state for faster repeated investigations.
+- Added JSON detail viewer quality-of-life tools: key/value search, per-key `Copy JSON path`, and improved copy feedback in the event drawer.
+
+### Changed
+- Improved Events Explorer loading UX with a bottom loading mask while additional pages are being fetched.
+- Improved raw packet provenance flow: Point Details now prefers exact event linking via `Measurement.sourceEventId` and falls back to time-window search only when exact link is unavailable.
+- Improved event triage docs with concrete portnum/device/search workflows and explicit measurement-to-event linkage behavior.
+
+### Acceptance
+- Events Explorer remains responsive with large event histories and supports continuous scrolling without row-jump regressions on append.
+- Operators can move from point details to exact raw events when `sourceEventId` exists, and still use deterministic fallback search otherwise.
+- Event detail inspection supports targeted payload search plus JSON-path copying for reproducible debugging.
+
+### Notes
+- No breaking API changes; improvements are additive across UI and docs.
+
 ## v0.10.2 - 2026-02-21
 
 ### Title
