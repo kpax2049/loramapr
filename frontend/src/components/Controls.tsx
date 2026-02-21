@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import type { AutoSessionConfig, DeviceLatest } from '../api/types';
+import type { AutoSessionConfig, DeviceLatest, DeviceTelemetrySample } from '../api/types';
 import { useApiDiagnosticsEntries } from '../api/diagnostics';
 import { getApiBaseUrl } from '../api/http';
 import { ApiError } from '../api/http';
@@ -7,6 +7,7 @@ import {
   useAgentDecisions,
   useAutoSession,
   useDeviceDetail,
+  useDeviceTelemetry,
   useDevices,
   useGateways,
   useReceivers,
@@ -175,6 +176,7 @@ export default function Controls({
   const updateAutoSessionMutation = useUpdateAutoSession(deviceId);
   const updateDeviceMutation = useUpdateDevice();
   const deviceDetailQuery = useDeviceDetail(deviceId, { enabled: Boolean(deviceId) });
+  const telemetryQuery = useDeviceTelemetry(deviceId, 48);
   const deviceDetail = deviceDetailQuery.data;
   const deviceDetailErrorStatus = getErrorStatus(deviceDetailQuery.error);
   const autoSessionStatus = getErrorStatus(autoSessionQuery.error);
@@ -413,6 +415,11 @@ export default function Controls({
   const meshtasticMacaddr = normalizeOptionalText(deviceDetail?.macaddr);
   const meshtasticLastNodeInfoAt = deviceDetail?.lastNodeInfoAt ?? null;
   const latestTelemetry = deviceDetail?.latestTelemetry ?? null;
+  const telemetrySamples = telemetryQuery.data?.items ?? [];
+  const telemetrySeries = useMemo(
+    () => buildTelemetrySeries(telemetrySamples),
+    [telemetrySamples]
+  );
   const detailIconInput = useMemo(
     () => ({
       deviceUid: deviceDetail?.deviceUid ?? selectedDevice?.deviceUid ?? null,
@@ -910,6 +917,12 @@ export default function Controls({
                         <span>capturedAt</span>
                         <strong>{formatRelativeTime(latestTelemetry.capturedAt)}</strong>
                       </div>
+                      {telemetrySeries ? (
+                        <div className="device-details__row">
+                          <span>trend</span>
+                          <TelemetrySparkline series={telemetrySeries} />
+                        </div>
+                      ) : null}
                       <div className="device-details__row">
                         <span>Raw telemetry</span>
                         <div className="device-details__events-links">
@@ -1827,6 +1840,96 @@ function formatTelemetrySeconds(value: number | null | undefined): string {
     return '—';
   }
   return `${Math.max(0, Math.round(value))}s`;
+}
+
+type TelemetrySeries = {
+  metric: 'batteryLevel' | 'voltage';
+  label: string;
+  unit: string;
+  values: number[];
+  min: number;
+  max: number;
+  latest: number;
+};
+
+function buildTelemetrySeries(samples: DeviceTelemetrySample[]): TelemetrySeries | null {
+  if (samples.length === 0) {
+    return null;
+  }
+
+  const batteryValues = samples
+    .map((sample) => sample.batteryLevel)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (batteryValues.length >= 2) {
+    return createTelemetrySeries('batteryLevel', 'Battery', '%', batteryValues);
+  }
+
+  const voltageValues = samples
+    .map((sample) => sample.voltage)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (voltageValues.length >= 2) {
+    return createTelemetrySeries('voltage', 'Voltage', 'V', voltageValues);
+  }
+
+  return null;
+}
+
+function createTelemetrySeries(
+  metric: TelemetrySeries['metric'],
+  label: string,
+  unit: string,
+  values: number[]
+): TelemetrySeries | null {
+  if (values.length < 2) {
+    return null;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const latest = values[values.length - 1];
+  return {
+    metric,
+    label,
+    unit,
+    values,
+    min,
+    max,
+    latest
+  };
+}
+
+function TelemetrySparkline({ series }: { series: TelemetrySeries }) {
+  const width = 148;
+  const height = 34;
+  const padding = 2;
+  const range = series.max - series.min || 1;
+  const denominator = Math.max(1, series.values.length - 1);
+
+  const points = series.values
+    .map((value, index) => {
+      const x = padding + (index / denominator) * (width - padding * 2);
+      const y =
+        padding + (1 - (value - series.min) / range) * (height - padding * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  return (
+    <div className="device-details__sparkline">
+      <svg
+        className="device-details__sparkline-svg"
+        viewBox={`0 0 ${width} ${height}`}
+        aria-label={`${series.label} trend`}
+        role="img"
+      >
+        <polyline className="device-details__sparkline-line" points={points} />
+      </svg>
+      <div className="device-details__sparkline-meta">
+        <span>{series.label}</span>
+        <strong>{formatTelemetryMetric(series.latest, series.unit)}</strong>
+      </div>
+    </div>
+  );
 }
 
 type CoverageLegendItem = {

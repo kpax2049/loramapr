@@ -22,6 +22,7 @@ import { getOwnerIdFromRequest, OwnerContextRequest } from '../../common/owner-c
 import {
   DeviceDetail,
   DeviceAgentDecision,
+  DeviceTelemetrySample,
   DeviceLatestStatus,
   DeviceListItem,
   LatestWebhookSource,
@@ -130,6 +131,23 @@ export class DevicesController {
       throw new NotFoundException('Device not found');
     }
     return formatDeviceDetail(device);
+  }
+
+  @Get(':id/telemetry')
+  @UseGuards(OwnerGuard)
+  async telemetry(
+    @Req() request: OwnerContextRequest,
+    @Param('id') id: string,
+    @Query('limit') limitParam?: string
+  ): Promise<{ items: DeviceTelemetrySampleResponse[]; count: number; limit: number }> {
+    const ownerId = getOwnerIdFromRequest(request);
+    const limit = parseTelemetryLimit(limitParam);
+    const samples = await this.devicesService.listTelemetry(id, limit, ownerId);
+    if (!samples) {
+      throw new NotFoundException('Device not found');
+    }
+    const items = samples.map(formatTelemetrySample);
+    return { items, count: items.length, limit };
   }
 
   @Get('by-uid/:deviceUid')
@@ -292,11 +310,22 @@ type DeviceDetailResponse = {
   } | null;
 };
 
+type DeviceTelemetrySampleResponse = {
+  batteryLevel: number | null;
+  voltage: number | null;
+  channelUtilization: number | null;
+  airUtilTx: number | null;
+  uptimeSeconds: number | null;
+  capturedAt: string;
+};
+
 const DEFAULT_RADIUS_METERS = 20;
 const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
 const DEFAULT_AGENT_DECISIONS_LIMIT = 200;
 const MAX_AGENT_DECISIONS_LIMIT = 5000;
+const DEFAULT_TELEMETRY_LIMIT = 48;
+const MAX_TELEMETRY_LIMIT = 500;
 const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_DEVICE_NOTES_LENGTH = 2000;
 const DELETE_CONFIRMATION_VALUE = 'DELETE';
@@ -357,6 +386,17 @@ function parseLimit(value?: string): number {
     throw new BadRequestException('limit must be a positive integer');
   }
   return Math.min(parsed, MAX_AGENT_DECISIONS_LIMIT);
+}
+
+function parseTelemetryLimit(value?: string): number {
+  if (value === undefined) {
+    return DEFAULT_TELEMETRY_LIMIT;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  return Math.min(parsed, MAX_TELEMETRY_LIMIT);
 }
 
 function parsePatchBody(body: DevicePatchBody): {
@@ -585,5 +625,16 @@ function formatDeviceDetail(device: DeviceDetail): DeviceDetailResponse {
           gatewayId: device.latestMeasurement.gatewayId
         }
       : null
+  };
+}
+
+function formatTelemetrySample(sample: DeviceTelemetrySample): DeviceTelemetrySampleResponse {
+  return {
+    batteryLevel: sample.batteryLevel,
+    voltage: sample.voltage,
+    channelUtilization: sample.channelUtilization,
+    airUtilTx: sample.airUtilTx,
+    uptimeSeconds: sample.uptimeSeconds,
+    capturedAt: sample.capturedAt.toISOString()
   };
 }

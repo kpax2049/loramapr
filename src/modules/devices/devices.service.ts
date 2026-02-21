@@ -55,14 +55,7 @@ export type DeviceDetail = {
   latestMeasurementAt: Date | null;
   latestWebhookReceivedAt: Date | null;
   latestWebhookSource: LatestWebhookSource | null;
-  latestTelemetry: {
-    batteryLevel: number | null;
-    voltage: number | null;
-    channelUtilization: number | null;
-    airUtilTx: number | null;
-    uptimeSeconds: number | null;
-    capturedAt: Date;
-  } | null;
+  latestTelemetry: DeviceTelemetrySample | null;
   latestMeasurement: {
     capturedAt: Date;
     lat: number;
@@ -71,6 +64,15 @@ export type DeviceDetail = {
     snr: number | null;
     gatewayId: string | null;
   } | null;
+};
+
+export type DeviceTelemetrySample = {
+  batteryLevel: number | null;
+  voltage: number | null;
+  channelUtilization: number | null;
+  airUtilTx: number | null;
+  uptimeSeconds: number | null;
+  capturedAt: Date;
 };
 
 export type DeviceMutableSummary = {
@@ -309,6 +311,40 @@ export class DevicesService {
       latestTelemetry,
       latestMeasurement
     };
+  }
+
+  async listTelemetry(
+    deviceId: string,
+    limit: number,
+    ownerId?: string
+  ): Promise<DeviceTelemetrySample[] | null> {
+    const device = await this.prisma.device.findFirst({
+      where: ownerId ? { id: deviceId, ownerId } : { id: deviceId },
+      select: { id: true, deviceUid: true }
+    });
+    if (!device) {
+      return null;
+    }
+
+    const rows = await this.prisma.webhookEvent.findMany({
+      where: {
+        deviceUid: device.deviceUid,
+        portnum: { in: ['TELEMETRY_APP', 'TELEMETRY'] }
+      },
+      orderBy: { receivedAt: 'desc' },
+      take: Math.max(1, Math.trunc(limit)),
+      select: { receivedAt: true, payloadJson: true }
+    });
+
+    const items: DeviceTelemetrySample[] = [];
+    for (const row of rows) {
+      const parsed = parseLatestTelemetry(row.payloadJson, row.receivedAt);
+      if (parsed) {
+        items.push(parsed);
+      }
+    }
+    items.reverse();
+    return items;
   }
 
   private async getLatestStatusForDevice(
@@ -625,7 +661,7 @@ function normalizeWebhookSource(
 function parseLatestTelemetry(
   payload: Prisma.JsonValue,
   capturedAt: Date
-): DeviceDetail['latestTelemetry'] {
+): DeviceTelemetrySample | null {
   const records = collectRecordCandidates(payload, new Set(['telemetry', 'devicemetrics', 'metrics']));
   if (records.length === 0) {
     return null;

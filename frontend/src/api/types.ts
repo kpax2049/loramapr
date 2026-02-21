@@ -65,6 +65,21 @@ export type DeviceDetail = {
   } | null;
 };
 
+export type DeviceTelemetrySample = {
+  batteryLevel: number | null;
+  voltage: number | null;
+  channelUtilization: number | null;
+  airUtilTx: number | null;
+  uptimeSeconds: number | null;
+  capturedAt: string;
+};
+
+export type DeviceTelemetryResponse = {
+  items: DeviceTelemetrySample[];
+  count: number;
+  limit: number;
+};
+
 export type ListResponse<T> = {
   items: T[];
   count: number;

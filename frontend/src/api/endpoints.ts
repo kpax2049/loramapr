@@ -2,6 +2,7 @@ import { getJson, requestJson } from './http';
 import type {
   Device,
   DeviceDetail,
+  DeviceTelemetryResponse,
   DeviceMutable,
   DeviceLatest,
   CoverageBinsResponse,
@@ -344,6 +345,20 @@ export async function getDeviceById(
   options?: RequestOptions
 ): Promise<DeviceDetail> {
   return getJson<DeviceDetail>(`/api/devices/${deviceId}`, options);
+}
+
+export async function getDeviceTelemetry(
+  deviceId: string,
+  params?: { limit?: number },
+  options?: RequestOptions
+): Promise<DeviceTelemetryResponse> {
+  const query = new URLSearchParams();
+  if (typeof params?.limit === 'number' && Number.isFinite(params.limit)) {
+    query.set('limit', String(Math.max(1, Math.floor(params.limit))));
+  }
+  const suffix = query.toString();
+  const path = suffix ? `/api/devices/${deviceId}/telemetry?${suffix}` : `/api/devices/${deviceId}/telemetry`;
+  return getJson<DeviceTelemetryResponse>(path, options);
 }
 
 const queryApiKey = (import.meta.env.VITE_QUERY_API_KEY ?? '').trim();
