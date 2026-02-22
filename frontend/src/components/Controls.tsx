@@ -41,6 +41,7 @@ import DeviceIcon, {
 import DeviceOnlineDot from './DeviceOnlineDot';
 import DevicesManager from './DevicesManager';
 import type { EventsNavigationInput } from '../utils/eventsNavigation';
+import MiniLineChart from './charts/MiniLineChart';
 
 const DEVICE_ICON_PICKER_OPTIONS = DEVICE_ICON_CATALOG;
 
@@ -1323,18 +1324,18 @@ export default function Controls({
         <div className="controls__group">
           {deviceId ? (
             <>
-              <SessionsPanel
-                deviceId={deviceId}
-                selectedSessionId={selectedSessionId}
-                onSelectSessionId={onSelectSessionId}
-                onStartSession={onStartSession}
-              />
               {selectedSessionId ? (
                 <SessionDetailsPanel
                   sessionId={selectedSessionId}
                   onFitMapToSession={onFitMapToSession}
                 />
               ) : null}
+              <SessionsPanel
+                deviceId={deviceId}
+                selectedSessionId={selectedSessionId}
+                onSelectSessionId={onSelectSessionId}
+                onStartSession={onStartSession}
+              />
             </>
           ) : (
             <span className="controls__label">Select a device</span>
@@ -1885,31 +1886,14 @@ function createTelemetrySeries(
 }
 
 function TelemetrySparkline({ series }: { series: TelemetrySeries }) {
-  const width = 148;
-  const height = 34;
-  const padding = 2;
-  const range = series.max - series.min || 1;
-  const denominator = Math.max(1, series.values.length - 1);
-
-  const points = series.values
-    .map((value, index) => {
-      const x = padding + (index / denominator) * (width - padding * 2);
-      const y =
-        padding + (1 - (value - series.min) / range) * (height - padding * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-
   return (
     <div className="device-details__sparkline">
-      <svg
-        className="device-details__sparkline-svg"
-        viewBox={`0 0 ${width} ${height}`}
+      <MiniLineChart
+        className="device-details__sparkline-chart"
+        data={series.values}
+        getValue={(value) => value}
         aria-label={`${series.label} trend`}
-        role="img"
-      >
-        <polyline className="device-details__sparkline-line" points={points} />
-      </svg>
+      />
       <div className="device-details__sparkline-meta">
         <span>{series.label}</span>
         <strong>{formatTelemetryMetric(series.latest, series.unit)}</strong>

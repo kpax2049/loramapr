@@ -13,6 +13,7 @@ import {
   useSessionStats,
   useUpdateSession
 } from '../query/sessions';
+import MiniLineChart from './charts/MiniLineChart';
 
 type SessionDetailsPanelProps = {
   sessionId: string;
@@ -24,6 +25,7 @@ const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim()
 export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: SessionDetailsPanelProps) {
   const [nameDraft, setNameDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -35,10 +37,10 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
   const sessionQuery = useSessionById(sessionId, { enabled: Boolean(sessionId) });
   const statsQuery = useSessionStats(sessionId, { enabled: Boolean(sessionId) });
   const signalSeriesQuery = useSessionSignalSeries(sessionId, signalMetric, {
-    enabled: Boolean(sessionId)
+    enabled: Boolean(sessionId && isExpanded)
   });
   const signalHistogramQuery = useSessionSignalHistogram(sessionId, signalMetric, {
-    enabled: Boolean(sessionId)
+    enabled: Boolean(sessionId && isExpanded)
   });
   const updateSessionMutation = useUpdateSession();
   const deleteSessionMutation = useDeleteSession();
@@ -55,6 +57,12 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
     setMetadataError(null);
     setActionError(null);
   }, [session?.id, session?.name, session?.notes]);
+
+  useEffect(() => {
+    setIsExpanded(false);
+    setDeleteModalOpen(false);
+    setDeleteConfirmText('');
+  }, [sessionId]);
 
   const nameDirty = (session?.name ?? '') !== nameDraft;
   const notesDirty = (session?.notes ?? '') !== notesDraft;
@@ -224,10 +232,35 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
   };
 
   return (
-    <section className="session-details-panel" aria-label="Session details">
+    <section
+      className={`session-details-panel ${isExpanded ? 'is-expanded' : 'is-collapsed'}`}
+      aria-label="Session details"
+    >
       <div className="session-details-panel__header">
-        <h4>Session details</h4>
-        {session?.isArchived ? <span className="session-details-panel__badge">Archived</span> : null}
+        <div className="session-details-panel__header-main">
+          <h4>Session details</h4>
+          {session ? (
+            <span className="session-details-panel__header-session" title={sessionLabel}>
+              {sessionLabel}
+            </span>
+          ) : null}
+        </div>
+        <div className="session-details-panel__header-actions">
+          {session?.isArchived ? <span className="session-details-panel__badge">Archived</span> : null}
+          <button
+            type="button"
+            className="session-details-panel__toggle"
+            aria-expanded={isExpanded}
+            onClick={() => {
+              setIsExpanded((value) => !value);
+              setDeleteModalOpen(false);
+              setDeleteConfirmText('');
+            }}
+            disabled={!session}
+          >
+            {isExpanded ? 'Hide details' : 'Show details'}
+          </button>
+        </div>
       </div>
 
       {sessionQuery.isLoading ? (
@@ -237,35 +270,122 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
         <div className="session-details-panel__error">Session details unavailable.</div>
       ) : null}
 
-      {session ? (
+      {session && !isExpanded ? (
         <>
-          <div className="session-details-panel__row">
-            <span>Name</span>
-            {hasQueryApiKey ? (
-              <input
-                type="text"
-                value={nameDraft}
-                onChange={(event) => setNameDraft(event.target.value)}
-                disabled={updateSessionMutation.isPending}
-                aria-label="Session name"
-              />
-            ) : (
-              <strong>{sessionLabel}</strong>
-            )}
+          <div className="session-details-panel__summary">
+            <div className="session-details-panel__summary-item">
+              <span>Started</span>
+              <strong>{formatTimestamp(session.startedAt)}</strong>
+            </div>
+            <div className="session-details-panel__summary-item">
+              <span>Ended</span>
+              <strong>{formatTimestamp(session.endedAt)}</strong>
+            </div>
+            <div className="session-details-panel__summary-item">
+              <span>Points</span>
+              <strong>
+                {measurementCount !== null && measurementCount !== undefined ? measurementCount : '—'}
+              </strong>
+            </div>
+            <div className="session-details-panel__summary-item">
+              <span>Duration</span>
+              <strong>{formatDuration(durationMs)}</strong>
+            </div>
           </div>
-          <div className="session-details-panel__row session-details-panel__row--notes">
-            <span>Notes</span>
-            {hasQueryApiKey ? (
-              <textarea
-                value={notesDraft}
-                onChange={(event) => setNotesDraft(event.target.value)}
-                rows={3}
-                disabled={updateSessionMutation.isPending}
-                aria-label="Session notes"
-              />
-            ) : (
-              <strong>{session.notes?.trim() || '—'}</strong>
-            )}
+          <div className="session-details-panel__actions">
+            <button
+              type="button"
+              className="controls__button controls__button--compact"
+              onClick={() => void onFitMapToSession(session.id, stats?.bbox ?? null)}
+              disabled={sessionQuery.isLoading || statsQuery.isLoading}
+            >
+              Fit map to session
+            </button>
+            <button
+              type="button"
+              className="controls__button controls__button--compact"
+              onClick={() => void handleExportGeoJson()}
+              disabled={isExporting}
+            >
+              {isExporting ? 'Exporting…' : 'Export GeoJSON'}
+            </button>
+          </div>
+          {statsQuery.error ? (
+            <div className="session-details-panel__error">Session stats unavailable.</div>
+          ) : null}
+          {exportError ? (
+            <div className="session-details-panel__error" role="status">
+              {exportError}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {session && isExpanded ? (
+        <>
+          <div className="session-details-panel__grid">
+            <div className="session-details-panel__column">
+              <div className="session-details-panel__row">
+                <span>Name</span>
+                {hasQueryApiKey ? (
+                  <input
+                    type="text"
+                    value={nameDraft}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    disabled={updateSessionMutation.isPending}
+                    aria-label="Session name"
+                  />
+                ) : (
+                  <strong>{sessionLabel}</strong>
+                )}
+              </div>
+              <div className="session-details-panel__row session-details-panel__row--notes">
+                <span>Notes</span>
+                {hasQueryApiKey ? (
+                  <textarea
+                    value={notesDraft}
+                    onChange={(event) => setNotesDraft(event.target.value)}
+                    rows={3}
+                    disabled={updateSessionMutation.isPending}
+                    aria-label="Session notes"
+                  />
+                ) : (
+                  <strong>{session.notes?.trim() || '—'}</strong>
+                )}
+              </div>
+              <div className="session-details-panel__row">
+                <span>Started</span>
+                <strong>{formatTimestamp(session.startedAt)}</strong>
+              </div>
+              <div className="session-details-panel__row">
+                <span>Point count</span>
+                <strong>
+                  {measurementCount !== null && measurementCount !== undefined ? measurementCount : '—'}
+                </strong>
+              </div>
+            </div>
+            <div className="session-details-panel__column">
+              <div className="session-details-panel__row">
+                <span>Ended</span>
+                <strong>{formatTimestamp(session.endedAt)}</strong>
+              </div>
+              <div className="session-details-panel__row">
+                <span>Duration</span>
+                <strong>{formatDuration(durationMs)}</strong>
+              </div>
+              <div className="session-details-panel__row">
+                <span>Distance</span>
+                <strong>{distanceKm !== null ? `${distanceKm.toFixed(2)} km` : '—'}</strong>
+              </div>
+              <div className="session-details-panel__row">
+                <span>Receivers/gateways</span>
+                <strong>
+                  {stats?.receiversCount !== null && stats?.receiversCount !== undefined
+                    ? stats.receiversCount
+                    : '—'}
+                </strong>
+              </div>
+            </div>
           </div>
           {hasQueryApiKey ? (
             <div className="session-details-panel__actions session-details-panel__actions--meta">
@@ -279,36 +399,6 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
               </button>
             </div>
           ) : null}
-          <div className="session-details-panel__row">
-            <span>Started</span>
-            <strong>{formatTimestamp(session.startedAt)}</strong>
-          </div>
-          <div className="session-details-panel__row">
-            <span>Ended</span>
-            <strong>{formatTimestamp(session.endedAt)}</strong>
-          </div>
-          <div className="session-details-panel__row">
-            <span>Point count</span>
-            <strong>
-              {measurementCount !== null && measurementCount !== undefined ? measurementCount : '—'}
-            </strong>
-          </div>
-          <div className="session-details-panel__row">
-            <span>Duration</span>
-            <strong>{formatDuration(durationMs)}</strong>
-          </div>
-          <div className="session-details-panel__row">
-            <span>Distance</span>
-            <strong>{distanceKm !== null ? `${distanceKm.toFixed(2)} km` : '—'}</strong>
-          </div>
-          <div className="session-details-panel__row">
-            <span>Receivers/gateways</span>
-            <strong>
-              {stats?.receiversCount !== null && stats?.receiversCount !== undefined
-                ? stats.receiversCount
-                : '—'}
-            </strong>
-          </div>
           <div className="session-details-panel__section-title">Signal over time</div>
           <div className="session-details-panel__metric-toggle">
             <button
@@ -549,9 +639,6 @@ type SignalPoint = {
 };
 
 function SignalSeriesChart({ items, metric }: SignalSeriesChartProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hover, setHover] = useState<{ index: number; x: number; y: number } | null>(null);
-
   const points = useMemo(() => {
     return items
       .map((item) => {
@@ -564,164 +651,23 @@ function SignalSeriesChart({ items, metric }: SignalSeriesChartProps) {
       .filter((item): item is SignalPoint => item !== null);
   }, [items]);
 
-  const minValue = useMemo(() => {
-    if (points.length === 0) {
-      return null;
-    }
-    let min = points[0].v;
-    for (const point of points) {
-      if (point.v < min) {
-        min = point.v;
-      }
-    }
-    return min;
-  }, [points]);
-
-  const maxValue = useMemo(() => {
-    if (points.length === 0) {
-      return null;
-    }
-    let max = points[0].v;
-    for (const point of points) {
-      if (point.v > max) {
-        max = point.v;
-      }
-    }
-    return max;
-  }, [points]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || points.length === 0 || minValue === null || maxValue === null) {
-      return;
-    }
-    const context = canvas.getContext('2d');
-    if (!context) {
-      return;
-    }
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      return;
-    }
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, rect.width, rect.height);
-
-    const styles = getComputedStyle(canvas);
-    const stroke = styles.getPropertyValue('--accent-bg-strong')?.trim() || styles.color || '#4c8bf5';
-    const marker = styles.getPropertyValue('--panel-text')?.trim() || stroke;
-    const paddingX = 10;
-    const paddingY = 8;
-    const width = rect.width - paddingX * 2;
-    const height = rect.height - paddingY * 2;
-    if (width <= 0 || height <= 0) {
-      return;
-    }
-
-    const rangeMin = minValue;
-    const rangeMax = maxValue === minValue ? maxValue + 1 : maxValue;
-    const valueRange = rangeMax - rangeMin;
-    const pointCount = points.length;
-    const pointStep = pointCount > 1 ? width / (pointCount - 1) : 0;
-
-    context.save();
-    context.globalAlpha = 0.18;
-    context.strokeStyle = stroke;
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(paddingX, paddingY + height);
-    context.lineTo(paddingX + width, paddingY + height);
-    context.stroke();
-    context.restore();
-
-    context.strokeStyle = stroke;
-    context.lineWidth = 1.6;
-    context.beginPath();
-    points.forEach((point, index) => {
-      const x = paddingX + pointStep * index;
-      const y = paddingY + (1 - (point.v - rangeMin) / valueRange) * height;
-      if (index === 0) {
-        context.moveTo(x, y);
-      } else {
-        context.lineTo(x, y);
-      }
-    });
-    context.stroke();
-
-    if (hover && hover.index >= 0 && hover.index < points.length) {
-      const hovered = points[hover.index];
-      const x = paddingX + pointStep * hover.index;
-      const y = paddingY + (1 - (hovered.v - rangeMin) / valueRange) * height;
-      context.fillStyle = marker;
-      context.beginPath();
-      context.arc(x, y, 2.6, 0, Math.PI * 2);
-      context.fill();
-    }
-  }, [hover, maxValue, minValue, points]);
-
-  if (points.length === 0 || minValue === null || maxValue === null) {
+  if (points.length === 0) {
     return null;
   }
 
-  const hoveredPoint = hover && hover.index >= 0 && hover.index < points.length ? points[hover.index] : null;
-
   return (
-    <div className="session-signal-chart">
-      <canvas
-        ref={canvasRef}
-        className="session-signal-chart__canvas"
-        role="img"
-        aria-label={`Session ${metric.toUpperCase()} over time`}
-        onMouseMove={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          const paddingX = 10;
-          const paddingY = 8;
-          const chartWidth = rect.width - paddingX * 2;
-          const chartHeight = rect.height - paddingY * 2;
-          if (
-            chartWidth <= 0 ||
-            chartHeight <= 0 ||
-            points.length === 0 ||
-            minValue === null ||
-            maxValue === null
-          ) {
-            setHover(null);
-            return;
-          }
-
-          const x = Math.min(Math.max(event.clientX - rect.left - paddingX, 0), chartWidth);
-          const ratio = chartWidth > 0 ? x / chartWidth : 0;
-          const index = points.length > 1 ? Math.round(ratio * (points.length - 1)) : 0;
-          const clampedIndex = Math.min(Math.max(index, 0), points.length - 1);
-          const valueRange = maxValue === minValue ? 1 : maxValue - minValue;
-          const pointValue = points[clampedIndex].v;
-          const pointY =
-            paddingY + (1 - (pointValue - minValue) / valueRange) * chartHeight;
-          const tooltipAnchorY = Math.min(
-            rect.height - 6,
-            Math.max(40, pointY - 6)
-          );
-          const tooltipX = paddingX + (points.length > 1 ? (chartWidth / (points.length - 1)) * clampedIndex : 0);
-          setHover({ index: clampedIndex, x: tooltipX, y: tooltipAnchorY });
-        }}
-        onMouseLeave={() => setHover(null)}
-      />
-      {hoveredPoint ? (
-        <div
-          className="session-signal-chart__tooltip"
-          style={{
-            left: `${hover.x}px`,
-            top: `${hover.y}px`
-          }}
-        >
-          <span>{formatTimestamp(hoveredPoint.t)}</span>
-          <strong>{formatSignalValue(hoveredPoint.v, metric)}</strong>
-        </div>
-      ) : null}
-    </div>
+    <MiniLineChart
+      className="session-signal-chart"
+      data={points}
+      getValue={(point) => point.v}
+      ariaLabel={`Session ${metric.toUpperCase()} over time`}
+      tooltipFormatter={(point) => (
+        <>
+          <span>{formatTimestamp(point.t)}</span>
+          <strong>{formatSignalValue(point.v, metric)}</strong>
+        </>
+      )}
+    />
   );
 }
 
@@ -729,6 +675,13 @@ type SignalHistogramChartProps = {
   bins: SessionSignalHistogramBin[];
   metric: 'rssi' | 'snr';
 };
+
+const HISTOGRAM_CHART_PADDING_X = 2;
+const HISTOGRAM_CHART_PADDING_Y = 2;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 function SignalHistogramChart({ bins, metric }: SignalHistogramChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -782,44 +735,103 @@ function SignalHistogramChart({ bins, metric }: SignalHistogramChartProps) {
 
     const styles = getComputedStyle(canvas);
     const barColor =
-      styles.getPropertyValue('--accent-bg-strong')?.trim() || styles.color || '#4c8bf5';
-    const barHoverColor =
-      styles.getPropertyValue('--panel-text')?.trim() || barColor;
+      styles.getPropertyValue('--hist-top-bar')?.trim() || 'rgba(238,218,118,0.98)';
+    const topShadowColor =
+      styles.getPropertyValue('--hist-top-shadow')?.trim() || 'rgba(96,77,34,0.56)';
+    const baseline =
+      styles.getPropertyValue('--hist-baseline')?.trim() || 'rgba(196,202,211,0.45)';
+    const bandEvenColor =
+      styles.getPropertyValue('--hist-band-even')?.trim() || 'rgba(16,22,28,0.78)';
+    const bandOddColor =
+      styles.getPropertyValue('--hist-band-odd')?.trim() || 'rgba(5,10,14,0.88)';
+    const bottomColor =
+      styles.getPropertyValue('--hist-bottom-bar')?.trim() || 'rgba(185,191,199,0.78)';
+    const bottomShadowColor =
+      styles.getPropertyValue('--hist-bottom-shadow')?.trim() || 'rgba(37,44,53,0.7)';
+    const hoverTopColor =
+      styles.getPropertyValue('--hist-top-hover')?.trim() || styles.getPropertyValue('--panel-text')?.trim() || barColor;
+    const hoverBottomColor =
+      styles.getPropertyValue('--hist-bottom-hover')?.trim() || bottomColor;
 
-    const paddingX = 10;
-    const paddingY = 8;
+    const paddingX = HISTOGRAM_CHART_PADDING_X;
+    const paddingY = HISTOGRAM_CHART_PADDING_Y;
     const width = rect.width - paddingX * 2;
     const height = rect.height - paddingY * 2;
     if (width <= 0 || height <= 0) {
       return;
     }
 
-    context.save();
-    context.globalAlpha = 0.18;
-    context.strokeStyle = barColor;
+    const midY = paddingY + height * 0.5;
+    const topHeight = height * 0.48;
+    const bottomHeight = height * 0.48;
+
+    const bandCount = Math.max(8, Math.round(width / 76));
+    const bandWidth = width / bandCount;
+    for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
+      const bandX = paddingX + bandIndex * bandWidth;
+      context.fillStyle = bandIndex % 2 === 0 ? bandEvenColor : bandOddColor;
+      context.fillRect(bandX, paddingY, Math.ceil(bandWidth), height);
+    }
+
+    context.strokeStyle = baseline;
     context.lineWidth = 1;
     context.beginPath();
-    context.moveTo(paddingX, paddingY + height);
-    context.lineTo(paddingX + width, paddingY + height);
+    context.moveTo(paddingX, midY);
+    context.lineTo(paddingX + width, midY);
     context.stroke();
-    context.restore();
 
     const scaleMax = maxCount > 0 ? maxCount : 1;
     const binWidth = width / normalizedBins.length;
-    const barGap = Math.min(2, Math.max(0, binWidth * 0.12));
-    const barWidth = Math.max(1, binWidth - barGap);
+    const barWidth = clamp(binWidth * 0.64, 2, 15);
+    const shadowBarWidth = clamp(barWidth * 0.78, 1, 13);
+
+    const ratios = normalizedBins.map((bin) => bin.count / scaleMax);
 
     normalizedBins.forEach((bin, index) => {
-      const ratio = bin.count / scaleMax;
-      const barHeight = Math.max(1, ratio * height);
-      const x = paddingX + index * binWidth + (binWidth - barWidth) / 2;
-      const y = paddingY + height - barHeight;
+      const ratio = ratios[index];
+      const previous = ratios[Math.max(0, index - 1)] ?? ratio;
+      const next = ratios[Math.min(ratios.length - 1, index + 1)] ?? ratio;
+      const smoothed = (previous + ratio + next) / 3;
 
-      context.save();
-      context.globalAlpha = hover?.index === index ? 0.95 : 0.76;
-      context.fillStyle = hover?.index === index ? barHoverColor : barColor;
-      context.fillRect(x, y, barWidth, barHeight);
-      context.restore();
+      const xCenter = paddingX + index * binWidth + binWidth / 2;
+
+      const topShadowHeight = clamp(smoothed * topHeight * 0.96, 1.5, topHeight);
+      const topFrontHeight = clamp(ratio * topHeight * 0.9, 1.5, topHeight);
+      const inverseRatio = clamp(1 - ratio * 0.95, 0.08, 0.98);
+      const bottomShadowHeight = clamp(inverseRatio * bottomHeight * 0.96, 1.5, bottomHeight);
+      const bottomFrontHeight = clamp(inverseRatio * bottomHeight * 0.66, 1.2, bottomHeight);
+
+      context.fillStyle = topShadowColor;
+      context.fillRect(
+        xCenter - shadowBarWidth / 2,
+        midY - topShadowHeight,
+        shadowBarWidth,
+        topShadowHeight
+      );
+
+      context.fillStyle = hover?.index === index ? hoverTopColor : barColor;
+      context.fillRect(
+        xCenter - barWidth / 2,
+        midY - topFrontHeight,
+        barWidth,
+        topFrontHeight
+      );
+
+      context.fillStyle = bottomShadowColor;
+      context.fillRect(
+        xCenter - shadowBarWidth / 2,
+        midY,
+        shadowBarWidth,
+        bottomShadowHeight
+      );
+
+      context.fillStyle = hover?.index === index ? hoverBottomColor : bottomColor;
+      context.fillRect(
+        xCenter - barWidth / 2,
+        midY,
+        barWidth,
+        bottomFrontHeight
+      );
     });
   }, [hover?.index, maxCount, normalizedBins]);
 
@@ -841,8 +853,8 @@ function SignalHistogramChart({ bins, metric }: SignalHistogramChartProps) {
         aria-label={`Session ${metric.toUpperCase()} distribution`}
         onMouseMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
-          const paddingX = 10;
-          const paddingY = 8;
+          const paddingX = HISTOGRAM_CHART_PADDING_X;
+          const paddingY = HISTOGRAM_CHART_PADDING_Y;
           const chartWidth = rect.width - paddingX * 2;
           const chartHeight = rect.height - paddingY * 2;
           if (chartWidth <= 0 || chartHeight <= 0 || normalizedBins.length === 0) {
@@ -858,9 +870,12 @@ function SignalHistogramChart({ bins, metric }: SignalHistogramChartProps) {
           );
           const bin = normalizedBins[index];
           const scaleMax = maxCount > 0 ? maxCount : 1;
-          const barHeight = Math.max(1, (bin.count / scaleMax) * chartHeight);
-          const barTop = paddingY + chartHeight - barHeight;
-          const tooltipY = Math.min(rect.height - 6, Math.max(36, barTop - 4));
+          const ratio = bin.count / scaleMax;
+          const topHeight = chartHeight * 0.48;
+          const midY = paddingY + chartHeight * 0.5;
+          const topFrontHeight = clamp(ratio * topHeight * 0.9, 1.5, topHeight);
+          const barTop = midY - topFrontHeight;
+          const tooltipY = Math.min(rect.height - 8, Math.max(4, barTop));
           const tooltipX = paddingX + index * binWidth + binWidth / 2;
           setHover({ index, x: tooltipX, y: tooltipY });
         }}
