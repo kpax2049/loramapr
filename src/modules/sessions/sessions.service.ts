@@ -11,6 +11,12 @@ type SignalSummary = {
   avg: number | null;
 };
 
+type SignalSeriesMetric = 'rssi' | 'snr';
+type SignalSeriesSource = 'auto' | 'meshtastic' | 'lorawan' | 'measurement';
+type SignalSeriesResolvedSource = Exclude<SignalSeriesSource, 'auto'>;
+type SignalSeriesItem = { t: string; v: number };
+type RawSignalRow = { t: Date; v: number | Prisma.Decimal | null };
+
 @Injectable()
 export class SessionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -373,6 +379,50 @@ export class SessionsService {
     };
   }
 
+  async getSignalSeries(params: {
+    sessionId: string;
+    metric: SignalSeriesMetric;
+    source: SignalSeriesSource;
+    sample: number;
+  }) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: params.sessionId },
+      select: { id: true }
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const sourceUsed =
+      params.source === 'auto'
+        ? await this.resolveSignalSeriesSource(params.sessionId, params.metric)
+        : params.source;
+    const rows = await this.readSignalSeriesRows(params.sessionId, params.metric, sourceUsed);
+    const sampledRows = rows.length > params.sample ? sampleItems(rows, params.sample) : rows;
+
+    const items: SignalSeriesItem[] = [];
+    for (const row of sampledRows) {
+      if (!(row.t instanceof Date)) {
+        continue;
+      }
+      const value = toNumeric(row.v);
+      if (value === null) {
+        continue;
+      }
+      items.push({
+        t: row.t.toISOString(),
+        v: value
+      });
+    }
+
+    return {
+      sessionId: params.sessionId,
+      metric: params.metric,
+      sourceUsed,
+      items
+    };
+  }
+
   async startForDeviceUid(deviceUid: string, name?: string) {
     const device = await this.prisma.device.findUnique({
       where: { deviceUid },
@@ -625,6 +675,191 @@ export class SessionsService {
       ),
       receiversCount: receivers.length > 0 ? receivers.length : null
     };
+  }
+
+  private async resolveSignalSeriesSource(
+    sessionId: string,
+    metric: SignalSeriesMetric
+  ): Promise<SignalSeriesResolvedSource> {
+    const [hasMeshtastic, hasLorawan] = await Promise.all([
+      this.hasMeshtasticSignalMetric(sessionId, metric),
+      this.hasLorawanSignalMetric(sessionId, metric)
+    ]);
+    if (hasMeshtastic) {
+      return 'meshtastic';
+    }
+    if (hasLorawan) {
+      return 'lorawan';
+    }
+    return 'measurement';
+  }
+
+  private async hasMeshtasticSignalMetric(
+    sessionId: string,
+    metric: SignalSeriesMetric
+  ): Promise<boolean> {
+    const count = await this.prisma.meshtasticRx.count({
+      where: {
+        measurement: { sessionId },
+        ...(metric === 'rssi' ? { rxRssi: { not: null } } : { rxSnr: { not: null } })
+      }
+    });
+    return count > 0;
+  }
+
+  private async hasLorawanSignalMetric(sessionId: string, metric: SignalSeriesMetric): Promise<boolean> {
+    const count = await this.prisma.rxMetadata.count({
+      where: {
+        measurement: { sessionId },
+        ...(metric === 'rssi' ? { rssi: { not: null } } : { snr: { not: null } })
+      }
+    });
+    return count > 0;
+  }
+
+  private async readSignalSeriesRows(
+    sessionId: string,
+    metric: SignalSeriesMetric,
+    source: SignalSeriesResolvedSource
+  ): Promise<RawSignalRow[]> {
+    if (source === 'meshtastic') {
+      return this.readMeshtasticSignalSeriesRows(sessionId, metric);
+    }
+    if (source === 'lorawan') {
+      return this.readLorawanSignalSeriesRows(sessionId, metric);
+    }
+    return this.readMeasurementSignalSeriesRows(sessionId, metric);
+  }
+
+  private async readMeshtasticSignalSeriesRows(
+    sessionId: string,
+    metric: SignalSeriesMetric
+  ): Promise<RawSignalRow[]> {
+    if (metric === 'rssi') {
+      return this.prisma.$queryRaw<RawSignalRow[]>(
+        Prisma.sql`
+          SELECT
+            m."capturedAt" AS t,
+            mx."rxRssi" AS v
+          FROM "MeshtasticRx" mx
+          INNER JOIN "Measurement" m ON m."id" = mx."measurementId"
+          WHERE
+            m."sessionId" = ${sessionId}::uuid
+            AND mx."rxRssi" IS NOT NULL
+          ORDER BY m."capturedAt" ASC, m."id" ASC
+        `
+      );
+    }
+
+    return this.prisma.$queryRaw<RawSignalRow[]>(
+      Prisma.sql`
+        SELECT
+          m."capturedAt" AS t,
+          mx."rxSnr" AS v
+        FROM "MeshtasticRx" mx
+        INNER JOIN "Measurement" m ON m."id" = mx."measurementId"
+        WHERE
+          m."sessionId" = ${sessionId}::uuid
+          AND mx."rxSnr" IS NOT NULL
+        ORDER BY m."capturedAt" ASC, m."id" ASC
+      `
+    );
+  }
+
+  private async readLorawanSignalSeriesRows(
+    sessionId: string,
+    metric: SignalSeriesMetric
+  ): Promise<RawSignalRow[]> {
+    type LorawanSignalRow = RawSignalRow & { measurementId: string };
+
+    if (metric === 'rssi') {
+      const rows = await this.prisma.$queryRaw<LorawanSignalRow[]>(
+        Prisma.sql`
+          WITH ranked AS (
+            SELECT
+              m."capturedAt" AS t,
+              m."id" AS "measurementId",
+              rx."rssi",
+              rx."snr",
+              row_number() OVER (
+                PARTITION BY m."id"
+                ORDER BY rx."snr" DESC NULLS LAST, rx."rssi" DESC NULLS LAST, rx."gatewayId" ASC
+              ) AS rn
+            FROM "RxMetadata" rx
+            INNER JOIN "Measurement" m ON m."id" = rx."measurementId"
+            WHERE m."sessionId" = ${sessionId}::uuid
+          )
+          SELECT
+            t,
+            "rssi" AS v,
+            "measurementId"
+          FROM ranked
+          WHERE rn = 1 AND "rssi" IS NOT NULL
+          ORDER BY t ASC, "measurementId" ASC
+        `
+      );
+      return rows.map((row) => ({ t: row.t, v: row.v }));
+    }
+
+    const rows = await this.prisma.$queryRaw<LorawanSignalRow[]>(
+      Prisma.sql`
+        WITH ranked AS (
+          SELECT
+            m."capturedAt" AS t,
+            m."id" AS "measurementId",
+            rx."rssi",
+            rx."snr",
+            row_number() OVER (
+              PARTITION BY m."id"
+              ORDER BY rx."snr" DESC NULLS LAST, rx."rssi" DESC NULLS LAST, rx."gatewayId" ASC
+            ) AS rn
+          FROM "RxMetadata" rx
+          INNER JOIN "Measurement" m ON m."id" = rx."measurementId"
+          WHERE m."sessionId" = ${sessionId}::uuid
+        )
+        SELECT
+          t,
+          "snr" AS v,
+          "measurementId"
+        FROM ranked
+        WHERE rn = 1 AND "snr" IS NOT NULL
+        ORDER BY t ASC, "measurementId" ASC
+      `
+    );
+    return rows.map((row) => ({ t: row.t, v: row.v }));
+  }
+
+  private async readMeasurementSignalSeriesRows(
+    sessionId: string,
+    metric: SignalSeriesMetric
+  ): Promise<RawSignalRow[]> {
+    if (metric === 'rssi') {
+      return this.prisma.$queryRaw<RawSignalRow[]>(
+        Prisma.sql`
+          SELECT
+            m."capturedAt" AS t,
+            m."rssi" AS v
+          FROM "Measurement" m
+          WHERE
+            m."sessionId" = ${sessionId}::uuid
+            AND m."rssi" IS NOT NULL
+          ORDER BY m."capturedAt" ASC, m."id" ASC
+        `
+      );
+    }
+
+    return this.prisma.$queryRaw<RawSignalRow[]>(
+      Prisma.sql`
+        SELECT
+          m."capturedAt" AS t,
+          m."snr" AS v
+        FROM "Measurement" m
+        WHERE
+          m."sessionId" = ${sessionId}::uuid
+          AND m."snr" IS NOT NULL
+        ORDER BY m."capturedAt" ASC, m."id" ASC
+      `
+    );
   }
 }
 

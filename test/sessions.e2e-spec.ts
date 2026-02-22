@@ -9,7 +9,9 @@ describe('Sessions e2e', () => {
   let prisma: PrismaService;
   let deviceId: string;
   let sessionId: string;
+  let signalSessionId: string;
   let timestamps: { t0: Date; t1: Date; t2: Date };
+  let signalTimestamps: { t0: Date; t1: Date; t2: Date };
 
   beforeAll(async () => {
     process.env.COVERAGE_WORKER_ENABLED = 'false';
@@ -39,6 +41,15 @@ describe('Sessions e2e', () => {
       select: { id: true }
     });
     sessionId = session.id;
+
+    const signalSession = await prisma.session.create({
+      data: {
+        deviceId,
+        startedAt: new Date()
+      },
+      select: { id: true }
+    });
+    signalSessionId = signalSession.id;
 
     const base = new Date();
     timestamps = {
@@ -72,11 +83,49 @@ describe('Sessions e2e', () => {
         }
       ]
     });
+
+    signalTimestamps = {
+      t0: new Date(base.getTime() + 6000),
+      t1: new Date(base.getTime() + 8000),
+      t2: new Date(base.getTime() + 10_000)
+    };
+
+    await prisma.measurement.createMany({
+      data: [
+        {
+          deviceId,
+          sessionId: signalSessionId,
+          capturedAt: signalTimestamps.t0,
+          lat: 37.7711,
+          lon: -122.4311,
+          rssi: -120,
+          snr: -5
+        },
+        {
+          deviceId,
+          sessionId: signalSessionId,
+          capturedAt: signalTimestamps.t1,
+          lat: 37.7712,
+          lon: -122.4312,
+          rssi: -110,
+          snr: -3
+        },
+        {
+          deviceId,
+          sessionId: signalSessionId,
+          capturedAt: signalTimestamps.t2,
+          lat: 37.7713,
+          lon: -122.4313,
+          rssi: -100,
+          snr: 0
+        }
+      ]
+    });
   });
 
   afterAll(async () => {
-    await prisma.measurement.deleteMany({ where: { sessionId } });
-    await prisma.session.deleteMany({ where: { id: sessionId } });
+    await prisma.measurement.deleteMany({ where: { sessionId: { in: [sessionId, signalSessionId] } } });
+    await prisma.session.deleteMany({ where: { id: { in: [sessionId, signalSessionId] } } });
     await prisma.device.deleteMany({ where: { id: deviceId } });
     await app.close();
   });
@@ -132,5 +181,23 @@ describe('Sessions e2e', () => {
     expect(response.body.rssi).toBeNull();
     expect(response.body.snr).toBeNull();
     expect(response.body.receiversCount).toBeNull();
+  });
+
+  it('signal-series requires metric', async () => {
+    await request(app.getHttpServer()).get(`/api/sessions/${signalSessionId}/signal-series`).expect(400);
+  });
+
+  it('signal-series auto source falls back to measurement and supports sampling', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/sessions/${signalSessionId}/signal-series?metric=rssi&sample=2`)
+      .expect(200);
+
+    expect(response.body.sessionId).toBe(signalSessionId);
+    expect(response.body.metric).toBe('rssi');
+    expect(response.body.sourceUsed).toBe('measurement');
+    expect(response.body.items).toEqual([
+      { t: signalTimestamps.t0.toISOString(), v: -120 },
+      { t: signalTimestamps.t2.toISOString(), v: -100 }
+    ]);
   });
 });
