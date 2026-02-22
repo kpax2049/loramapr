@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v0.10.4 (2026-02-22)
+
+- Session Details UX refresh: selected-session details now stay near the session workflow, default to a compact summary, and expand on demand for full metadata/actions/charts.
+- Signal chart visual refresh: session signal charts now use a modern dark/accent style with improved readability and unclipped tooltip behavior.
+- Session Details now persists global chart preferences (`rssi`/`snr`, expanded state) and uses a responsive two-column metadata layout.
+- Release notes: `docs/release-v0.10.4.md`.
+
 ## v0.10.3 (2026-02-21)
 
 - Events Explorer performance release: large event feeds now use virtualized rows with smoother scroll behavior and stable selection during incremental page loads.
