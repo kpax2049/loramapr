@@ -108,4 +108,29 @@ describe('Sessions e2e', () => {
     expect(response.body.items.length).toBe(1);
     expect(response.body.items[0].capturedAt).toBe(cursor);
   });
+
+  it('stats returns aggregate session metrics', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/sessions/${sessionId}/stats`)
+      .expect(200);
+
+    expect(response.body.sessionId).toBe(sessionId);
+    expect(response.body.deviceId).toBe(deviceId);
+    expect(response.body.startedAt).toEqual(expect.any(String));
+    expect(response.body.endedAt).toBeNull();
+    expect(response.body.minCapturedAt).toBe(timestamps.t0.toISOString());
+    expect(response.body.maxCapturedAt).toBe(timestamps.t2.toISOString());
+    expect(response.body.pointCount).toBe(3);
+    expect(response.body.distanceMeters).toEqual(expect.any(Number));
+    expect(response.body.distanceMeters).toBeGreaterThan(0);
+    expect(response.body.bbox).toEqual({
+      minLat: 37.77,
+      minLon: -122.431,
+      maxLat: 37.771,
+      maxLon: -122.43
+    });
+    expect(response.body.rssi).toBeNull();
+    expect(response.body.snr).toBeNull();
+    expect(response.body.receiversCount).toBeNull();
+  });
 });

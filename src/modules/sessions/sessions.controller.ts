@@ -152,6 +152,11 @@ export class SessionsController {
     const sample = parseOverviewSample(sampleRaw);
     return this.sessionsService.getOverview(id, sample);
   }
+
+  @Get(':id/stats')
+  async stats(@Param('id') id: string) {
+    return this.sessionsService.getStats(id);
+  }
 }
 
 function getSingleValue(value: string | string[] | undefined, name: string): string | undefined {

@@ -1,8 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { StopSessionDto } from './dto/stop-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
+
+type SignalSummary = {
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+};
 
 @Injectable()
 export class SessionsService {
@@ -302,6 +309,70 @@ export class SessionsService {
     };
   }
 
+  async getStats(id: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        deviceId: true,
+        startedAt: true,
+        endedAt: true
+      }
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const aggregate = await this.prisma.measurement.aggregate({
+      where: { sessionId: id },
+      _count: { _all: true },
+      _min: {
+        capturedAt: true,
+        lat: true,
+        lon: true
+      },
+      _max: {
+        capturedAt: true,
+        lat: true,
+        lon: true
+      }
+    });
+
+    const pointCount = aggregate._count._all;
+    const bbox =
+      aggregate._min.lat !== null &&
+      aggregate._min.lon !== null &&
+      aggregate._max.lat !== null &&
+      aggregate._max.lon !== null
+        ? {
+            minLat: aggregate._min.lat,
+            minLon: aggregate._min.lon,
+            maxLat: aggregate._max.lat,
+            maxLon: aggregate._max.lon
+          }
+        : null;
+
+    const [distanceMeters, signalSummary] = await Promise.all([
+      this.computeDistanceMeters(id, pointCount),
+      this.computeSignalSummary(id)
+    ]);
+
+    return {
+      sessionId: session.id,
+      deviceId: session.deviceId,
+      startedAt: session.startedAt.toISOString(),
+      endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+      minCapturedAt: aggregate._min.capturedAt ? aggregate._min.capturedAt.toISOString() : null,
+      maxCapturedAt: aggregate._max.capturedAt ? aggregate._max.capturedAt.toISOString() : null,
+      pointCount,
+      distanceMeters,
+      bbox,
+      rssi: signalSummary.rssi,
+      snr: signalSummary.snr,
+      receiversCount: signalSummary.receiversCount
+    };
+  }
+
   async startForDeviceUid(deviceUid: string, name?: string) {
     const device = await this.prisma.device.findUnique({
       where: { deviceUid },
@@ -353,6 +424,208 @@ export class SessionsService {
 
     return { stopped: true, session };
   }
+
+  private async computeDistanceMeters(sessionId: string, pointCount: number): Promise<number | null> {
+    if (pointCount < 2) {
+      return null;
+    }
+
+    const sampledPoints = await this.prisma.$queryRaw<Array<{ lat: number; lon: number }>>(
+      Prisma.sql`
+        WITH ordered AS (
+          SELECT
+            m."lat",
+            m."lon",
+            row_number() OVER (ORDER BY m."capturedAt" ASC, m."id" ASC) AS rn,
+            ntile(5000) OVER (ORDER BY m."capturedAt" ASC, m."id" ASC) AS bucket
+          FROM "Measurement" m
+          WHERE m."sessionId" = ${sessionId}::uuid
+            AND m."lat" IS NOT NULL
+            AND m."lon" IS NOT NULL
+        ),
+        sampled AS (
+          SELECT DISTINCT ON (bucket)
+            bucket,
+            rn,
+            "lat",
+            "lon"
+          FROM ordered
+          ORDER BY bucket, rn
+        )
+        SELECT "lat", "lon"
+        FROM sampled
+        ORDER BY rn ASC
+      `
+    );
+
+    if (sampledPoints.length < 2) {
+      return null;
+    }
+
+    let total = 0;
+    let previous = sampledPoints[0];
+    for (let i = 1; i < sampledPoints.length; i += 1) {
+      const current = sampledPoints[i];
+      if (
+        !Number.isFinite(previous.lat) ||
+        !Number.isFinite(previous.lon) ||
+        !Number.isFinite(current.lat) ||
+        !Number.isFinite(current.lon)
+      ) {
+        previous = current;
+        continue;
+      }
+
+      total += haversineMeters(previous.lat, previous.lon, current.lat, current.lon);
+      previous = current;
+    }
+
+    return Number.isFinite(total) ? total : null;
+  }
+
+  private async computeSignalSummary(sessionId: string): Promise<{
+    rssi: SignalSummary | null;
+    snr: SignalSummary | null;
+    receiversCount: number | null;
+  }> {
+    const meshtasticAggregate = await this.prisma.meshtasticRx.aggregate({
+      where: {
+        measurement: { sessionId }
+      },
+      _count: { _all: true },
+      _min: {
+        rxRssi: true,
+        rxSnr: true
+      },
+      _max: {
+        rxRssi: true,
+        rxSnr: true
+      },
+      _avg: {
+        rxRssi: true,
+        rxSnr: true
+      }
+    });
+
+    if (meshtasticAggregate._count._all > 0) {
+      const receivers = await this.prisma.measurement.groupBy({
+        by: ['gatewayId'],
+        where: {
+          sessionId,
+          gatewayId: { not: null }
+        }
+      });
+
+      return {
+        rssi: toSignalSummary(
+          meshtasticAggregate._min.rxRssi,
+          meshtasticAggregate._max.rxRssi,
+          meshtasticAggregate._avg.rxRssi
+        ),
+        snr: toSignalSummary(
+          meshtasticAggregate._min.rxSnr,
+          meshtasticAggregate._max.rxSnr,
+          meshtasticAggregate._avg.rxSnr
+        ),
+        receiversCount: receivers.length > 0 ? receivers.length : null
+      };
+    }
+
+    const lorawanAggregate = await this.prisma.rxMetadata.aggregate({
+      where: {
+        measurement: { sessionId }
+      },
+      _count: { _all: true },
+      _min: {
+        rssi: true,
+        snr: true
+      },
+      _max: {
+        rssi: true,
+        snr: true
+      },
+      _avg: {
+        rssi: true,
+        snr: true
+      }
+    });
+
+    if (lorawanAggregate._count._all > 0) {
+      const receivers = await this.prisma.rxMetadata.groupBy({
+        by: ['gatewayId'],
+        where: {
+          measurement: { sessionId }
+        }
+      });
+
+      return {
+        rssi: toSignalSummary(
+          lorawanAggregate._min.rssi,
+          lorawanAggregate._max.rssi,
+          lorawanAggregate._avg.rssi
+        ),
+        snr: toSignalSummary(
+          lorawanAggregate._min.snr,
+          lorawanAggregate._max.snr,
+          lorawanAggregate._avg.snr
+        ),
+        receiversCount: receivers.length > 0 ? receivers.length : null
+      };
+    }
+
+    const fallbackSignalCount = await this.prisma.measurement.count({
+      where: {
+        sessionId,
+        OR: [{ rssi: { not: null } }, { snr: { not: null } }]
+      }
+    });
+
+    if (fallbackSignalCount === 0) {
+      return {
+        rssi: null,
+        snr: null,
+        receiversCount: null
+      };
+    }
+
+    const fallbackAggregate = await this.prisma.measurement.aggregate({
+      where: { sessionId },
+      _min: {
+        rssi: true,
+        snr: true
+      },
+      _max: {
+        rssi: true,
+        snr: true
+      },
+      _avg: {
+        rssi: true,
+        snr: true
+      }
+    });
+
+    const receivers = await this.prisma.measurement.groupBy({
+      by: ['gatewayId'],
+      where: {
+        sessionId,
+        gatewayId: { not: null }
+      }
+    });
+
+    return {
+      rssi: toSignalSummary(
+        fallbackAggregate._min.rssi,
+        fallbackAggregate._max.rssi,
+        fallbackAggregate._avg.rssi
+      ),
+      snr: toSignalSummary(
+        fallbackAggregate._min.snr,
+        fallbackAggregate._max.snr,
+        fallbackAggregate._avg.snr
+      ),
+      receiversCount: receivers.length > 0 ? receivers.length : null
+    };
+  }
 }
 
 function sampleItems<T>(items: T[], sample: number): T[] {
@@ -372,4 +645,51 @@ function sampleItems<T>(items: T[], sample: number): T[] {
     result.push(items[index]);
   }
   return result;
+}
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const earthRadiusMeters = 6_371_000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const lat1Rad = toRadians(lat1);
+  const lat2Rad = toRadians(lat2);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMeters * c;
+}
+
+function toSignalSummary(
+  min: number | Prisma.Decimal | null | undefined,
+  max: number | Prisma.Decimal | null | undefined,
+  avg: number | Prisma.Decimal | null | undefined
+): SignalSummary | null {
+  const minValue = toNumeric(min);
+  const maxValue = toNumeric(max);
+  const avgValue = toNumeric(avg);
+  if (minValue === null && maxValue === null && avgValue === null) {
+    return null;
+  }
+  return {
+    min: minValue,
+    max: maxValue,
+    avg: avgValue
+  };
+}
+
+function toNumeric(value: number | Prisma.Decimal | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof (value as Prisma.Decimal).toNumber === 'function') {
+    const converted = (value as Prisma.Decimal).toNumber();
+    return Number.isFinite(converted) ? converted : null;
+  }
+  return null;
 }
