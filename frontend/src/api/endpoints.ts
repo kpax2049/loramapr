@@ -21,6 +21,7 @@ import type {
   SessionWindowResponse,
   SessionTimeline,
   SessionDetail,
+  SessionStats,
   Session,
   TrackPoint,
   SystemStatus,
@@ -516,6 +517,13 @@ export async function getSessionById(
   options?: RequestOptions
 ): Promise<SessionDetail> {
   return getJson<SessionDetail>(`/api/sessions/${sessionId}`, options);
+}
+
+export async function getSessionStats(
+  sessionId: string,
+  options?: RequestOptions
+): Promise<SessionStats> {
+  return getJson<SessionStats>(`/api/sessions/${sessionId}/stats`, options);
 }
 
 export async function getSessionWindow(

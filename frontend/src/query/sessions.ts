@@ -3,6 +3,7 @@ import type { UseMutationOptions, UseQueryOptions } from '@tanstack/react-query'
 import {
   deleteSession,
   getSessionById,
+  getSessionStats,
   getSessionTimeline,
   getSessionWindow,
   listSessions,
@@ -14,6 +15,7 @@ import type {
   ListResponse,
   Session,
   SessionDetail,
+  SessionStats,
   SessionTimeline,
   SessionWindowResponse
 } from '../api/types';
@@ -62,6 +64,20 @@ export function useSessionById(
   return useQuery<SessionDetail>({
     queryKey: ['session', sessionId ?? null],
     queryFn: ({ signal }) => getSessionById(sessionId as string, { signal }),
+    ...options,
+    enabled: enabled && Boolean(sessionId)
+  });
+}
+
+export function useSessionStats(
+  sessionId?: string | null,
+  options?: QueryOptions<SessionStats>
+) {
+  const enabled = options?.enabled ?? Boolean(sessionId);
+
+  return useQuery<SessionStats>({
+    queryKey: ['sessionStats', sessionId ?? null],
+    queryFn: ({ signal }) => getSessionStats(sessionId as string, { signal }),
     ...options,
     enabled: enabled && Boolean(sessionId)
   });

@@ -3734,6 +3734,111 @@
   color: var(--danger-fg);
 }
 
+.session-details-panel {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+}
+
+.session-details-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.session-details-panel__header h4 {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  color: var(--panel-muted);
+}
+
+.session-details-panel__badge {
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-muted);
+  border-radius: 999px;
+  padding: 0.08rem 0.42rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.session-details-panel__row {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.session-details-panel__row > span {
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
+.session-details-panel__row strong {
+  font-size: 0.83rem;
+  color: var(--panel-text);
+  word-break: break-word;
+}
+
+.session-details-panel__row input,
+.session-details-panel__row textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  font-size: 0.82rem;
+}
+
+.session-details-panel__row textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.session-details-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.session-details-panel__actions--meta {
+  justify-content: flex-end;
+}
+
+.session-details-panel__danger-button {
+  border-color: var(--danger-border);
+  background: var(--danger-bg-soft);
+  color: var(--danger-fg);
+}
+
+.session-details-panel__danger-button:hover:not(:disabled) {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.session-details-panel__error,
+.session-details-panel__empty {
+  font-size: 0.72rem;
+  color: var(--panel-muted);
+}
+
+.session-details-panel__error {
+  color: var(--danger-fg);
+}
+
 .sessions-panel {
   display: flex;
   flex-direction: column;

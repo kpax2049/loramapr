@@ -143,6 +143,34 @@ export type SessionDetail = {
   measurementCount: number;
 };
 
+export type SessionStats = {
+  sessionId: string;
+  deviceId: string;
+  startedAt: string;
+  endedAt: string | null;
+  minCapturedAt: string | null;
+  maxCapturedAt: string | null;
+  pointCount: number;
+  distanceMeters: number | null;
+  bbox: {
+    minLat: number;
+    minLon: number;
+    maxLat: number;
+    maxLon: number;
+  } | null;
+  rssi: {
+    min: number | null;
+    max: number | null;
+    avg: number | null;
+  } | null;
+  snr: {
+    min: number | null;
+    max: number | null;
+    avg: number | null;
+  } | null;
+  receiversCount: number | null;
+};
+
 export type SessionTimeline = {
   sessionId: string;
   deviceId: string;

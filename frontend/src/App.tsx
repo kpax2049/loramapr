@@ -1,7 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
-import { getSessionWindow, type CoverageQueryParams, type MeasurementQueryParams } from './api/endpoints';
+import {
+  getMeasurements,
+  getSessionWindow,
+  type CoverageQueryParams,
+  type MeasurementQueryParams
+} from './api/endpoints';
 import type {
   CoverageBin,
   Measurement,
@@ -2076,6 +2081,71 @@ function App() {
     hasAutoFitRef.current = true;
   };
 
+  const handleFitMapToSession = useCallback(
+    async (
+      sessionId: string,
+      bbox: {
+        minLat: number;
+        minLon: number;
+        maxLat: number;
+        maxLon: number;
+      } | null
+    ) => {
+      const bboxBounds: LatLonBounds | null = bbox
+        ? (() => {
+            const southWest = toLatLonPoint(bbox.minLat, bbox.minLon);
+            const northEast = toLatLonPoint(bbox.maxLat, bbox.maxLon);
+            if (!southWest || !northEast) {
+              return null;
+            }
+            return [southWest, northEast];
+          })()
+        : null;
+
+      if (bboxBounds && isValidLatLonBounds(bboxBounds)) {
+        setFitFeedback(null);
+        if (isDegenerateBounds(bboxBounds)) {
+          mapRef.current?.focusPoint(bboxBounds[0], 16);
+        } else {
+          mapRef.current?.fitBounds(bboxBounds, { padding: [24, 24], maxZoom: 17 });
+        }
+        setUserInteractedWithMap(true);
+        hasAutoFitRef.current = true;
+        return;
+      }
+
+      try {
+        const response = await getMeasurements(
+          {
+            sessionId,
+            limit: 5000
+          },
+          {}
+        );
+        const points = response.items
+          .map((point) => toLatLonPoint(point.lat, point.lon))
+          .filter((point): point is LatLonPoint => point !== null);
+        const bounds = buildBoundsFromPoints(points);
+        if (points.length === 0) {
+          setFitFeedback('No data to fit');
+          return;
+        }
+
+        setFitFeedback(null);
+        if (points.length < 2 || !bounds || isDegenerateBounds(bounds)) {
+          mapRef.current?.focusPoint(points[0], 16);
+        } else {
+          mapRef.current?.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+        }
+        setUserInteractedWithMap(true);
+        hasAutoFitRef.current = true;
+      } catch {
+        setFitFeedback('No data to fit');
+      }
+    },
+    []
+  );
+
   const handleCenterOnLatestLocation = (point: [number, number]) => {
     mapRef.current?.focusPoint(point, 16);
     setFitFeedback(null);
@@ -2423,6 +2493,7 @@ function App() {
       useAdvancedRange={useAdvancedRange}
       onUseAdvancedRangeChange={handleUseAdvancedRangeChange}
       selectedSessionId={selectedSessionId}
+      playbackSessionId={playbackSessionId}
       onSelectSessionId={setSelectedSessionId}
       onStartSession={handleSessionStart}
       receiverSource={receiverSource}
@@ -2437,6 +2508,7 @@ function App() {
       onSelectCompareGatewayId={setCompareGatewayId}
       latest={latestDeviceQuery.data}
       onFitToData={handleFitToData}
+      onFitMapToSession={handleFitMapToSession}
       onCenterOnLatestLocation={handleCenterOnLatestLocation}
       mapLayerMode={mapLayerMode}
       onMapLayerModeChange={setMapLayerMode}
