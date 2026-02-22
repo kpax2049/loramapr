@@ -21,18 +21,35 @@ type SessionDetailsPanelProps = {
 };
 
 const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
+const SESSION_DETAILS_EXPANDED_KEY = 'sessionDetailsExpanded';
+const SESSION_DETAILS_METRIC_KEY = 'sessionDetailsMetric';
+
+function readStoredSessionDetailsExpanded(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(SESSION_DETAILS_EXPANDED_KEY) === 'true';
+}
+
+function readStoredSignalMetric(): 'rssi' | 'snr' {
+  if (typeof window === 'undefined') {
+    return 'rssi';
+  }
+  const stored = window.localStorage.getItem(SESSION_DETAILS_METRIC_KEY);
+  return stored === 'snr' ? 'snr' : 'rssi';
+}
 
 export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: SessionDetailsPanelProps) {
   const [nameDraft, setNameDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(() => readStoredSessionDetailsExpanded());
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [signalMetric, setSignalMetric] = useState<'rssi' | 'snr'>('rssi');
+  const [signalMetric, setSignalMetric] = useState<'rssi' | 'snr'>(() => readStoredSignalMetric());
 
   const sessionQuery = useSessionById(sessionId, { enabled: Boolean(sessionId) });
   const statsQuery = useSessionStats(sessionId, { enabled: Boolean(sessionId) });
@@ -59,10 +76,23 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
   }, [session?.id, session?.name, session?.notes]);
 
   useEffect(() => {
-    setIsExpanded(false);
     setDeleteModalOpen(false);
     setDeleteConfirmText('');
   }, [sessionId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(SESSION_DETAILS_EXPANDED_KEY, isExpanded ? 'true' : 'false');
+  }, [isExpanded]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(SESSION_DETAILS_METRIC_KEY, signalMetric);
+  }, [signalMetric]);
 
   const nameDirty = (session?.name ?? '') !== nameDraft;
   const notesDirty = (session?.notes ?? '') !== notesDraft;
