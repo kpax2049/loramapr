@@ -43,12 +43,21 @@ type SessionSignalSeriesQuery = {
   sample?: string | string[];
 };
 
+type SessionSignalHistogramQuery = {
+  metric?: string | string[];
+  source?: string | string[];
+  bins?: string | string[];
+};
+
 const DEFAULT_WINDOW_LIMIT = 2000;
 const MAX_WINDOW_LIMIT = 5000;
 const MIN_WINDOW_MS = 1000;
 const MAX_WINDOW_MS = 3_600_000;
 const DEFAULT_SIGNAL_SERIES_SAMPLE = 1200;
 const MAX_SIGNAL_SERIES_SAMPLE = 5000;
+const DEFAULT_SIGNAL_HISTOGRAM_BINS = 20;
+const MIN_SIGNAL_HISTOGRAM_BINS = 5;
+const MAX_SIGNAL_HISTOGRAM_BINS = 60;
 const DELETE_CONFIRMATION_VALUE = 'DELETE';
 
 @Controller('api/sessions')
@@ -178,6 +187,19 @@ export class SessionsController {
       sample
     });
   }
+
+  @Get(':id/signal-histogram')
+  async signalHistogram(@Param('id') id: string, @Query() query: SessionSignalHistogramQuery) {
+    const metric = parseSignalMetric(getSingleValue(query.metric, 'metric'));
+    const source = parseSignalSource(getSingleValue(query.source, 'source'));
+    const bins = parseSignalHistogramBins(getSingleValue(query.bins, 'bins'));
+    return this.sessionsService.getSignalHistogram({
+      sessionId: id,
+      metric,
+      source,
+      bins
+    });
+  }
 }
 
 function getSingleValue(value: string | string[] | undefined, name: string): string | undefined {
@@ -276,6 +298,19 @@ function parseSignalSeriesSample(value: string | undefined): number {
     throw new BadRequestException('sample must be a positive integer');
   }
   return Math.min(parsed, MAX_SIGNAL_SERIES_SAMPLE);
+}
+
+function parseSignalHistogramBins(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_SIGNAL_HISTOGRAM_BINS;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < MIN_SIGNAL_HISTOGRAM_BINS || parsed > MAX_SIGNAL_HISTOGRAM_BINS) {
+    throw new BadRequestException(
+      `bins must be an integer between ${MIN_SIGNAL_HISTOGRAM_BINS} and ${MAX_SIGNAL_HISTOGRAM_BINS}`
+    );
+  }
+  return parsed;
 }
 
 function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {

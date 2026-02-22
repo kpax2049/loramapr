@@ -200,4 +200,26 @@ describe('Sessions e2e', () => {
       { t: signalTimestamps.t2.toISOString(), v: -100 }
     ]);
   });
+
+  it('signal-histogram requires metric', async () => {
+    await request(app.getHttpServer()).get(`/api/sessions/${signalSessionId}/signal-histogram`).expect(400);
+  });
+
+  it('signal-histogram returns equal-width bins with counts', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/sessions/${signalSessionId}/signal-histogram?metric=rssi&bins=5`)
+      .expect(200);
+
+    expect(response.body.sessionId).toBe(signalSessionId);
+    expect(response.body.metric).toBe('rssi');
+    expect(response.body.sourceUsed).toBe('measurement');
+    expect(Array.isArray(response.body.bins)).toBe(true);
+    expect(response.body.bins).toHaveLength(5);
+
+    const totalCount = response.body.bins.reduce((sum: number, bin: { count: number }) => sum + bin.count, 0);
+    expect(totalCount).toBe(3);
+
+    expect(response.body.bins[0].lo).toBeCloseTo(-120, 6);
+    expect(response.body.bins[4].hi).toBeCloseTo(-100, 6);
+  });
 });

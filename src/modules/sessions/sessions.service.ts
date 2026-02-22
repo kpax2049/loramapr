@@ -16,6 +16,7 @@ type SignalSeriesSource = 'auto' | 'meshtastic' | 'lorawan' | 'measurement';
 type SignalSeriesResolvedSource = Exclude<SignalSeriesSource, 'auto'>;
 type SignalSeriesItem = { t: string; v: number };
 type RawSignalRow = { t: Date; v: number | Prisma.Decimal | null };
+type SignalHistogramBin = { lo: number; hi: number; count: number };
 
 @Injectable()
 export class SessionsService {
@@ -420,6 +421,38 @@ export class SessionsService {
       metric: params.metric,
       sourceUsed,
       items
+    };
+  }
+
+  async getSignalHistogram(params: {
+    sessionId: string;
+    metric: SignalSeriesMetric;
+    source: SignalSeriesSource;
+    bins: number;
+  }) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: params.sessionId },
+      select: { id: true }
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const sourceUsed =
+      params.source === 'auto'
+        ? await this.resolveSignalSeriesSource(params.sessionId, params.metric)
+        : params.source;
+    const rows = await this.readSignalSeriesRows(params.sessionId, params.metric, sourceUsed);
+
+    const values = rows
+      .map((row) => toNumeric(row.v))
+      .filter((value): value is number => value !== null && Number.isFinite(value));
+
+    return {
+      sessionId: params.sessionId,
+      metric: params.metric,
+      sourceUsed,
+      bins: buildSignalHistogram(values, params.bins)
     };
   }
 
@@ -880,6 +913,49 @@ function sampleItems<T>(items: T[], sample: number): T[] {
     result.push(items[index]);
   }
   return result;
+}
+
+function buildSignalHistogram(values: number[], bins: number): SignalHistogramBin[] {
+  if (values.length === 0) {
+    return [];
+  }
+
+  let min = values[0];
+  let max = values[0];
+  for (const value of values) {
+    if (value < min) {
+      min = value;
+    }
+    if (value > max) {
+      max = value;
+    }
+  }
+
+  if (min === max) {
+    return [{ lo: min, hi: max, count: values.length }];
+  }
+
+  const width = (max - min) / bins;
+  const histogram: SignalHistogramBin[] = Array.from({ length: bins }, (_, index) => {
+    const lo = min + width * index;
+    const hi = index === bins - 1 ? max : min + width * (index + 1);
+    return { lo, hi, count: 0 };
+  });
+
+  for (const value of values) {
+    let index = Math.floor((value - min) / width);
+    if (!Number.isFinite(index)) {
+      continue;
+    }
+    if (index < 0) {
+      index = 0;
+    } else if (index >= bins) {
+      index = bins - 1;
+    }
+    histogram[index].count += 1;
+  }
+
+  return histogram;
 }
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
