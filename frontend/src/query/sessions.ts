@@ -3,6 +3,8 @@ import type { UseMutationOptions, UseQueryOptions } from '@tanstack/react-query'
 import {
   deleteSession,
   getSessionById,
+  getSessionSignalHistogram,
+  getSessionSignalSeries,
   getSessionStats,
   getSessionTimeline,
   getSessionWindow,
@@ -16,6 +18,8 @@ import type {
   Session,
   SessionDetail,
   SessionStats,
+  SessionSignalSeries,
+  SessionSignalHistogram,
   SessionTimeline,
   SessionWindowResponse
 } from '../api/types';
@@ -78,6 +82,38 @@ export function useSessionStats(
   return useQuery<SessionStats>({
     queryKey: ['sessionStats', sessionId ?? null],
     queryFn: ({ signal }) => getSessionStats(sessionId as string, { signal }),
+    ...options,
+    enabled: enabled && Boolean(sessionId)
+  });
+}
+
+export function useSessionSignalSeries(
+  sessionId: string | null | undefined,
+  metric: 'rssi' | 'snr',
+  options?: QueryOptions<SessionSignalSeries>
+) {
+  const enabled = options?.enabled ?? Boolean(sessionId);
+
+  return useQuery<SessionSignalSeries>({
+    queryKey: ['sessionSignalSeries', sessionId ?? null, metric],
+    queryFn: ({ signal }) =>
+      getSessionSignalSeries(sessionId as string, { metric }, { signal }),
+    ...options,
+    enabled: enabled && Boolean(sessionId)
+  });
+}
+
+export function useSessionSignalHistogram(
+  sessionId: string | null | undefined,
+  metric: 'rssi' | 'snr',
+  options?: QueryOptions<SessionSignalHistogram>
+) {
+  const enabled = options?.enabled ?? Boolean(sessionId);
+
+  return useQuery<SessionSignalHistogram>({
+    queryKey: ['sessionSignalHistogram', sessionId ?? null, metric],
+    queryFn: ({ signal }) =>
+      getSessionSignalHistogram(sessionId as string, { metric }, { signal }),
     ...options,
     enabled: enabled && Boolean(sessionId)
   });

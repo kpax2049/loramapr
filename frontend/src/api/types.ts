@@ -171,6 +171,31 @@ export type SessionStats = {
   receiversCount: number | null;
 };
 
+export type SessionSignalSeriesItem = {
+  t: string;
+  v: number;
+};
+
+export type SessionSignalSeries = {
+  sessionId: string;
+  metric: 'rssi' | 'snr';
+  sourceUsed: 'meshtastic' | 'lorawan' | 'measurement' | 'auto';
+  items: SessionSignalSeriesItem[];
+};
+
+export type SessionSignalHistogramBin = {
+  lo: number;
+  hi: number;
+  count: number;
+};
+
+export type SessionSignalHistogram = {
+  sessionId: string;
+  metric: 'rssi' | 'snr';
+  sourceUsed: 'meshtastic' | 'lorawan' | 'measurement' | 'auto';
+  bins: SessionSignalHistogramBin[];
+};
+
 export type SessionTimeline = {
   sessionId: string;
   deviceId: string;

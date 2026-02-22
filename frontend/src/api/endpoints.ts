@@ -22,6 +22,8 @@ import type {
   SessionTimeline,
   SessionDetail,
   SessionStats,
+  SessionSignalSeries,
+  SessionSignalHistogram,
   Session,
   TrackPoint,
   SystemStatus,
@@ -524,6 +526,54 @@ export async function getSessionStats(
   options?: RequestOptions
 ): Promise<SessionStats> {
   return getJson<SessionStats>(`/api/sessions/${sessionId}/stats`, options);
+}
+
+export async function getSessionSignalSeries(
+  sessionId: string,
+  params: {
+    metric: 'rssi' | 'snr';
+    source?: 'auto' | 'meshtastic' | 'lorawan' | 'measurement';
+    sample?: number;
+  },
+  options?: RequestOptions
+): Promise<SessionSignalSeries> {
+  const query = new URLSearchParams();
+  query.set('metric', params.metric);
+  if (params.source) {
+    query.set('source', params.source);
+  }
+  if (typeof params.sample === 'number' && Number.isFinite(params.sample)) {
+    query.set('sample', String(Math.max(1, Math.floor(params.sample))));
+  }
+  const suffix = query.toString();
+  const path = suffix
+    ? `/api/sessions/${sessionId}/signal-series?${suffix}`
+    : `/api/sessions/${sessionId}/signal-series`;
+  return getJson<SessionSignalSeries>(path, options);
+}
+
+export async function getSessionSignalHistogram(
+  sessionId: string,
+  params: {
+    metric: 'rssi' | 'snr';
+    source?: 'auto' | 'meshtastic' | 'lorawan' | 'measurement';
+    bins?: number;
+  },
+  options?: RequestOptions
+): Promise<SessionSignalHistogram> {
+  const query = new URLSearchParams();
+  query.set('metric', params.metric);
+  if (params.source) {
+    query.set('source', params.source);
+  }
+  if (typeof params.bins === 'number' && Number.isFinite(params.bins)) {
+    query.set('bins', String(Math.max(1, Math.floor(params.bins))));
+  }
+  const suffix = query.toString();
+  const path = suffix
+    ? `/api/sessions/${sessionId}/signal-histogram?${suffix}`
+    : `/api/sessions/${sessionId}/signal-histogram`;
+  return getJson<SessionSignalHistogram>(path, options);
 }
 
 export async function getSessionWindow(
