@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.10.4 - 2026-02-22
+
+### Title
+- Session Details + Signal Charts
+
+### Added
+- Added a richer Session Details workflow with collapsed summary-by-default, explicit expand/collapse toggle, and persistent UI preferences for chart metric (`rssi`/`snr`) and expanded state.
+- Added a reusable mini line chart component for consistent session/device sparkline rendering and shared visual behavior.
+
+### Changed
+- Moved Session Details placement above the Sessions list to keep the selected session context visible while browsing session tiles.
+- Reworked Session Details metadata layout into a responsive two-column arrangement (Name/Notes anchored on the left) with container-based fallback to one column at narrow widths.
+- Restyled signal charts to a modern dark/accent visual language, including layered line/area/noise treatment for time-series and a mirrored, banded style for signal distribution.
+- Updated chart tooltip behavior so details can render outside chart bounds instead of clipping.
+
+### Docs
+- Updated `docs/wiki/Playback-and-Time.md` with Session Details behavior and signal endpoint/source resolution details (`MeshtasticRx` -> `RxMetadata` -> `Measurement` fallback).
+- Updated `docs/wiki/Hands-Free-Sessions.md` with a link to Session Details + signal chart documentation.
+
+### Milestone
+- Operators can inspect session metadata and radio signal quality in a compact details panel without losing context in the sessions list.
+
+### Notes
+- No breaking API changes.
+
 ## v0.10.3 - 2026-02-21
 
 ### Title

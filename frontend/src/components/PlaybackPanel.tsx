@@ -27,6 +27,7 @@ type PlaybackPanelProps = {
 
 const SPEED_OPTIONS: Array<0.25 | 0.5 | 1 | 2 | 4> = [0.25, 0.5, 1, 2, 4];
 const WINDOW_OPTIONS_MINUTES = [1, 5, 10, 30];
+const PLAYBACK_CHART_PADDING = 2;
 
 export default function PlaybackPanel({
   deviceId,
@@ -189,11 +190,25 @@ export default function PlaybackPanel({
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, rect.width, rect.height);
 
-    const stroke = getComputedStyle(canvas).color || '#000';
+    const styles = getComputedStyle(canvas);
+    const stroke = styles.getPropertyValue('--chart-line')?.trim() || styles.color || '#5c613e';
+    const baseline =
+      styles.getPropertyValue('--chart-baseline')?.trim() || 'rgba(255,255,255,0.08)';
+    const grid = styles.getPropertyValue('--chart-grid')?.trim() || 'rgba(255,255,255,0.25)';
+    const areaTop = styles.getPropertyValue('--chart-area-top')?.trim() || 'rgba(186,165,74,0.56)';
+    const areaMid = styles.getPropertyValue('--chart-area-mid')?.trim() || 'rgba(94,82,31,0.28)';
+    const areaBottom =
+      styles.getPropertyValue('--chart-area-bottom')?.trim() || 'rgba(10,10,8,0.05)';
+    const noiseTop =
+      styles.getPropertyValue('--chart-noise-fill')?.trim() || 'rgba(164,170,172,0.44)';
+    const noiseBottom =
+      styles.getPropertyValue('--chart-noise-fill-fade')?.trim() || 'rgba(130,136,138,0.08)';
     context.strokeStyle = stroke;
-    context.lineWidth = 1.5;
+    context.lineWidth = 2.5;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
 
-    const padding = 8;
+    const padding = PLAYBACK_CHART_PADDING;
     const width = rect.width - padding * 2;
     const height = rect.height - padding * 2;
     if (width <= 0 || height <= 0) {
@@ -206,15 +221,111 @@ export default function PlaybackPanel({
       return;
     }
 
-    context.beginPath();
-    windowChartData.points.forEach((point, index) => {
+    const projectedPoints = windowChartData.points.map((point) => {
       const x = padding + ((point.timeMs - windowChartData.startMs) / duration) * width;
       const y =
         padding + (1 - (point.value - windowChartData.minValue) / range) * height;
+      return { x, y };
+    });
+    if (projectedPoints.length === 0) {
+      return;
+    }
+
+    context.save();
+    context.strokeStyle = grid;
+    context.lineWidth = 1;
+    for (let row = 0; row <= 3; row += 1) {
+      const y = padding + (height / 3) * row;
+      context.beginPath();
+      context.moveTo(padding, y);
+      context.lineTo(padding + width, y);
+      context.stroke();
+    }
+    context.globalAlpha = 0.72;
+    for (let column = 0; column <= 4; column += 1) {
+      const x = padding + (width / 4) * column;
+      context.beginPath();
+      context.moveTo(x, padding);
+      context.lineTo(x, padding + height);
+      context.stroke();
+    }
+    context.restore();
+
+    const areaGradient = context.createLinearGradient(
+      0,
+      padding,
+      0,
+      padding + height
+    );
+    areaGradient.addColorStop(0, areaTop);
+    areaGradient.addColorStop(0.58, areaMid);
+    areaGradient.addColorStop(1, areaBottom);
+
+    context.beginPath();
+    context.moveTo(projectedPoints[0].x, padding + height);
+    for (const point of projectedPoints) {
+      context.lineTo(point.x, point.y);
+    }
+    context.lineTo(projectedPoints[projectedPoints.length - 1].x, padding + height);
+    context.closePath();
+    context.fillStyle = areaGradient;
+    context.fill();
+
+    const noiseGradient = context.createLinearGradient(
+      0,
+      padding + height * 0.72,
+      0,
+      padding + height
+    );
+    noiseGradient.addColorStop(0, noiseTop);
+    noiseGradient.addColorStop(1, noiseBottom);
+
+    const noiseTopY = padding + height * 0.71;
+    const noiseBottomY = padding + height;
+    const noiseSamples = Math.max(28, projectedPoints.length * 4);
+    context.beginPath();
+    context.moveTo(padding, noiseBottomY);
+    for (let index = 0; index < noiseSamples; index += 1) {
+      const ratio = noiseSamples > 1 ? index / (noiseSamples - 1) : 0;
+      const x = padding + ratio * width;
+      const scaled = ratio * (projectedPoints.length - 1);
+      const leftIndex = Math.floor(scaled);
+      const rightIndex = Math.min(projectedPoints.length - 1, leftIndex + 1);
+      const mix = scaled - leftIndex;
+      const left = projectedPoints[leftIndex];
+      const right = projectedPoints[rightIndex];
+      const lineY = left.y + (right.y - left.y) * mix;
+      const trend = 1 - (lineY - padding) / height;
+      const noiseSeed = Math.sin((index + 1) * 12.9898) * 43758.5453;
+      const jitter = noiseSeed - Math.floor(noiseSeed) - 0.5;
+      const bandHeight = noiseBottomY - noiseTopY;
+      const baseY = noiseBottomY - (0.2 + trend * 0.62) * bandHeight;
+      const y = Math.min(
+        noiseBottomY - 0.25,
+        Math.max(noiseTopY, baseY + jitter * bandHeight * 0.42)
+      );
+      context.lineTo(x, y);
+    }
+    context.lineTo(padding + width, noiseBottomY);
+    context.closePath();
+    context.fillStyle = noiseGradient;
+    context.fill();
+
+    context.save();
+    context.strokeStyle = baseline;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(padding, padding + height);
+    context.lineTo(padding + width, padding + height);
+    context.stroke();
+    context.restore();
+
+    context.beginPath();
+    projectedPoints.forEach((point, index) => {
       if (index === 0) {
-        context.moveTo(x, y);
+        context.moveTo(point.x, point.y);
       } else {
-        context.lineTo(x, y);
+        context.lineTo(point.x, point.y);
       }
     });
     context.stroke();
@@ -224,6 +335,8 @@ export default function PlaybackPanel({
     if (Number.isFinite(cursorX)) {
       context.save();
       context.globalAlpha = 0.6;
+      context.strokeStyle = stroke;
+      context.lineWidth = 1;
       context.beginPath();
       context.moveTo(cursorX, padding);
       context.lineTo(cursorX, padding + height);
@@ -289,7 +402,7 @@ export default function PlaybackPanel({
         {sampleNote ? <div className="playback-panel__status">{sampleNote}</div> : null}
         {emptyNote ? <div className="playback-panel__status">{emptyNote}</div> : null}
       </div>
-      <div className="playback-panel__chart">
+      <div className="playback-panel__chart mini-line-chart">
         <canvas
           ref={canvasRef}
           className="playback-panel__canvas"
@@ -299,7 +412,7 @@ export default function PlaybackPanel({
               return;
             }
             const rect = event.currentTarget.getBoundingClientRect();
-            const padding = 8;
+            const padding = PLAYBACK_CHART_PADDING;
             const width = rect.width - padding * 2;
             if (width <= 0) {
               return;

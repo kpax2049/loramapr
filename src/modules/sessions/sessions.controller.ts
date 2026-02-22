@@ -37,10 +37,27 @@ type SessionWindowQuery = {
   sample?: string | string[];
 };
 
+type SessionSignalSeriesQuery = {
+  metric?: string | string[];
+  source?: string | string[];
+  sample?: string | string[];
+};
+
+type SessionSignalHistogramQuery = {
+  metric?: string | string[];
+  source?: string | string[];
+  bins?: string | string[];
+};
+
 const DEFAULT_WINDOW_LIMIT = 2000;
 const MAX_WINDOW_LIMIT = 5000;
 const MIN_WINDOW_MS = 1000;
 const MAX_WINDOW_MS = 3_600_000;
+const DEFAULT_SIGNAL_SERIES_SAMPLE = 1200;
+const MAX_SIGNAL_SERIES_SAMPLE = 5000;
+const DEFAULT_SIGNAL_HISTOGRAM_BINS = 20;
+const MIN_SIGNAL_HISTOGRAM_BINS = 5;
+const MAX_SIGNAL_HISTOGRAM_BINS = 60;
 const DELETE_CONFIRMATION_VALUE = 'DELETE';
 
 @Controller('api/sessions')
@@ -152,6 +169,37 @@ export class SessionsController {
     const sample = parseOverviewSample(sampleRaw);
     return this.sessionsService.getOverview(id, sample);
   }
+
+  @Get(':id/stats')
+  async stats(@Param('id') id: string) {
+    return this.sessionsService.getStats(id);
+  }
+
+  @Get(':id/signal-series')
+  async signalSeries(@Param('id') id: string, @Query() query: SessionSignalSeriesQuery) {
+    const metric = parseSignalMetric(getSingleValue(query.metric, 'metric'));
+    const source = parseSignalSource(getSingleValue(query.source, 'source'));
+    const sample = parseSignalSeriesSample(getSingleValue(query.sample, 'sample'));
+    return this.sessionsService.getSignalSeries({
+      sessionId: id,
+      metric,
+      source,
+      sample
+    });
+  }
+
+  @Get(':id/signal-histogram')
+  async signalHistogram(@Param('id') id: string, @Query() query: SessionSignalHistogramQuery) {
+    const metric = parseSignalMetric(getSingleValue(query.metric, 'metric'));
+    const source = parseSignalSource(getSingleValue(query.source, 'source'));
+    const bins = parseSignalHistogramBins(getSingleValue(query.bins, 'bins'));
+    return this.sessionsService.getSignalHistogram({
+      sessionId: id,
+      metric,
+      source,
+      bins
+    });
+  }
 }
 
 function getSingleValue(value: string | string[] | undefined, name: string): string | undefined {
@@ -217,6 +265,52 @@ function parseOverviewSample(value: string | undefined): number {
     throw new BadRequestException('sample must be a positive integer');
   }
   return Math.min(parsed, 5000);
+}
+
+function parseSignalMetric(value: string | undefined): 'rssi' | 'snr' {
+  if (!value) {
+    throw new BadRequestException('metric is required');
+  }
+  if (value === 'rssi' || value === 'snr') {
+    return value;
+  }
+  throw new BadRequestException('metric must be one of: rssi, snr');
+}
+
+function parseSignalSource(
+  value: string | undefined
+): 'auto' | 'meshtastic' | 'lorawan' | 'measurement' {
+  if (!value) {
+    return 'auto';
+  }
+  if (value === 'auto' || value === 'meshtastic' || value === 'lorawan' || value === 'measurement') {
+    return value;
+  }
+  throw new BadRequestException('source must be one of: auto, meshtastic, lorawan, measurement');
+}
+
+function parseSignalSeriesSample(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_SIGNAL_SERIES_SAMPLE;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new BadRequestException('sample must be a positive integer');
+  }
+  return Math.min(parsed, MAX_SIGNAL_SERIES_SAMPLE);
+}
+
+function parseSignalHistogramBins(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_SIGNAL_HISTOGRAM_BINS;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < MIN_SIGNAL_HISTOGRAM_BINS || parsed > MAX_SIGNAL_HISTOGRAM_BINS) {
+    throw new BadRequestException(
+      `bins must be an integer between ${MIN_SIGNAL_HISTOGRAM_BINS} and ${MAX_SIGNAL_HISTOGRAM_BINS}`
+    );
+  }
+  return parsed;
 }
 
 function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {

@@ -3,10 +3,10 @@ import type {
   AutoSessionConfig,
   DeviceLatest,
   DeviceTelemetrySample,
+  SessionStats,
   UnifiedEventListItem
 } from '../api/types';
 import { useApiDiagnosticsEntries } from '../api/diagnostics';
-import { getApiBaseUrl } from '../api/http';
 import { ApiError } from '../api/http';
 import {
   useAgentDecisions,
@@ -28,6 +28,7 @@ import LorawanEventsPanel from './LorawanEventsPanel';
 import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
 import SessionsPanel from './SessionsPanel';
+import SessionDetailsPanel from './SessionDetailsPanel';
 import EventsExplorerPanel from './EventsExplorerPanel';
 import DeviceIcon, {
   DEVICE_ICON_CATALOG,
@@ -40,6 +41,7 @@ import DeviceIcon, {
 import DeviceOnlineDot from './DeviceOnlineDot';
 import DevicesManager from './DevicesManager';
 import type { EventsNavigationInput } from '../utils/eventsNavigation';
+import MiniLineChart from './charts/MiniLineChart';
 
 const DEVICE_ICON_PICKER_OPTIONS = DEVICE_ICON_CATALOG;
 
@@ -58,6 +60,7 @@ type ControlsProps = {
   useAdvancedRange: boolean;
   onUseAdvancedRangeChange: (value: boolean) => void;
   selectedSessionId: string | null;
+  playbackSessionId: string | null;
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
   receiverSource: 'lorawan' | 'meshtastic';
@@ -72,6 +75,7 @@ type ControlsProps = {
   onSelectCompareGatewayId: (gatewayId: string | null) => void;
   latest?: DeviceLatest;
   onFitToData: () => void;
+  onFitMapToSession: (sessionId: string, bbox: SessionStats['bbox']) => void | Promise<void>;
   onCenterOnLatestLocation: (point: [number, number]) => void;
   mapLayerMode: 'points' | 'coverage';
   onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
@@ -114,6 +118,7 @@ export default function Controls({
   useAdvancedRange,
   onUseAdvancedRangeChange,
   selectedSessionId,
+  playbackSessionId,
   onSelectSessionId,
   onStartSession,
   receiverSource,
@@ -128,6 +133,7 @@ export default function Controls({
   onSelectCompareGatewayId,
   latest,
   onFitToData,
+  onFitMapToSession,
   onCenterOnLatestLocation,
   mapLayerMode,
   onMapLayerModeChange,
@@ -172,8 +178,6 @@ export default function Controls({
       onDeviceChange(matchingDevice.id);
     }
   }, [devices, deviceId, onDeviceChange]);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
   const [autoSessionForm, setAutoSessionForm] = useState({
     enabled: false,
     homeLat: '',
@@ -331,10 +335,6 @@ export default function Controls({
       onDeviceChange(devices[0].id);
     }
   }, [deviceId, devices, onDeviceChange]);
-
-  useEffect(() => {
-    setExportError(null);
-  }, [selectedSessionId, filterMode]);
 
   const updateAutoSessionField = (field: keyof typeof autoSessionForm, value: string | boolean) => {
     setAutoSessionDirty(true);
@@ -1194,6 +1194,12 @@ export default function Controls({
             </label>
           </div>
           {isPlaybackMode && playbackControls}
+          {isPlaybackMode && playbackSessionId ? (
+            <SessionDetailsPanel
+              sessionId={playbackSessionId}
+              onFitMapToSession={onFitMapToSession}
+            />
+          ) : null}
         </div>
       )}
 
@@ -1251,6 +1257,12 @@ export default function Controls({
           <span className="controls__label">
             Playback mode is active. Use Playback tab controls for replay.
           </span>
+          {playbackSessionId ? (
+            <SessionDetailsPanel
+              sessionId={playbackSessionId}
+              onFitMapToSession={onFitMapToSession}
+            />
+          ) : null}
         </div>
       ) : showSessionsTab && filterMode === 'time' ? (
         <>
@@ -1312,27 +1324,18 @@ export default function Controls({
         <div className="controls__group">
           {deviceId ? (
             <>
+              {selectedSessionId ? (
+                <SessionDetailsPanel
+                  sessionId={selectedSessionId}
+                  onFitMapToSession={onFitMapToSession}
+                />
+              ) : null}
               <SessionsPanel
                 deviceId={deviceId}
                 selectedSessionId={selectedSessionId}
                 onSelectSessionId={onSelectSessionId}
                 onStartSession={onStartSession}
               />
-              {selectedSessionId ? (
-                <>
-                  <button
-                    type="button"
-                    className="controls__button"
-                    onClick={() => void handleExport(selectedSessionId, setExportError, setIsExporting)}
-                    disabled={isExporting}
-                  >
-                    {isExporting ? 'Exporting…' : 'Export GeoJSON'}
-                  </button>
-                  {exportError ? (
-                    <div className="controls__export-error">{exportError}</div>
-                  ) : null}
-                </>
-              ) : null}
             </>
           ) : (
             <span className="controls__label">Select a device</span>
@@ -1754,47 +1757,6 @@ function sanitizeIconPickerValue(
   return isDeviceIconPickerValue(value) ? value : fallback;
 }
 
-async function handleExport(
-  sessionId: string,
-  setExportError: (value: string | null) => void,
-  setIsExporting: (value: boolean) => void
-): Promise<void> {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  setExportError(null);
-  setIsExporting(true);
-  try {
-    const apiBaseUrl = getApiBaseUrl();
-    const url = `${apiBaseUrl}/api/export/session/${sessionId}.geojson`;
-    const queryKey = import.meta.env.VITE_QUERY_API_KEY ?? '';
-    const headers = queryKey ? { 'X-API-Key': queryKey } : undefined;
-    const response = await fetch(url, { headers });
-    if (response.status === 401 || response.status === 403) {
-      setExportError('Export requires QUERY key');
-      return;
-    }
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Export failed (${response.status})`);
-    }
-
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = `session-${sessionId}.geojson`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch (error) {
-    setExportError('Export failed');
-  } finally {
-    setIsExporting(false);
-  }
-}
-
 function formatRelativeTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1924,31 +1886,14 @@ function createTelemetrySeries(
 }
 
 function TelemetrySparkline({ series }: { series: TelemetrySeries }) {
-  const width = 148;
-  const height = 34;
-  const padding = 2;
-  const range = series.max - series.min || 1;
-  const denominator = Math.max(1, series.values.length - 1);
-
-  const points = series.values
-    .map((value, index) => {
-      const x = padding + (index / denominator) * (width - padding * 2);
-      const y =
-        padding + (1 - (value - series.min) / range) * (height - padding * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-
   return (
     <div className="device-details__sparkline">
-      <svg
-        className="device-details__sparkline-svg"
-        viewBox={`0 0 ${width} ${height}`}
+      <MiniLineChart
+        className="device-details__sparkline-chart"
+        data={series.values}
+        getValue={(value) => value}
         aria-label={`${series.label} trend`}
-        role="img"
-      >
-        <polyline className="device-details__sparkline-line" points={points} />
-      </svg>
+      />
       <div className="device-details__sparkline-meta">
         <span>{series.label}</span>
         <strong>{formatTelemetryMetric(series.latest, series.unit)}</strong>

@@ -11,6 +11,19 @@ It is optimized for:
 
 `Explore` mode remains the broader query mode (device/session/time filters over `measurements` + `tracks` + `stats`).
 
+## Session Details panel
+
+When a session is selected (Sessions tab or Playback mode), the Session Details panel provides:
+
+- collapsed summary by default (started/ended, points, duration, quick actions)
+- expandable full view (name/notes, stats, signal charts, lifecycle actions)
+- QUERY-key gated editing/actions where required
+
+Global UI preferences are stored in `localStorage` (not per-session):
+
+- `sessionDetailsMetric` (`rssi` or `snr`)
+- `sessionDetailsExpanded` (`true` or `false`)
+
 ## Scrubber model (time window)
 
 Current implementation in `frontend/src/App.tsx` + `frontend/src/components/PlaybackPanel.tsx`:
@@ -96,6 +109,20 @@ This affects rendering density, not stored/query data.
   - query: `sample` (optional)
   - available in backend; not used by current frontend playback UI
 
+- `GET /api/sessions/:id/signal-series`
+  - query:
+    - `metric` (required): `rssi` or `snr`
+    - `source` (optional): `auto|meshtastic|lorawan|measurement` (default `auto`)
+    - `sample` (optional)
+  - returns: `sessionId`, `metric`, `sourceUsed`, `items[]`
+
+- `GET /api/sessions/:id/signal-histogram`
+  - query:
+    - `metric` (required): `rssi` or `snr`
+    - `source` (optional): `auto|meshtastic|lorawan|measurement` (default `auto`)
+    - `bins` (optional)
+  - returns: `sessionId`, `metric`, `sourceUsed`, `bins[]`
+
 ### Track endpoint
 
 - `GET /api/tracks`
@@ -127,6 +154,21 @@ This affects rendering density, not stored/query data.
   - optional query params:
     - `from`, `to`
   - returns: `count`, `minCapturedAt`, `maxCapturedAt`, `gatewayCount`
+
+## Signal chart source resolution
+
+`Signal over time` and `Signal distribution` are backed by session signal endpoints and include `sourceUsed`.
+
+With `source=auto` (frontend default), backend resolves source per metric in this order:
+
+1. `meshtastic` from `MeshtasticRx` (`rxRssi` / `rxSnr`)
+2. `lorawan` from `RxMetadata` (`rssi` / `snr`, ranked to one row per measurement)
+3. `measurement` fallback from `Measurement.rssi` / `Measurement.snr`
+
+Notes:
+
+- Source can differ between `rssi` and `snr` if one metric is missing in upstream rows.
+- Explicit source selection may return empty series/histogram if that source has no values for the session.
 
 ## Troubleshooting playback/time map behavior
 

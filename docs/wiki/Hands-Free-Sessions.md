@@ -128,3 +128,8 @@ curl -s -H "X-API-Key: $QUERY_API_KEY" \
 
 - Persisting per-device agent in-memory state across agent restarts.
 - Dedicated UI view for full agent decision history (API exists; latest decision is shown in status).
+
+## Related session UI (details + signal charts)
+
+For selected sessions, the frontend Session Details panel is documented in [[Playback-and-Time|Playback and Time]].
+That page also documents signal chart source resolution (`MeshtasticRx` -> `RxMetadata` -> `Measurement` fallback when `source=auto`).
