@@ -29,6 +29,8 @@ Alternative: `make keys` also creates `.env` automatically if missing.
 make keys
 ```
 
+`make keys` runs the generator in a temporary `node:20-alpine` container, so this works on a host with only Docker + Docker Compose installed.
+
 ### 4) Start stack
 
 `make up` starts `postgres`, `backend`, and `frontend`.

@@ -73,6 +73,8 @@ export default function SelectedDeviceHeader({
   const iconKey = getEffectiveIconKey(device ?? {});
   const iconDefinition = getDeviceIconDefinition(iconKey);
   const sessionStatus = device ? (activeSession ? 'active' : 'idle') : null;
+  const copyTitle = deviceUid ? 'Copy device UID' : 'Select a device first';
+  const fitTitle = deviceUid ? 'Recenter map to visible data' : 'Select a device first';
 
   return (
     <div className="selected-device-header" data-tour="selected-device-header">
@@ -106,7 +108,38 @@ export default function SelectedDeviceHeader({
             </span>
           </div>
         </div>
-        <div className="selected-device-header__badges">
+        <div className="selected-device-header__meta">
+          <div className="selected-device-header__tools">
+            <button
+              type="button"
+              className="selected-device-header__tool-button"
+              disabled={!deviceUid}
+              onClick={() => deviceUid && copyDeviceUid(deviceUid)}
+              title={copyTitle}
+              aria-label="Copy device UID"
+            >
+              <IconCopy className="selected-device-header__tool-icon" size={14} stroke={1.9} aria-hidden="true" />
+            </button>
+            {onFitToData ? (
+              <button
+                type="button"
+                className="selected-device-header__tool-button"
+                disabled={!deviceUid}
+                onClick={onFitToData}
+                title={fitTitle}
+                aria-label="Recenter map to visible data"
+                data-tour="fit-to-data"
+              >
+                <IconArrowsMinimize
+                  className="selected-device-header__tool-icon"
+                  size={14}
+                  stroke={1.9}
+                  aria-hidden="true"
+                />
+              </button>
+            ) : null}
+          </div>
+          <div className="selected-device-header__badges">
           {sessionStatus ? (
             <span
               className={`selected-device-header__badge selected-device-header__badge--session selected-device-header__badge--session-${sessionStatus}`}
@@ -118,38 +151,8 @@ export default function SelectedDeviceHeader({
           {showAutoSessionBadge ? (
             <span className="selected-device-header__badge">Auto-session enabled</span>
           ) : null}
+          </div>
         </div>
-      </div>
-      <div className="selected-device-header__actions">
-        <button
-          type="button"
-          className="selected-device-header__button"
-          disabled={!deviceUid}
-          onClick={() => deviceUid && copyDeviceUid(deviceUid)}
-          title={deviceUid ? 'Copy device UID' : 'Select a device first'}
-        >
-          <IconCopy className="selected-device-header__button-icon" size={14} stroke={1.9} aria-hidden="true" />
-          Copy deviceUid
-        </button>
-        {onFitToData ? (
-          <button
-            type="button"
-            className="selected-device-header__button"
-            disabled={!deviceUid}
-            onClick={onFitToData}
-            title="Recenter map to visible data"
-            aria-label="Recenter map to visible data"
-            data-tour="fit-to-data"
-          >
-            <IconArrowsMinimize
-              className="selected-device-header__button-icon"
-              size={14}
-              stroke={1.9}
-              aria-hidden="true"
-            />
-            Fit to data
-          </button>
-        ) : null}
       </div>
       {fitFeedback ? (
         <div className="selected-device-header__feedback" role="status" aria-live="polite">

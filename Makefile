@@ -39,7 +39,7 @@ demo:
 	@./bin/loramapr demo
 
 keys:
-	@./bin/loramapr keys
+	@./scripts/setup/generate-secrets.sh
 
 prod-up:
 	@./bin/loramapr prod-up
