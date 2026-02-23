@@ -42,6 +42,11 @@ import DeviceOnlineDot from './DeviceOnlineDot';
 import DevicesManager from './DevicesManager';
 import type { EventsNavigationInput } from '../utils/eventsNavigation';
 import MiniLineChart from './charts/MiniLineChart';
+import {
+  bucketClass,
+  bucketLabel,
+  type CoverageBucket
+} from '../coverage/coverageBuckets';
 
 const DEVICE_ICON_PICKER_OPTIONS = DEVICE_ICON_CATALOG;
 
@@ -1902,37 +1907,15 @@ function TelemetrySparkline({ series }: { series: TelemetrySeries }) {
   );
 }
 
-type CoverageLegendItem = {
-  label: string;
-  bucket: 'low' | 'med' | 'high';
-};
-
 function CoverageLegend({ metric }: { metric: 'count' | 'rssiAvg' | 'snrAvg' }) {
-  const items: CoverageLegendItem[] =
-    metric === 'count'
-      ? [
-          { label: '1-5', bucket: 'low' },
-          { label: '6-20', bucket: 'med' },
-          { label: '21+', bucket: 'high' }
-        ]
-      : metric === 'snrAvg'
-        ? [
-            { label: '<= -5 dB', bucket: 'low' },
-            { label: '-4 to 5 dB', bucket: 'med' },
-            { label: '>= 6 dB', bucket: 'high' }
-          ]
-        : [
-            { label: '<= -110 dBm', bucket: 'low' },
-            { label: '-109 to -90 dBm', bucket: 'med' },
-            { label: '>= -89 dBm', bucket: 'high' }
-          ];
+  const items: CoverageBucket[] = ['low', 'med', 'high'];
 
   return (
     <div className="controls__legend" aria-label="Coverage legend" data-tour="coverage-legend">
-      {items.map((item) => (
-        <div key={item.label} className="controls__legend-row">
-          <span className={`controls__legend-swatch coverage-bin coverage-bin--${item.bucket}`} />
-          <span>{item.label}</span>
+      {items.map((bucket) => (
+        <div key={bucket} className="controls__legend-row">
+          <span className={`controls__legend-swatch coverage-bin ${bucketClass(metric, bucket)}`} />
+          <span>{bucketLabel(metric, bucket)}</span>
         </div>
       ))}
     </div>

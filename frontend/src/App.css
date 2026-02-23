@@ -4805,27 +4805,71 @@
 }
 
 .coverage-bin {
-  stroke: var(--map-point-default);
-  fill: var(--map-point-default);
-  background: var(--map-point-default);
+  stroke: var(--cov-none);
+  fill: var(--cov-none);
+  background: var(--cov-none);
 }
 
-.coverage-bin--high {
-  stroke: var(--map-point-strong);
-  fill: var(--map-point-strong);
-  background: var(--map-point-strong);
+.cov-count-high {
+  stroke: var(--cov-count-high);
+  fill: var(--cov-count-high);
+  background: var(--cov-count-high);
 }
 
-.coverage-bin--med {
-  stroke: var(--map-point-medium);
-  fill: var(--map-point-medium);
-  background: var(--map-point-medium);
+.cov-count-med {
+  stroke: var(--cov-count-med);
+  fill: var(--cov-count-med);
+  background: var(--cov-count-med);
 }
 
-.coverage-bin--low {
-  stroke: var(--map-point-weak);
-  fill: var(--map-point-weak);
-  background: var(--map-point-weak);
+.cov-count-low {
+  stroke: var(--cov-count-low);
+  fill: var(--cov-count-low);
+  background: var(--cov-count-low);
+}
+
+.cov-rssi-high {
+  stroke: var(--cov-rssi-high);
+  fill: var(--cov-rssi-high);
+  background: var(--cov-rssi-high);
+}
+
+.cov-rssi-med {
+  stroke: var(--cov-rssi-med);
+  fill: var(--cov-rssi-med);
+  background: var(--cov-rssi-med);
+}
+
+.cov-rssi-low {
+  stroke: var(--cov-rssi-low);
+  fill: var(--cov-rssi-low);
+  background: var(--cov-rssi-low);
+}
+
+.cov-snr-high {
+  stroke: var(--cov-snr-high);
+  fill: var(--cov-snr-high);
+  background: var(--cov-snr-high);
+}
+
+.cov-snr-med {
+  stroke: var(--cov-snr-med);
+  fill: var(--cov-snr-med);
+  background: var(--cov-snr-med);
+}
+
+.cov-snr-low {
+  stroke: var(--cov-snr-low);
+  fill: var(--cov-snr-low);
+  background: var(--cov-snr-low);
+}
+
+.cov-count-none,
+.cov-rssi-none,
+.cov-snr-none {
+  stroke: var(--cov-none);
+  fill: var(--cov-none);
+  background: var(--cov-none);
 }
 
 .device-icon-gallery {

@@ -39,6 +39,12 @@ import {
   type DeviceStatusBucket
 } from '../utils/deviceOnlineStatus';
 import { createHomeGeofenceDivIcon } from '../map/homeGeofenceMarkerIcon';
+import {
+  bucketClass,
+  getCoverageBucket,
+  resolveBucketColor,
+  type CoverageBucket
+} from '../coverage/coverageBuckets';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -351,7 +357,6 @@ function zoomToTolerance(zoom: number): number {
 }
 
 type RssiBucket = 'strong' | 'medium' | 'weak' | 'unknown' | 'default';
-type CoverageBucket = 'low' | 'med' | 'high';
 
 function getRssiBucket(rssi?: number | null): RssiBucket {
   if (rssi === null || rssi === undefined) {
@@ -367,36 +372,6 @@ function getRssiBucket(rssi?: number | null): RssiBucket {
     return 'medium';
   }
   return 'weak';
-}
-
-function getCoverageSnrBucket(snr: number): CoverageBucket {
-  if (snr >= 6) {
-    return 'high';
-  }
-  if (snr >= -4) {
-    return 'med';
-  }
-  return 'low';
-}
-
-function getCoverageCountBucket(count: number): CoverageBucket {
-  if (count >= 21) {
-    return 'high';
-  }
-  if (count >= 6) {
-    return 'med';
-  }
-  return 'low';
-}
-
-function getCoverageRssiBucket(rssi: number): CoverageBucket {
-  if (rssi >= -89) {
-    return 'high';
-  }
-  if (rssi >= -109) {
-    return 'med';
-  }
-  return 'low';
 }
 
 type PointPalette = Record<RssiBucket, string> & {
@@ -642,7 +617,16 @@ ref
 
   const coverageData = useMemo(() => {
     if (mapLayerMode !== 'coverage' || coverageBins.length === 0 || !coverageBinSize) {
-      return { bins: [] as Array<CoverageBin & { bounds: [[number, number], [number, number]]; bucket: CoverageBucket }> };
+      return {
+        bins: [] as Array<
+          CoverageBin & {
+            bounds: [[number, number], [number, number]];
+            bucket: CoverageBucket;
+            bucketClassName: string;
+            bucketColor: string;
+          }
+        >
+      };
     }
     const bins = coverageBins.flatMap((bin) => {
       if (!hasFiniteBinCoordinates(bin)) {
@@ -664,17 +648,14 @@ ref
         coverageMetric === 'count'
           ? bin.count
           : coverageMetric === 'snrAvg'
-            ? bin.snrAvg ?? 0
-            : bin.rssiAvg ?? 0;
-      const bucket =
-        coverageMetric === 'count'
-          ? getCoverageCountBucket(metricValue)
-          : coverageMetric === 'snrAvg'
-            ? getCoverageSnrBucket(metricValue)
-            : getCoverageRssiBucket(metricValue);
+            ? bin.snrAvg
+            : bin.rssiAvg;
+      const bucket = getCoverageBucket(coverageMetric, metricValue);
       return {
         ...bin,
         bucket,
+        bucketClassName: bucketClass(coverageMetric, bucket),
+        bucketColor: resolveBucketColor(coverageMetric, bucket),
         bounds: [
           [minLat, minLon],
           [maxLat, maxLon]
@@ -683,7 +664,7 @@ ref
     });
 
     return { bins };
-  }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric]);
+  }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric, theme]);
 
   const latestLocationIconInput = useMemo<DeviceIdentityInput | null>(() => {
     if (!latestLocationMarker) {
@@ -914,14 +895,23 @@ ref
       )}
       {mapLayerMode === 'coverage' &&
         coverageData.bins.map((bin) => {
-          const className = ['coverage-bin', `coverage-bin--${bin.bucket}`].join(' ');
-          const fillOpacity = bin.bucket === 'high' ? 0.85 : bin.bucket === 'med' ? 0.6 : 0.35;
+          const className = ['coverage-bin', bin.bucketClassName].join(' ');
+          const fillOpacity =
+            bin.bucket === 'high'
+              ? 0.85
+              : bin.bucket === 'med'
+                ? 0.62
+                : bin.bucket === 'low'
+                  ? 0.38
+                  : 0.16;
 
           return (
             <Rectangle
               key={`${bin.latBin}-${bin.lonBin}`}
               bounds={bin.bounds}
               pathOptions={{
+                color: bin.bucketColor,
+                fillColor: bin.bucketColor,
                 weight: 1,
                 opacity: 0.7,
                 fillOpacity,

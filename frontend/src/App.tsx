@@ -328,6 +328,17 @@ function toTimestampMs(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toUtcDayIso(value: string | number | Date | null | undefined): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
+}
+
 function getApproxDistanceMeters(
   fromLat: number,
   fromLon: number,
@@ -989,6 +1000,20 @@ function App() {
     enabled: Boolean(playbackSessionId)
   });
   const sessionPickerQuery = useSessions(deviceId ?? undefined, { enabled: Boolean(deviceId) });
+  const selectedSessionSummary = useMemo(
+    () =>
+      selectedSessionId
+        ? (sessionPickerQuery.data?.items ?? []).find((session) => session.id === selectedSessionId) ?? null
+        : null,
+    [sessionPickerQuery.data?.items, selectedSessionId]
+  );
+  const playbackSessionSummary = useMemo(
+    () =>
+      playbackSessionId
+        ? (sessionPickerQuery.data?.items ?? []).find((session) => session.id === playbackSessionId) ?? null
+        : null,
+    [sessionPickerQuery.data?.items, playbackSessionId]
+  );
   const nonArchivedSessionIds = useMemo(
     () => new Set((sessionPickerQuery.data?.items ?? []).map((session) => session.id)),
     [sessionPickerQuery.data?.items]
@@ -1444,7 +1469,7 @@ function App() {
     ? playbackWindowQuery
     : exploreMeasurementsQuery;
   const activeTrackQuery = isPlaybackMode ? null : exploreTrackQuery;
-  const effectiveMapLayerMode = isPlaybackMode ? 'points' : mapLayerMode;
+  const effectiveMapLayerMode = mapLayerMode;
   const playbackWindowSummary = useMemo(() => {
     if (!isPlaybackMode || !playbackWindowQuery.data) {
       return null;
@@ -1468,6 +1493,60 @@ function App() {
     return null;
   }, [isPlaybackMode, playbackWindowQuery.data]);
   const playbackEmptyNote = playbackWindowEmpty ? 'No points in this window' : null;
+  const latestActiveMeasurementMs = useMemo(() => {
+    let latest: number | null = null;
+    for (const measurement of activeMeasurements as Array<{ capturedAt?: string | null }>) {
+      const timestamp = toTimestampMs(measurement.capturedAt);
+      if (timestamp === null) {
+        continue;
+      }
+      if (latest === null || timestamp > latest) {
+        latest = timestamp;
+      }
+    }
+    return latest;
+  }, [activeMeasurements]);
+  const coverageDay = useMemo(() => {
+    if (isPlaybackMode) {
+      if (Number.isFinite(playbackCursorMs)) {
+        return toUtcDayIso(playbackCursorMs);
+      }
+      return (
+        toUtcDayIso(playbackTimelineQuery.data?.maxCapturedAt) ??
+        toUtcDayIso(playbackTimelineQuery.data?.minCapturedAt) ??
+        toUtcDayIso(playbackTimelineQuery.data?.startedAt) ??
+        toUtcDayIso(playbackSessionSummary?.endedAt) ??
+        toUtcDayIso(playbackSessionSummary?.startedAt) ??
+        toUtcDayIso(latestActiveMeasurementMs)
+      );
+    }
+    if (isSessionMode) {
+      return (
+        toUtcDayIso(selectedSessionSummary?.endedAt) ??
+        toUtcDayIso(selectedSessionSummary?.startedAt) ??
+        toUtcDayIso(latestActiveMeasurementMs)
+      );
+    }
+    return (
+      toUtcDayIso(exploreRange.to) ??
+      toUtcDayIso(exploreRange.from) ??
+      toUtcDayIso(latestActiveMeasurementMs)
+    );
+  }, [
+    isPlaybackMode,
+    playbackCursorMs,
+    playbackTimelineQuery.data?.maxCapturedAt,
+    playbackTimelineQuery.data?.minCapturedAt,
+    playbackTimelineQuery.data?.startedAt,
+    playbackSessionSummary?.endedAt,
+    playbackSessionSummary?.startedAt,
+    latestActiveMeasurementMs,
+    isSessionMode,
+    selectedSessionSummary?.endedAt,
+    selectedSessionSummary?.startedAt,
+    exploreRange.to,
+    exploreRange.from
+  ]);
 
   const statsParams = useMemo<MeasurementQueryParams>(
     () =>
@@ -1487,27 +1566,50 @@ function App() {
   });
   const coverageParams = useMemo<CoverageQueryParams>(() => {
     const gatewayId = receiverSource === 'lorawan' ? selectedGatewayId ?? undefined : undefined;
+    if (isPlaybackMode) {
+      return {
+        sessionId: playbackSessionId ?? undefined,
+        day: coverageDay,
+        bbox: debouncedBbox ?? undefined,
+        gatewayId
+      };
+    }
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
+        day: coverageDay,
         bbox: debouncedBbox ?? undefined,
         gatewayId
       };
     }
     return {
       deviceId: deviceId ?? undefined,
+      day: coverageDay,
       bbox: debouncedBbox ?? undefined,
       gatewayId
     };
-  }, [isSessionMode, selectedSessionId, debouncedBbox, deviceId, selectedGatewayId, receiverSource]);
+  }, [
+    isPlaybackMode,
+    playbackSessionId,
+    isSessionMode,
+    selectedSessionId,
+    coverageDay,
+    debouncedBbox,
+    deviceId,
+    selectedGatewayId,
+    receiverSource
+  ]);
   const coverageQuery = useCoverageBins(
     coverageParams,
     {
       enabled:
-        !isPlaybackMode &&
         mapLayerMode === 'coverage' &&
         Boolean(bboxPayload) &&
-        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+        (isPlaybackMode
+          ? Boolean(playbackSessionId)
+          : isSessionMode
+            ? Boolean(selectedSessionId)
+            : Boolean(deviceId))
     },
     { filterMode }
   );
