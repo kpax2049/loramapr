@@ -3,6 +3,8 @@
 
 const crypto = require('node:crypto');
 const { ApiKeyScope, PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { Pool } = require('pg');
 
 function hashApiKey(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -62,7 +64,10 @@ async function main() {
     return;
   }
 
-  const prisma = new PrismaClient();
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL
+  });
+  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
   let created = 0;
   let updated = 0;
 
@@ -88,6 +93,7 @@ async function main() {
     }
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 
   console.log(
