@@ -2480,33 +2480,37 @@ function App() {
 
   const sidebarFooter = (
     <div className="layout__sidebar-footer-brand">
-      <img
-        src={logoDark}
-        alt={`${APP_NAME} logo`}
-        className="layout__sidebar-brand-logo layout__sidebar-brand-logo--dark"
-      />
-      <img
-        src={logoLight}
-        alt=""
-        aria-hidden="true"
-        className="layout__sidebar-brand-logo layout__sidebar-brand-logo--light"
-      />
+      <div className="layout__sidebar-brand-logo-wrap" aria-hidden="true">
+        <img
+          src={logoDark}
+          alt={`${APP_NAME} logo`}
+          className="layout__sidebar-brand-logo layout__sidebar-brand-logo--dark"
+        />
+        <img
+          src={logoLight}
+          alt=""
+          aria-hidden="true"
+          className="layout__sidebar-brand-logo layout__sidebar-brand-logo--light"
+        />
+      </div>
       <span className="layout__sidebar-footer-meta">{`v${APP_VERSION}`}</span>
     </div>
   );
   const sidebarFooterCollapsed = (
     <div className="layout__sidebar-footer-mark">
-      <img
-        src={markDark}
-        alt={`${APP_NAME} icon`}
-        className="layout__sidebar-brand-mark layout__sidebar-brand-mark--dark"
-      />
-      <img
-        src={markLight}
-        alt=""
-        aria-hidden="true"
-        className="layout__sidebar-brand-mark layout__sidebar-brand-mark--light"
-      />
+      <div className="layout__sidebar-brand-mark-wrap" aria-hidden="true">
+        <img
+          src={markDark}
+          alt={`${APP_NAME} icon`}
+          className="layout__sidebar-brand-mark layout__sidebar-brand-mark--dark"
+        />
+        <img
+          src={markLight}
+          alt=""
+          aria-hidden="true"
+          className="layout__sidebar-brand-mark layout__sidebar-brand-mark--light"
+        />
+      </div>
     </div>
   );
   const zenToggleButton = (
