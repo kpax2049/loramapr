@@ -19,14 +19,14 @@ type DevicesManagerProps = {
 
 type DeviceSortMode = 'name' | 'lastSeen';
 
-const DEVICE_SORT_STORAGE_KEY = 'devicesManagerSortMode';
+const DEVICE_SORT_STORAGE_KEY = 'devicesManagerSortModeV2';
 
 function readStoredSortMode(): DeviceSortMode {
   if (typeof window === 'undefined') {
-    return 'name';
+    return 'lastSeen';
   }
   const value = window.localStorage.getItem(DEVICE_SORT_STORAGE_KEY);
-  return value === 'lastSeen' ? 'lastSeen' : 'name';
+  return value === 'name' ? 'name' : 'lastSeen';
 }
 
 function formatRelativeTime(value: string | null, nowMs = Date.now()): string {
@@ -384,8 +384,8 @@ export default function DevicesManager({
               onChange={(event) => setSortMode(event.target.value as DeviceSortMode)}
               aria-label="Sort devices"
             >
-              <option value="name">Name</option>
               <option value="lastSeen">Last seen</option>
+              <option value="name">Name</option>
             </select>
           </label>
           <label className="devices-manager__archived-toggle">
