@@ -30,6 +30,7 @@ make keys
 ```
 
 `make keys` runs the generator in a temporary `node:20-alpine` container, so this works on a host with only Docker + Docker Compose installed.
+It writes keys to root `.env` and syncs `frontend/.env` (`VITE_QUERY_API_KEY`) so browser requests include `X-API-Key`.
 
 ### 4) Start stack
 
@@ -38,7 +39,8 @@ On backend startup, the API container now:
 
 1. waits for DB readiness,
 2. runs `prisma migrate deploy`,
-3. then starts Nest.
+3. registers `QUERY_API_KEY` / `INGEST_API_KEY` from env into the `ApiKey` table (idempotent),
+4. then starts Nest.
 
 ```bash
 make up

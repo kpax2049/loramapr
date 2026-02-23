@@ -7,5 +7,8 @@ node scripts/wait-for-db.js
 echo "[api-entrypoint] Running prisma migrate deploy..."
 npx prisma migrate deploy
 
+echo "[api-entrypoint] Registering configured API keys..."
+node scripts/setup/register-env-api-keys.js
+
 echo "[api-entrypoint] Starting API server..."
 exec node dist/main.js

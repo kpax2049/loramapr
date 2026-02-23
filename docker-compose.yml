@@ -25,6 +25,8 @@ services:
       PORT: ${API_PORT:-3000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-loramapr}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      QUERY_API_KEY: ${QUERY_API_KEY:-}
+      INGEST_API_KEY: ${INGEST_API_KEY:-}
       NODE_ENV: production
     ports:
       - "${API_PORT:-3000}:${API_PORT:-3000}"
