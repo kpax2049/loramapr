@@ -1,4 +1,5 @@
 import type { Device } from '../api/types';
+import { IconArrowsMinimize, IconCopy } from '@tabler/icons-react';
 import { useAutoSession } from '../query/hooks';
 import { useSessions } from '../query/sessions';
 import DeviceOnlineDot from './DeviceOnlineDot';
@@ -125,7 +126,9 @@ export default function SelectedDeviceHeader({
           className="selected-device-header__button"
           disabled={!deviceUid}
           onClick={() => deviceUid && copyDeviceUid(deviceUid)}
+          title={deviceUid ? 'Copy device UID' : 'Select a device first'}
         >
+          <IconCopy className="selected-device-header__button-icon" size={14} stroke={1.9} aria-hidden="true" />
           Copy deviceUid
         </button>
         {onFitToData ? (
@@ -138,6 +141,12 @@ export default function SelectedDeviceHeader({
             aria-label="Recenter map to visible data"
             data-tour="fit-to-data"
           >
+            <IconArrowsMinimize
+              className="selected-device-header__button-icon"
+              size={14}
+              stroke={1.9}
+              aria-hidden="true"
+            />
             Fit to data
           </button>
         ) : null}

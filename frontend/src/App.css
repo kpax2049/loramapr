@@ -819,6 +819,10 @@
 }
 
 .selected-device-header__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
   border-radius: 8px;
   border: 1px solid var(--border-strong);
   background: var(--panel-surface);
@@ -829,6 +833,10 @@
   font-family: var(--font-mono);
   padding: 0.3rem 0.45rem;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.selected-device-header__button-icon {
+  flex: 0 0 auto;
 }
 
 .selected-device-header__button:not(:disabled):hover {
