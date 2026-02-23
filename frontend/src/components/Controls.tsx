@@ -193,6 +193,7 @@ export default function Controls({
   });
   const [autoSessionDirty, setAutoSessionDirty] = useState(false);
   const [autoSessionError, setAutoSessionError] = useState<string | null>(null);
+  const [autoSessionExpanded, setAutoSessionExpanded] = useState(true);
   const [detailsExpanded, setDetailsExpanded] = useState(true);
   const [detailsNameDraft, setDetailsNameDraft] = useState('');
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -579,6 +580,7 @@ export default function Controls({
     if (typeof window === 'undefined') {
       return;
     }
+    setAutoSessionExpanded(true);
     const target = document.getElementById('auto-session-section');
     if (!target) {
       return;
@@ -1031,94 +1033,107 @@ export default function Controls({
       ) : null}
 
       {showDeviceTab && deviceId && (
-        <div className="controls__group" id="auto-session-section">
-          <span className="controls__label">Auto Session (Home Geofence)</span>
-          <label className="controls__toggle">
-            <input
-              type="checkbox"
-              checked={autoSessionForm.enabled}
-              onChange={(event) => updateAutoSessionField('enabled', event.target.checked)}
-            />
-            Enabled
-          </label>
-          <div className="controls__row">
-            <div className="controls__group">
-              <label htmlFor="auto-home-lat">homeLat</label>
-              <input
-                id="auto-home-lat"
-                type="number"
-                value={autoSessionForm.homeLat}
-                onChange={(event) => updateAutoSessionField('homeLat', event.target.value)}
-              />
-            </div>
-            <div className="controls__group">
-              <label htmlFor="auto-home-lon">homeLon</label>
-              <input
-                id="auto-home-lon"
-                type="number"
-                value={autoSessionForm.homeLon}
-                onChange={(event) => updateAutoSessionField('homeLon', event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="controls__row">
-            <div className="controls__group">
-              <label htmlFor="auto-radius">radiusMeters</label>
-              <input
-                id="auto-radius"
-                type="number"
-                value={autoSessionForm.radiusMeters}
-                onChange={(event) => updateAutoSessionField('radiusMeters', event.target.value)}
-              />
-            </div>
-            <div className="controls__group">
-              <label htmlFor="auto-min-outside">minOutsideSeconds</label>
-              <input
-                id="auto-min-outside"
-                type="number"
-                value={autoSessionForm.minOutsideSeconds}
-                onChange={(event) => updateAutoSessionField('minOutsideSeconds', event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="controls__row">
-            <div className="controls__group">
-              <label htmlFor="auto-min-inside">minInsideSeconds</label>
-              <input
-                id="auto-min-inside"
-                type="number"
-                value={autoSessionForm.minInsideSeconds}
-                onChange={(event) => updateAutoSessionField('minInsideSeconds', event.target.value)}
-              />
-            </div>
-          </div>
+        <div className="controls__group auto-session-panel" id="auto-session-section">
           <button
             type="button"
-            className="controls__button"
-            onClick={handleAutoSessionSave}
-            disabled={autoSessionQuery.isLoading || updateAutoSessionMutation.isPending}
+            className="auto-session-panel__toggle"
+            onClick={() => setAutoSessionExpanded((value) => !value)}
+            aria-expanded={autoSessionExpanded}
+            aria-controls="auto-session-panel-body"
           >
-            {updateAutoSessionMutation.isPending ? 'Saving…' : 'Save'}
+            <span>Auto Session (Home Geofence)</span>
+            <span className="auto-session-panel__toggle-meta">{autoSessionExpanded ? '-' : '+'}</span>
           </button>
-          <label
-            className="controls__toggle"
-            title={homeGeofenceConfigured ? 'Show home geofence on map' : 'Home geofence not configured'}
-          >
-            <input
-              type="checkbox"
-              checked={homeGeofenceConfigured ? showHomeGeofence : false}
-              onChange={(event) => onShowHomeGeofenceChange(event.target.checked)}
-              disabled={!homeGeofenceConfigured}
-            />
-            Show Home Geofence
-          </label>
-          {autoSessionAuthError ? (
-            <div className="controls__gateway-error">
-              Auto session requires QUERY key
+          {autoSessionExpanded ? (
+            <div id="auto-session-panel-body" className="auto-session-panel__body">
+              <label className="controls__toggle">
+                <input
+                  type="checkbox"
+                  checked={autoSessionForm.enabled}
+                  onChange={(event) => updateAutoSessionField('enabled', event.target.checked)}
+                />
+                Enabled
+              </label>
+              <div className="controls__row">
+                <div className="controls__group">
+                  <label htmlFor="auto-home-lat">homeLat</label>
+                  <input
+                    id="auto-home-lat"
+                    type="number"
+                    value={autoSessionForm.homeLat}
+                    onChange={(event) => updateAutoSessionField('homeLat', event.target.value)}
+                  />
+                </div>
+                <div className="controls__group">
+                  <label htmlFor="auto-home-lon">homeLon</label>
+                  <input
+                    id="auto-home-lon"
+                    type="number"
+                    value={autoSessionForm.homeLon}
+                    onChange={(event) => updateAutoSessionField('homeLon', event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="controls__row">
+                <div className="controls__group">
+                  <label htmlFor="auto-radius">radiusMeters</label>
+                  <input
+                    id="auto-radius"
+                    type="number"
+                    value={autoSessionForm.radiusMeters}
+                    onChange={(event) => updateAutoSessionField('radiusMeters', event.target.value)}
+                  />
+                </div>
+                <div className="controls__group">
+                  <label htmlFor="auto-min-outside">minOutsideSeconds</label>
+                  <input
+                    id="auto-min-outside"
+                    type="number"
+                    value={autoSessionForm.minOutsideSeconds}
+                    onChange={(event) => updateAutoSessionField('minOutsideSeconds', event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="controls__row">
+                <div className="controls__group">
+                  <label htmlFor="auto-min-inside">minInsideSeconds</label>
+                  <input
+                    id="auto-min-inside"
+                    type="number"
+                    value={autoSessionForm.minInsideSeconds}
+                    onChange={(event) => updateAutoSessionField('minInsideSeconds', event.target.value)}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="controls__button"
+                onClick={handleAutoSessionSave}
+                disabled={autoSessionQuery.isLoading || updateAutoSessionMutation.isPending}
+              >
+                {updateAutoSessionMutation.isPending ? 'Saving…' : 'Save'}
+              </button>
+              <label
+                className="controls__toggle"
+                title={homeGeofenceConfigured ? 'Show home geofence on map' : 'Home geofence not configured'}
+              >
+                <input
+                  type="checkbox"
+                  checked={homeGeofenceConfigured ? showHomeGeofence : false}
+                  onChange={(event) => onShowHomeGeofenceChange(event.target.checked)}
+                  disabled={!homeGeofenceConfigured}
+                />
+                Show Home Geofence
+              </label>
+              {autoSessionAuthError ? (
+                <div className="controls__gateway-error">
+                  Auto session requires QUERY key
+                </div>
+              ) : null}
+              {autoSessionError ? (
+                <div className="controls__gateway-error">{autoSessionError}</div>
+              ) : null}
             </div>
-          ) : null}
-          {autoSessionError ? (
-            <div className="controls__gateway-error">{autoSessionError}</div>
           ) : null}
         </div>
       )}
@@ -1329,6 +1344,11 @@ export default function Controls({
         <div className="controls__group">
           {deviceId ? (
             <>
+              {filterMode === 'session' && !selectedSessionId ? (
+                <div className="controls__session-empty-state" role="status" aria-live="polite">
+                  Select a session
+                </div>
+              ) : null}
               {selectedSessionId ? (
                 <SessionDetailsPanel
                   sessionId={selectedSessionId}

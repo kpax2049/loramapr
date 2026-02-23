@@ -205,6 +205,7 @@ export default function SessionsPanel({
     if (!hasQueryApiKey || updateSessionMutation.isPending) {
       return;
     }
+    const clearsSelection = selectedSessionId === session.id && !session.isArchived;
     setSessionActionError(null);
     setOpenMenuSessionId(null);
     updateSessionMutation.mutate(
@@ -215,7 +216,9 @@ export default function SessionsPanel({
       },
       {
         onSuccess: () => {
-          // Selection clearing and user messaging are handled centrally in App state.
+          if (clearsSelection) {
+            onSelectSessionId(null);
+          }
         },
         onError: (mutationError) => {
           const status = getErrorStatus(mutationError);
@@ -247,14 +250,19 @@ export default function SessionsPanel({
     ) {
       return;
     }
+    const deletingSessionId = deleteTargetSession.id;
+    const clearingSelected = selectedSessionId === deletingSessionId;
     setSessionActionError(null);
     deleteSessionMutation.mutate(
       {
-        id: deleteTargetSession.id,
+        id: deletingSessionId,
         deviceId: deleteTargetSession.deviceId
       },
       {
         onSuccess: () => {
+          if (clearingSelected) {
+            onSelectSessionId(null);
+          }
           setDeleteTargetSession(null);
           setDeleteConfirmText('');
         },
@@ -280,15 +288,20 @@ export default function SessionsPanel({
       return;
     }
 
+    const archivingSessionId = deleteTargetSession.id;
+    const clearingSelected = selectedSessionId === archivingSessionId;
     setSessionActionError(null);
     updateSessionMutation.mutate(
       {
-        id: deleteTargetSession.id,
+        id: archivingSessionId,
         deviceId: deleteTargetSession.deviceId,
         input: { isArchived: true }
       },
       {
         onSuccess: () => {
+          if (clearingSelected) {
+            onSelectSessionId(null);
+          }
           setDeleteTargetSession(null);
           setDeleteConfirmText('');
         },

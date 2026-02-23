@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getMeasurements, listUnifiedEvents, type MeasurementQueryParams } from '../api/endpoints';
-import type { Measurement, UnifiedEventListItem } from '../api/types';
+import {
+  getMeasurements,
+  getUnifiedEventById,
+  listUnifiedEvents,
+  type MeasurementQueryParams
+} from '../api/endpoints';
+import type { Measurement, UnifiedEventDetail, UnifiedEventListItem } from '../api/types';
 import type { EventsNavigationInput } from '../utils/eventsNavigation';
 
 type PointDetailsProps = {
@@ -72,8 +77,54 @@ type DetailRow = {
   value: string;
 };
 
+const RAW_EVENT_JSON_EXPANDED_KEY = 'pointDetailsRawEventJsonExpanded';
+const ALL_METADATA_EXPANDED_KEY = 'pointDetailsAllMetadataExpanded';
+
+function readStoredExpandedState(key: string, fallback = false): boolean {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+  const raw = window.localStorage.getItem(key);
+  if (raw === '1') {
+    return true;
+  }
+  if (raw === '0') {
+    return false;
+  }
+  return fallback;
+}
+
+function storeExpandedState(key: string, value: boolean): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(key, value ? '1' : '0');
+}
+
+function stringifyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2) ?? 'null';
+  } catch {
+    return '[Unserializable JSON]';
+  }
+}
+
 export default function PointDetails({ measurement, deviceUid, onOpenEvents }: PointDetailsProps) {
   const [isOpeningRawPacket, setIsOpeningRawPacket] = useState(false);
+  const [rawEventExpanded, setRawEventExpanded] = useState(() =>
+    readStoredExpandedState(RAW_EVENT_JSON_EXPANDED_KEY, false)
+  );
+  const [allMetadataExpanded, setAllMetadataExpanded] = useState(() =>
+    readStoredExpandedState(ALL_METADATA_EXPANDED_KEY, false)
+  );
+
+  useEffect(() => {
+    storeExpandedState(RAW_EVENT_JSON_EXPANDED_KEY, rawEventExpanded);
+  }, [rawEventExpanded]);
+
+  useEffect(() => {
+    storeExpandedState(ALL_METADATA_EXPANDED_KEY, allMetadataExpanded);
+  }, [allMetadataExpanded]);
 
   const detailQuery = useQuery<Measurement | null>({
     queryKey: [
@@ -115,7 +166,22 @@ export default function PointDetails({ measurement, deviceUid, onOpenEvents }: P
     }
   });
 
-  if (!measurement) {
+  const detailMeasurement =
+    measurement && detailQuery.data
+      ? {
+          ...measurement,
+          ...detailQuery.data,
+          meshtasticRx: detailQuery.data.meshtasticRx ?? measurement.meshtasticRx ?? null
+        }
+      : measurement;
+  const measurementEventId = detailMeasurement ? getMeasurementEventId(detailMeasurement) : null;
+  const rawEventQuery = useQuery<UnifiedEventDetail>({
+    queryKey: ['point-details-raw-event', measurementEventId],
+    enabled: Boolean(measurementEventId),
+    staleTime: 15_000,
+    queryFn: ({ signal }) => getUnifiedEventById(measurementEventId as string, { signal })
+  });
+  if (!detailMeasurement) {
     return (
       <aside className="point-details" aria-label="Point details">
         <div className="point-details__empty">Select a point to see details.</div>
@@ -123,14 +189,6 @@ export default function PointDetails({ measurement, deviceUid, onOpenEvents }: P
     );
   }
 
-  const detailMeasurement: Measurement = detailQuery.data
-    ? {
-        ...measurement,
-        ...detailQuery.data,
-        meshtasticRx: detailQuery.data.meshtasticRx ?? measurement.meshtasticRx ?? null
-      }
-    : measurement;
-  const measurementEventId = getMeasurementEventId(detailMeasurement);
   const resolvedDeviceUid = resolveDeviceUid(detailMeasurement, deviceUid);
   const canOpenRawEvents = Boolean(measurementEventId || resolvedDeviceUid) && Boolean(onOpenEvents);
   const capturedAtMs = new Date(detailMeasurement.capturedAt).getTime();
@@ -189,6 +247,8 @@ export default function PointDetails({ measurement, deviceUid, onOpenEvents }: P
           { label: 'rxTime', value: formatCapturedAt(detailMeasurement.meshtasticRx.rxTime) }
         ]
       : [];
+  const rawEventJson = rawEventQuery.data ? stringifyJson(rawEventQuery.data.payloadJson) : null;
+  const allMetadataJson = stringifyJson(detailMeasurement);
 
   const handleOpenRawEvents = () => {
     if (!onOpenEvents) {
@@ -281,99 +341,151 @@ export default function PointDetails({ measurement, deviceUid, onOpenEvents }: P
 
   return (
     <aside className="point-details" aria-label="Point details">
-      <h2>Point details</h2>
-      <dl>
-        <div>
-          <dt>Captured at</dt>
-          <dd>{formatCapturedAt(detailMeasurement.capturedAt)}</dd>
-        </div>
-        <div>
-          <dt>Session ID</dt>
-          <dd>{detailMeasurement.sessionId ?? 'none'}</dd>
-        </div>
-        <div>
-          <dt>Raw events</dt>
-          <dd>
-            {canOpenRawEvents || canOpenRawPacket ? (
-              <div className="point-details__events-links">
-                {canOpenRawEvents ? (
-                  <button type="button" className="point-details__events-link" onClick={handleOpenRawEvents}>
-                    View raw event(s)
-                  </button>
-                ) : null}
-                {canOpenRawPacket ? (
-                  <button
-                    type="button"
-                    className="point-details__events-link"
-                    onClick={() => void handleOpenRawPacket()}
-                    disabled={isOpeningRawPacket}
-                  >
-                    {isOpeningRawPacket ? 'Opening…' : 'View raw packet'}
-                  </button>
-                ) : null}
-              </div>
-            ) : '—'}
-          </dd>
-        </div>
-        <div>
-          <dt>Latitude</dt>
-          <dd>{formatValue(detailMeasurement.lat)}</dd>
-        </div>
-        <div>
-          <dt>Longitude</dt>
-          <dd>{formatValue(detailMeasurement.lon)}</dd>
-        </div>
-        <div>
-          <dt>RSSI</dt>
-          <dd>{formatValue(detailMeasurement.rssi)}</dd>
-        </div>
-        <div>
-          <dt>SNR</dt>
-          <dd>{formatValue(detailMeasurement.snr)}</dd>
-        </div>
-        <div>
-          <dt>SF</dt>
-          <dd>{formatValue(detailMeasurement.sf)}</dd>
-        </div>
-        <div>
-          <dt>BW</dt>
-          <dd>{formatValue(detailMeasurement.bw)}</dd>
-        </div>
-        <div>
-          <dt>Frequency</dt>
-          <dd>{formatValue(detailMeasurement.freq)}</dd>
-        </div>
-        <div>
-          <dt>Gateway ID</dt>
-          <dd>{formatValue(detailMeasurement.gatewayId)}</dd>
-        </div>
-      </dl>
-      {gpsQualityRows.length > 0 ? (
-        <>
-          <h3 className="point-details__section-title">GPS quality</h3>
-          <dl>
-            {gpsQualityRows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </>
-      ) : null}
-      {meshtasticRxRows.length > 0 ? (
-        <>
-          <h3 className="point-details__section-title">Radio (Meshtastic)</h3>
-          <dl>
-            {meshtasticRxRows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </>
-      ) : null}
+      <div className="point-details__header">
+        <h2>Point details</h2>
+        <dl className="point-details__summary">
+          <div>
+            <dt>Captured at</dt>
+            <dd>{formatCapturedAt(detailMeasurement.capturedAt)}</dd>
+          </div>
+          <div>
+            <dt>Session ID</dt>
+            <dd>{detailMeasurement.sessionId ?? 'none'}</dd>
+          </div>
+          <div>
+            <dt>Raw events</dt>
+            <dd>
+              {canOpenRawEvents || canOpenRawPacket ? (
+                <div className="point-details__events-links">
+                  {canOpenRawEvents ? (
+                    <button type="button" className="point-details__events-link" onClick={handleOpenRawEvents}>
+                      View raw event(s)
+                    </button>
+                  ) : null}
+                  {canOpenRawPacket ? (
+                    <button
+                      type="button"
+                      className="point-details__events-link"
+                      onClick={() => void handleOpenRawPacket()}
+                      disabled={isOpeningRawPacket}
+                    >
+                      {isOpeningRawPacket ? 'Opening…' : 'View raw packet'}
+                    </button>
+                  ) : null}
+                </div>
+              ) : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt>Latitude</dt>
+            <dd>{formatValue(detailMeasurement.lat)}</dd>
+          </div>
+          <div>
+            <dt>Longitude</dt>
+            <dd>{formatValue(detailMeasurement.lon)}</dd>
+          </div>
+        </dl>
+      </div>
+      <div className="point-details__body">
+        <dl>
+          <div>
+            <dt>RSSI</dt>
+            <dd>{formatValue(detailMeasurement.rssi)}</dd>
+          </div>
+          <div>
+            <dt>SNR</dt>
+            <dd>{formatValue(detailMeasurement.snr)}</dd>
+          </div>
+          <div>
+            <dt>SF</dt>
+            <dd>{formatValue(detailMeasurement.sf)}</dd>
+          </div>
+          <div>
+            <dt>BW</dt>
+            <dd>{formatValue(detailMeasurement.bw)}</dd>
+          </div>
+          <div>
+            <dt>Frequency</dt>
+            <dd>{formatValue(detailMeasurement.freq)}</dd>
+          </div>
+          <div>
+            <dt>Gateway ID</dt>
+            <dd>{formatValue(detailMeasurement.gatewayId)}</dd>
+          </div>
+        </dl>
+        {gpsQualityRows.length > 0 ? (
+          <>
+            <h3 className="point-details__section-title">GPS quality</h3>
+            <dl>
+              {gpsQualityRows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        ) : null}
+        {meshtasticRxRows.length > 0 ? (
+          <>
+            <h3 className="point-details__section-title">Radio (Meshtastic)</h3>
+            <dl>
+              {meshtasticRxRows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        ) : null}
+        <section className="point-details__collapsible">
+          <button
+            type="button"
+            className="point-details__collapsible-toggle"
+            onClick={() => setRawEventExpanded((value) => !value)}
+            aria-expanded={rawEventExpanded}
+            aria-controls="point-details-raw-event-json"
+          >
+            <span>Raw event JSON</span>
+            <span className="point-details__collapsible-symbol">{rawEventExpanded ? '-' : '+'}</span>
+          </button>
+          {rawEventExpanded ? (
+            <div id="point-details-raw-event-json" className="point-details__collapsible-body">
+              {measurementEventId ? (
+                rawEventQuery.isLoading ? (
+                  <div className="point-details__empty">Loading raw event…</div>
+                ) : rawEventQuery.error ? (
+                  <div className="point-details__empty">Could not load raw event JSON.</div>
+                ) : rawEventJson ? (
+                  <pre className="point-details__json">{rawEventJson}</pre>
+                ) : (
+                  <div className="point-details__empty">No raw event JSON available.</div>
+                )
+              ) : (
+                <div className="point-details__empty">No linked source event.</div>
+              )}
+            </div>
+          ) : null}
+        </section>
+        <section className="point-details__collapsible">
+          <button
+            type="button"
+            className="point-details__collapsible-toggle"
+            onClick={() => setAllMetadataExpanded((value) => !value)}
+            aria-expanded={allMetadataExpanded}
+            aria-controls="point-details-all-metadata"
+          >
+            <span>All metadata</span>
+            <span className="point-details__collapsible-symbol">{allMetadataExpanded ? '-' : '+'}</span>
+          </button>
+          {allMetadataExpanded ? (
+            <div id="point-details-all-metadata" className="point-details__collapsible-body">
+              <pre className="point-details__json">{allMetadataJson}</pre>
+            </div>
+          ) : null}
+        </section>
+      </div>
     </aside>
   );
 }

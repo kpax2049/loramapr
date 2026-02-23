@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
+import { IconChartBar, IconChevronRight, IconFileSearch } from '@tabler/icons-react';
 import {
   getMeasurements,
   getSessionWindow,
@@ -57,6 +58,8 @@ const ZEN_MODE_KEY = 'zenMode';
 const THEME_MODE_KEY = 'themeMode';
 const SHOW_DEVICE_MARKERS_KEY = 'showDeviceMarkers';
 const SHOW_HOME_GEOFENCE_PREFIX = 'showHomeGeofence:';
+const POINT_DETAILS_COLLAPSED_KEY = 'rightPanelPointDetailsCollapsed';
+const STATS_PANEL_COLLAPSED_KEY = 'rightPanelStatsCollapsed';
 const APP_NAME = __APP_NAME__;
 const APP_VERSION = __APP_VERSION__;
 const DEVICE_ICON_GALLERY_ROUTE = '/dev/device-icons';
@@ -224,6 +227,13 @@ function readStoredShowHomeGeofence(deviceId: string | null): boolean {
     return false;
   }
   return window.localStorage.getItem(buildHomeGeofenceStorageKey(deviceId)) === 'true';
+}
+
+function readStoredBoolean(key: string): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(key) === 'true';
 }
 
 function readSystemTheme(): EffectiveTheme {
@@ -610,6 +620,12 @@ function App() {
   const [showHomeGeofence, setShowHomeGeofence] = useState<boolean>(() =>
     readStoredShowHomeGeofence(initial.deviceId)
   );
+  const [pointDetailsCollapsed, setPointDetailsCollapsed] = useState<boolean>(() =>
+    readStoredBoolean(POINT_DETAILS_COLLAPSED_KEY)
+  );
+  const [statsPanelCollapsed, setStatsPanelCollapsed] = useState<boolean>(() =>
+    readStoredBoolean(STATS_PANEL_COLLAPSED_KEY)
+  );
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [receiverSource, setReceiverSource] = useState<'lorawan' | 'meshtastic'>('lorawan');
   const [receiverSourceOverridden, setReceiverSourceOverridden] = useState(false);
@@ -736,6 +752,23 @@ function App() {
       showHomeGeofence ? 'true' : 'false'
     );
   }, [deviceId, showHomeGeofence]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(
+      POINT_DETAILS_COLLAPSED_KEY,
+      pointDetailsCollapsed ? 'true' : 'false'
+    );
+  }, [pointDetailsCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(STATS_PANEL_COLLAPSED_KEY, statsPanelCollapsed ? 'true' : 'false');
+  }, [statsPanelCollapsed]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -991,7 +1024,7 @@ function App() {
     [debouncedBbox]
   );
 
-  const isSessionMode = filterMode === 'session' && Boolean(selectedSessionId);
+  const isSessionMode = filterMode === 'session';
   const isPlaybackMode = viewMode === 'playback';
   const hasPlaybackSession = Boolean(playbackSessionId);
   const isMeshtasticSource = receiverSource === 'meshtastic';
@@ -2053,9 +2086,6 @@ function App() {
       return;
     }
     setSelectedSessionId(null);
-    if (filterMode === 'session') {
-      setFilterMode('time');
-    }
     setSessionSelectionNotice('Selected session was archived or deleted, selection was cleared.');
   }, [
     deviceId,
@@ -2063,8 +2093,7 @@ function App() {
     sessionPickerQuery.isFetched,
     sessionPickerQuery.isFetching,
     sessionPickerQuery.dataUpdatedAt,
-    nonArchivedSessionIds,
-    filterMode
+    nonArchivedSessionIds
   ]);
 
   useEffect(() => {
@@ -2386,7 +2415,10 @@ function App() {
     ? buildDeviceIdentityLabel(selectedDevice)
     : 'No device';
   const statusSessionId = playbackSessionId ?? selectedSessionId;
-  const isRightPanelExpanded = !zenMode || tourForceRightPanelExpanded;
+  const isPointDetailsExpanded = tourForceRightPanelExpanded || (!zenMode && !pointDetailsCollapsed);
+  const isStatsPanelExpanded = tourForceRightPanelExpanded || (!zenMode && !statsPanelCollapsed);
+  const showRightPanel = !zenMode || tourForceRightPanelExpanded;
+  const isRightPanelIconsOnly = showRightPanel && !isPointDetailsExpanded && !isStatsPanelExpanded;
 
   const sidebarHeader = (
     <div className="sidebar-header" aria-label="Sidebar header" data-tour="sidebar-header">
@@ -2724,28 +2756,85 @@ function App() {
           themeMode={themeMode}
           onThemeModeChange={setThemeMode}
         />
-        <div
-          className={`right-column${isRightPanelExpanded ? '' : ' right-column--shell'}`}
-          data-tour="right-panel"
-          aria-hidden={!isRightPanelExpanded}
-        >
-          {isRightPanelExpanded ? (
-            <>
-              <PointDetails
-                measurement={selectedMeasurement}
-                deviceUid={selectedMeasurement?.deviceUid ?? selectedDeviceUid ?? null}
-                onOpenEvents={handleOpenEvents}
-              />
-              <StatsCard
-                stats={statsQuery.data}
-                isLoading={statsQuery.isLoading}
-                error={statsQuery.error as Error | null}
-              />
-            </>
-          ) : (
-            <div className="right-column__shell" aria-hidden="true" />
-          )}
-        </div>
+        {showRightPanel ? (
+          <div
+            className={`right-column${isRightPanelIconsOnly ? ' right-column--icons-only' : ''}`}
+            data-tour="right-panel"
+          >
+            <div
+              className={`right-panel-slot ${
+                isPointDetailsExpanded ? 'right-panel-slot--point-details' : 'right-panel-slot--collapsed'
+              }`}
+            >
+              {isPointDetailsExpanded ? (
+                <>
+                  <button
+                    type="button"
+                    className="right-panel-slot__toggle"
+                    onClick={() => setPointDetailsCollapsed(true)}
+                    aria-label="Collapse point details panel"
+                    title="Collapse point details panel"
+                    disabled={tourForceRightPanelExpanded}
+                  >
+                    <IconChevronRight size={14} aria-hidden="true" />
+                  </button>
+                  <PointDetails
+                    measurement={selectedMeasurement}
+                    deviceUid={selectedMeasurement?.deviceUid ?? selectedDeviceUid ?? null}
+                    onOpenEvents={handleOpenEvents}
+                  />
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="right-panel-toggle"
+                  onClick={() => setPointDetailsCollapsed(false)}
+                  aria-label="Show point details panel"
+                  title="Show point details panel"
+                  disabled={tourForceRightPanelExpanded}
+                >
+                  <IconFileSearch size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <div
+              className={`right-panel-slot ${
+                isStatsPanelExpanded ? 'right-panel-slot--stats' : 'right-panel-slot--collapsed'
+              }`}
+            >
+              {isStatsPanelExpanded ? (
+                <>
+                  <button
+                    type="button"
+                    className="right-panel-slot__toggle"
+                    onClick={() => setStatsPanelCollapsed(true)}
+                    aria-label="Collapse stats panel"
+                    title="Collapse stats panel"
+                    disabled={tourForceRightPanelExpanded}
+                  >
+                    <IconChevronRight size={14} aria-hidden="true" />
+                  </button>
+                  <StatsCard
+                    stats={statsQuery.data}
+                    isLoading={statsQuery.isLoading}
+                    error={statsQuery.error as Error | null}
+                  />
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="right-panel-toggle"
+                  onClick={() => setStatsPanelCollapsed(false)}
+                  aria-label="Show stats panel"
+                  title="Show stats panel"
+                  disabled={tourForceRightPanelExpanded}
+                >
+                  <IconChartBar size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
         {!zenMode && (isLoading || error) && (
           <div className="status">
             {isLoading && <p>Loading map data…</p>}
