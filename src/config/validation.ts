@@ -1,23 +1,25 @@
 import * as Joi from 'joi';
 
+const optionalString = Joi.string().empty('').optional();
+
 const envSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
   API_PORT: Joi.number().integer().min(1).max(65535).optional(),
   PORT: Joi.number().integer().min(1).max(65535).optional(),
   DATABASE_URL: Joi.string().uri().required(),
-  CORS_ORIGINS: Joi.string().optional(),
-  FRONTEND_ORIGIN: Joi.string().optional(),
-  CORS_ORIGIN: Joi.string().optional(),
+  CORS_ORIGINS: optionalString,
+  FRONTEND_ORIGIN: optionalString,
+  CORS_ORIGIN: optionalString,
   FRONTEND_PORT: Joi.number().integer().min(1).max(65535).optional(),
-  POSTGRES_DB: Joi.string().optional(),
-  POSTGRES_USER: Joi.string().optional(),
-  POSTGRES_PASSWORD: Joi.string().optional(),
+  POSTGRES_DB: optionalString,
+  POSTGRES_USER: optionalString,
+  POSTGRES_PASSWORD: optionalString,
   POSTGRES_PORT: Joi.number().integer().min(1).max(65535).optional(),
-  QUERY_API_KEY: Joi.string().optional(),
-  INGEST_API_KEY: Joi.string().optional(),
-  TTS_WEBHOOK_API_KEY: Joi.string().optional(),
-  TTS_WEBHOOK_BASIC_USER: Joi.string().optional(),
-  TTS_WEBHOOK_BASIC_PASS: Joi.string().optional(),
+  QUERY_API_KEY: optionalString,
+  INGEST_API_KEY: optionalString,
+  TTS_WEBHOOK_API_KEY: optionalString,
+  TTS_WEBHOOK_BASIC_USER: optionalString,
+  TTS_WEBHOOK_BASIC_PASS: optionalString,
   RETENTION_WEBHOOKEVENT_DAYS: Joi.number().integer().min(1).optional(),
   RETENTION_AGENTDECISION_DAYS: Joi.number().integer().min(1).optional(),
   RETENTION_RUN_AT_STARTUP: Joi.boolean()
@@ -30,7 +32,7 @@ const envSchema = Joi.object({
     .falsy('no')
     .falsy('off')
     .optional(),
-  RETENTION_SCHEDULE_CRON: Joi.string().optional()
+  RETENTION_SCHEDULE_CRON: optionalString
 });
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
