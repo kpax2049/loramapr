@@ -25,6 +25,14 @@ This release marks the first stable version of a fully self-hosted workflow for 
 - Built-in operational tooling for API keys, database backup/restore, and retention safety defaults.
 - Expanded project documentation in the GitHub Wiki for quickstart, deployment, ingestion, troubleshooting, and operations.
 
+<p align="center">
+  <img alt="LoRaMapr session details and signal charts" src="docs/assets/ui-session-details-signal.png" width="980">
+</p>
+
+<p align="center">
+  <img alt="LoRaMapr coverage mode view" src="docs/assets/ui-coverage-map.png" width="980">
+</p>
+
 ## What LoRaMapr is for
 
 LoRaMapr is a self-hosted web app for **recording, replaying, and analyzing real-world radio coverage** using GPS-tagged telemetry. You collect measurements while walking/driving with a device, LoRaMapr groups them into **sessions**, and the UI lets you **visualize tracks, compare reception, and export data** (e.g., GeoJSON).
