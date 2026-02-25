@@ -15,7 +15,7 @@ die() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./bin/loramapr up|down|logs|ps|reset|demo|keys|prod-up|prod-down|prod-logs|wait-ready|check
+  ./bin/loramapr up|down|logs|ps|reset|demo|keys|prod-up|prod-down|prod-logs|wait-ready|check|backup|restore
 
 Commands:
   up      Start docker compose stack
@@ -30,6 +30,11 @@ Commands:
   prod-logs  Tail production compose logs
   wait-ready Wait for API readiness endpoint to return HTTP 200
   check      Fast non-destructive local stack health check
+  backup     Run scripts/db/backup.sh (optional OUTPUT_FILE)
+  restore    Run scripts/db/restore.sh with passthrough args
+
+Notes:
+  Set COMPOSE_FILE=docker-compose.prod.yml to run backup/restore against prod compose.
 EOF
 }
 
@@ -259,6 +264,16 @@ cmd_check() {
   fi
 }
 
+cmd_backup() {
+  ensure_env_file
+  "$ROOT_DIR/scripts/db/backup.sh" "${@:-}"
+}
+
+cmd_restore() {
+  ensure_env_file
+  "$ROOT_DIR/scripts/db/restore.sh" "$@"
+}
+
 main() {
   local cmd="${1:-help}"
   case "$cmd" in
@@ -274,6 +289,14 @@ main() {
     prod-logs) cmd_prod_logs ;;
     wait-ready) cmd_wait_ready ;;
     check) cmd_check ;;
+    backup)
+      shift
+      cmd_backup "$@"
+      ;;
+    restore)
+      shift
+      cmd_restore "$@"
+      ;;
     help|-h|--help) usage ;;
     *) usage; die "unknown command: $cmd" ;;
   esac

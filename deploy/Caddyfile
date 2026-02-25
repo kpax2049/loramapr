@@ -16,6 +16,8 @@
   }
 
   reverse_proxy /api/* api:{env.API_PORT}
+  reverse_proxy /healthz api:{env.API_PORT}
+  reverse_proxy /readyz api:{env.API_PORT}
   reverse_proxy web:{env.WEB_PORT}
 }
 
@@ -36,5 +38,7 @@
 #   }
 #
 #   reverse_proxy /api/* api:{env.API_PORT}
+#   reverse_proxy /healthz api:{env.API_PORT}
+#   reverse_proxy /readyz api:{env.API_PORT}
 #   reverse_proxy web:{env.WEB_PORT}
 # }

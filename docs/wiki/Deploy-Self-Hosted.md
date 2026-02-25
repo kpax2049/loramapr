@@ -59,25 +59,25 @@ Caddy can only obtain and renew certificates when the domain resolves publicly t
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs reverse-proxy -n 200 --no-log-prefix
 docker compose -f docker-compose.prod.yml logs api -n 200 --no-log-prefix
-curl -i http://localhost/api/healthz
-curl -i http://localhost/api/readyz
+curl -i http://localhost/healthz
+curl -i http://localhost/readyz
 ```
 
 Expected:
 
-- `curl http://localhost/api/healthz` returns `200` if API process is running.
-- `curl http://localhost/api/readyz` returns `200` when DB is reachable.
+- `curl http://localhost/healthz` returns `200` if API process is running.
+- `curl http://localhost/readyz` returns `200` when DB is reachable.
 - Browser app is served from `http://<server-ip-or-domain>/`.
-- API is reachable behind proxy at `/api/*`.
+- API is reachable behind proxy at `/api/*`, with health/readiness also exposed at `/healthz` and `/readyz`.
 
 ## Health endpoints
 
-- `/api/healthz`: liveness only, no DB probe.
-- `/api/readyz`: readiness with DB probe (`SELECT 1`), returns `503` when not ready.
+- `/healthz`: liveness only, no DB probe.
+- `/readyz`: readiness with DB probe (`SELECT 1`), returns `503` when not ready.
 
 ## Diagnose "not ready"
 
-If `/api/readyz` returns `503`, check API and Postgres logs:
+If `/readyz` returns `503`, check API and Postgres logs:
 
 ```bash
 docker compose -f docker-compose.prod.yml logs api -n 200 --no-log-prefix
@@ -98,7 +98,7 @@ Use this quick checklist after each deployment:
 2. Hit readiness through the proxy and confirm success:
 
 ```bash
-curl -i http://<server-ip-or-domain>/api/readyz
+curl -i http://<server-ip-or-domain>/readyz
 ```
 
 3. Create a session from the UI (Start Session action) and verify it appears in the sessions panel.

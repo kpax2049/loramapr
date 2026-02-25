@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: help up down logs ps reset demo keys prod-up prod-down prod-logs wait-ready check
+.PHONY: help up down logs ps reset demo keys prod-up prod-down prod-logs wait-ready check backup restore
 
 help:
 	@echo "Usage: make <target>"
@@ -19,6 +19,13 @@ help:
 	@echo "  prod-logs  Tail production compose logs"
 	@echo "  wait-ready Wait until API readiness is healthy"
 	@echo "  check      Fast non-destructive stack health check"
+	@echo "  backup     Run DB backup (optional: OUTPUT=backups/name.sql.gz)"
+	@echo "  restore    Run DB restore (requires BACKUP_FILE=...)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make backup OUTPUT=backups/test.sql.gz"
+	@echo "  COMPOSE_FILE=docker-compose.prod.yml make backup"
+	@echo "  COMPOSE_FILE=docker-compose.prod.yml make restore BACKUP_FILE=backups/file.sql.gz DROP_FIRST=1"
 
 up:
 	@./bin/loramapr up
@@ -55,3 +62,9 @@ wait-ready:
 
 check:
 	@./bin/loramapr check
+
+backup:
+	@./bin/loramapr backup $(if $(OUTPUT),$(OUTPUT),)
+
+restore:
+	@./bin/loramapr restore $(if $(DROP_FIRST),--drop-first,) $(if $(NO_STOP_API),--no-stop-api,) $(BACKUP_FILE)
