@@ -26,7 +26,7 @@ This release marks the first stable version of a fully self-hosted workflow for 
 - Expanded project documentation in the GitHub Wiki for quickstart, deployment, ingestion, troubleshooting, and operations.
 
 <p align="center">
-  <img alt="LoRaMapr session details and signal charts" src="docs/assets/ui-session-details-signal.png" width="980">
+  <img alt="LoRaMapr session details and signal charts" src="docs/assets/ui-session-details-signal.png?v=20260225" width="980">
 </p>
 
 <p align="center">
