@@ -8,9 +8,22 @@
   </picture>
 </p>
 
-> ⚠️ **Active development notice**  
-> This project is under active development and is **not** a complete, production-ready app yet.  
-> The goal is to reach a more or less production‑ready **v1.0.0**; until then, expect breaking changes and evolving features.
+> ✅ **Stable release (v1.0.0)**  
+> LoRaMapr has reached **v1.0.0** and is ready for self-hosted use.  
+> Development continues for new features and refinements, with changes tracked through normal release/version notes.
+
+## LoRaMapr v1.0.0 is live
+
+LoRaMapr has officially reached **v1.0.0**.  
+This release marks the first stable version of a fully self-hosted workflow for **recording, replaying, and analyzing real-world radio coverage** from GPS-tagged telemetry.
+
+## What's in v1.0.0
+
+- Stable ingest pipelines for **LoRaWAN** (TTS webhooks) and **Meshtastic** (Pi Forwarder).
+- Session-first workflow for manual and hands-free capture, plus playback and map-based analysis.
+- Production-ready self-hosting baseline with Docker Compose, reverse proxy, health/readiness checks, and startup migration flow.
+- Built-in operational tooling for API keys, database backup/restore, and retention safety defaults.
+- Expanded project documentation in the GitHub Wiki for quickstart, deployment, ingestion, troubleshooting, and operations.
 
 ## What LoRaMapr is for
 
@@ -94,8 +107,8 @@ Important: Meshtastic is **not limited to a home node**. The forwarder can run o
 
 Start the dev stack (postgres + backend + frontend):
 ```bash
-cp .env.example .env
-docker compose up -d --build
+make keys
+make up
 ```
 
 No manual `npm install` is required for runtime; containers install and run dependencies.
@@ -182,7 +195,12 @@ Use the Quickstart above for the recommended flow.
 
 ## API key generation
 
-Create an ingestion API key:
+For local Docker-first setup, generate (or preserve existing) QUERY/INGEST keys:
+```bash
+make keys
+```
+
+Advanced/manual minting is also available:
 ```bash
 npm run apikey:mint -- --scopes INGEST --label "dev ingest key"
 ```
@@ -239,6 +257,15 @@ docker compose down -v
 docker compose up --build
 ```
 
+Prod compose equivalents:
+```bash
+docker compose -f docker-compose.prod.yml logs postgres --tail=200
+docker compose -f docker-compose.prod.yml logs api --tail=200
+docker compose -f docker-compose.prod.yml logs reverse-proxy --tail=200
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
 If you see a Prisma engine mismatch (darwin vs linux), run:
 ```bash
 docker compose down -v
@@ -253,6 +280,26 @@ Common ports:
 - Postgres: 5432
 
 If API requests fail in dev, check that `frontend/.env` has `VITE_API_BASE_URL=http://localhost:3000` and restart the Vite dev server. In production, frontend requests use same-origin `/api/*` by default (leave `VITE_API_BASE_URL` empty).
+
+## Production smoke test
+
+Start production-style stack:
+```bash
+make prod-up
+```
+
+If your `docker-compose.prod.yml` maps proxy to default ports:
+```bash
+curl -i http://localhost/healthz
+curl -i http://localhost/readyz
+```
+
+If proxy is mapped to custom host port (for example `8080:80`), use that port:
+```bash
+PORT=8080
+curl -i "http://localhost:${PORT}/healthz"
+curl -i "http://localhost:${PORT}/readyz"
+```
 
 ## Contributor note
 
