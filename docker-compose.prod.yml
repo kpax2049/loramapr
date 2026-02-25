@@ -83,6 +83,7 @@ services:
       - caddy_config:/config
     networks:
       - internal
+      - edge
 
 volumes:
   postgres_data:
@@ -93,3 +94,5 @@ networks:
   internal:
     driver: bridge
     internal: true
+  edge:
+    driver: bridge
