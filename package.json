@@ -2,6 +2,7 @@
   "name": "loramapr-backend",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "NestJS backend",
   "main": "dist/main.js",
   "scripts": {

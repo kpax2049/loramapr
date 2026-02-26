@@ -309,6 +309,12 @@ curl -i "http://localhost:${PORT}/healthz"
 curl -i "http://localhost:${PORT}/readyz"
 ```
 
+## License
+
+License: AGPL-3.0
+
+This project is licensed under the GNU Affero General Public License v3.0. See `LICENSE`.
+
 ## Contributor note
 
 - Use `prisma migrate dev` only when changing schema; otherwise use `prisma migrate deploy` (the default in Docker).
