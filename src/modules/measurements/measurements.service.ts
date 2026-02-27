@@ -56,6 +56,7 @@ export type MeasurementQueryParams = {
   gatewayId?: string;
   rxGatewayId?: string;
   includeRx?: boolean;
+  sessionBoundOnly?: boolean;
   sample?: number;
   limit: number;
   ownerId?: string;
@@ -298,6 +299,8 @@ export class MeasurementsService {
     }
     if (params.sessionId) {
       where.sessionId = params.sessionId;
+    } else if (params.sessionBoundOnly) {
+      where.sessionId = { not: null };
     }
     if (params.ownerId) {
       // TODO: confirm owner scoping logic (device owner vs session owner) once auth exists.

@@ -58,6 +58,7 @@ type MeasurementKeyParams = {
   receiverId: string | null;
   rxGatewayId: string | null;
   includeRx: boolean;
+  sessionBoundOnly: boolean;
   sample: number | null;
   limit: number | null;
   filterMode: 'time' | 'session' | null;
@@ -112,6 +113,7 @@ function normalizeMeasurementParams(
     receiverId: params.receiverId ?? null,
     rxGatewayId: params.rxGatewayId ?? null,
     includeRx: Boolean(params.includeRx),
+    sessionBoundOnly: Boolean(params.sessionBoundOnly),
     sample: typeof params.sample === 'number' ? params.sample : null,
     limit: typeof params.limit === 'number' ? params.limit : null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')

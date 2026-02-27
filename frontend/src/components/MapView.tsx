@@ -669,16 +669,54 @@ ref
     });
 
     const heatPoints = bins.flatMap((bin) => {
-      const intensity = bucketIntensity(bin.bucket);
-      if (intensity <= 0) {
+      const baseIntensity = bucketIntensity(bin.bucket);
+      if (baseIntensity <= 0) {
         return [];
       }
-      const centerLat = bin.bounds[0][0] + coverageBinSize / 2;
-      const centerLon = bin.bounds[0][1] + coverageBinSize / 2;
-      if (!Number.isFinite(centerLat) || !Number.isFinite(centerLon)) {
-        return [];
-      }
-      return [[centerLat, centerLon, intensity] as [number, number, number]];
+
+      const minLat = bin.bounds[0][0];
+      const minLon = bin.bounds[0][1];
+      const maxLat = bin.bounds[1][0];
+      const maxLon = bin.bounds[1][1];
+      const latSpan = maxLat - minLat;
+      const lonSpan = maxLon - minLon;
+
+      // Add a denser kernel with slight deterministic jitter so high-zoom heat
+      // doesn't resolve into rigid square cells.
+      const rawSeedA = Math.sin(bin.latBin * 12.9898 + bin.lonBin * 78.233) * 43758.5453;
+      const rawSeedB = Math.sin(bin.latBin * 39.3468 + bin.lonBin * 11.135) * 12741.1721;
+      const jitterLat = ((rawSeedA - Math.floor(rawSeedA)) - 0.5) * 0.14;
+      const jitterLon = ((rawSeedB - Math.floor(rawSeedB)) - 0.5) * 0.14;
+
+      const samples: Array<{ latFactor: number; lonFactor: number; weight: number }> = [
+        { latFactor: 0.5, lonFactor: 0.5, weight: 1 },
+        { latFactor: 0.16, lonFactor: 0.5, weight: 0.8 },
+        { latFactor: 0.84, lonFactor: 0.5, weight: 0.8 },
+        { latFactor: 0.5, lonFactor: 0.16, weight: 0.8 },
+        { latFactor: 0.5, lonFactor: 0.84, weight: 0.8 },
+        { latFactor: 0.22, lonFactor: 0.22, weight: 0.62 },
+        { latFactor: 0.22, lonFactor: 0.78, weight: 0.62 },
+        { latFactor: 0.78, lonFactor: 0.22, weight: 0.62 },
+        { latFactor: 0.78, lonFactor: 0.78, weight: 0.62 },
+        { latFactor: -0.08, lonFactor: 0.5, weight: 0.34 },
+        { latFactor: 1.08, lonFactor: 0.5, weight: 0.34 },
+        { latFactor: 0.5, lonFactor: -0.08, weight: 0.34 },
+        { latFactor: 0.5, lonFactor: 1.08, weight: 0.34 },
+        { latFactor: 0.5, lonFactor: 0.32, weight: 0.66 },
+        { latFactor: 0.5, lonFactor: 0.68, weight: 0.66 },
+        { latFactor: 0.32, lonFactor: 0.5, weight: 0.66 },
+        { latFactor: 0.68, lonFactor: 0.5, weight: 0.66 }
+      ];
+
+      return samples.flatMap(({ latFactor, lonFactor, weight }) => {
+        const lat = minLat + latSpan * (latFactor + jitterLat);
+        const lon = minLon + lonSpan * (lonFactor + jitterLon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return [];
+        }
+        const intensity = Math.min(1, baseIntensity * weight);
+        return [[lat, lon, intensity] as [number, number, number]];
+      });
     });
 
     return { bins, heatPoints };
@@ -929,7 +967,7 @@ ref
 
           return (
             <Rectangle
-              key={`${bin.latBin}-${bin.lonBin}`}
+              key={`${bin.latBin}-${bin.lonBin}-${bin.gatewayId ?? 'all'}`}
               bounds={bin.bounds}
               pathOptions={{
                 color: bin.bucketColor,

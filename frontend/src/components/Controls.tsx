@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type {
   AutoSessionConfig,
   DeviceLatest,
+  Session,
   DeviceTelemetrySample,
   SessionStats,
   UnifiedEventListItem
@@ -84,6 +85,11 @@ type ControlsProps = {
   onCenterOnLatestLocation: (point: [number, number]) => void;
   mapLayerMode: 'points' | 'coverage';
   onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
+  coverageScope: 'device' | 'session';
+  onCoverageScopeChange: (scope: 'device' | 'session') => void;
+  selectedCoverageSessionId: string | null;
+  onSelectedCoverageSessionIdChange: (sessionId: string | null) => void;
+  coverageSessionOptions: Session[];
   coverageVisualizationMode: 'bins' | 'heatmap';
   onCoverageVisualizationModeChange: (mode: 'bins' | 'heatmap') => void;
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
@@ -144,6 +150,11 @@ export default function Controls({
   onCenterOnLatestLocation,
   mapLayerMode,
   onMapLayerModeChange,
+  coverageScope,
+  onCoverageScopeChange,
+  selectedCoverageSessionId,
+  onSelectedCoverageSessionIdChange,
+  coverageSessionOptions,
   coverageVisualizationMode,
   onCoverageVisualizationModeChange,
   coverageMetric,
@@ -400,6 +411,8 @@ export default function Controls({
   const showCoverageTab = activeTab === 'coverage';
   const showDebugTab = activeTab === 'debug';
   const isPlaybackMode = viewMode === 'playback';
+  const mostRecentCoverageSession = coverageSessionOptions[0] ?? null;
+  const effectiveCoverageSessionId = selectedCoverageSessionId ?? mostRecentCoverageSession?.id ?? null;
   const selectedReceiver =
     receiverOptions.find((receiver) => receiver.id === selectedReceiverId) ?? null;
   const debugProbeEnabled = showDebugTab && hasQueryApiKey;
@@ -1263,6 +1276,76 @@ export default function Controls({
       {showCoverageTab && mapLayerMode === 'coverage' ? (
         <div className="controls__group" data-tour="coverage-metric">
           <span className="controls__label">Coverage</span>
+          <span className="controls__sub-label">Scope</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="Coverage scope">
+            <label
+              className={`controls__segment ${coverageScope === 'device' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="coverage-scope"
+                value="device"
+                checked={coverageScope === 'device'}
+                onChange={() => {
+                  onCoverageScopeChange('device');
+                  onSelectedCoverageSessionIdChange(null);
+                }}
+              />
+              Device
+            </label>
+            <label
+              className={`controls__segment ${coverageScope === 'session' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="coverage-scope"
+                value="session"
+                checked={coverageScope === 'session'}
+                onChange={() => {
+                  onCoverageScopeChange('session');
+                  onSelectedCoverageSessionIdChange(
+                    selectedCoverageSessionId ?? mostRecentCoverageSession?.id ?? null
+                  );
+                }}
+              />
+              Session
+            </label>
+          </div>
+          {coverageScope === 'session' ? (
+            <>
+              <label htmlFor="coverage-session-select">Session</label>
+              <select
+                id="coverage-session-select"
+                value={effectiveCoverageSessionId ?? ''}
+                onChange={(event) => {
+                  const nextId = event.target.value || null;
+                  onCoverageScopeChange('session');
+                  onSelectedCoverageSessionIdChange(nextId);
+                }}
+                disabled={coverageSessionOptions.length === 0}
+              >
+                {coverageSessionOptions.length === 0 ? (
+                  <option value="">No sessions available</option>
+                ) : null}
+                {coverageSessionOptions.map((session) => (
+                  <option key={`coverage-session-${session.id}`} value={session.id}>
+                    {formatCoverageSessionOption(session)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="controls__inline-link"
+                onClick={() => {
+                  onCoverageScopeChange('device');
+                  onSelectedCoverageSessionIdChange(null);
+                }}
+              >
+                Back to all sessions
+              </button>
+            </>
+          ) : null}
+          <span className="controls__sub-label">Visualization</span>
           <div
             className="controls__segmented"
             role="radiogroup"
@@ -1819,6 +1902,16 @@ function sanitizeIconPickerValue(
   fallback: DeviceIconKey
 ): DeviceIconKey {
   return isDeviceIconPickerValue(value) ? value : fallback;
+}
+
+function formatCoverageSessionOption(session: Session): string {
+  const name = session.name?.trim();
+  const label = name && name.length > 0 ? name : `Session ${session.id.slice(0, 8)}`;
+  const startedAt = new Date(session.startedAt);
+  const startedLabel = Number.isNaN(startedAt.getTime())
+    ? session.startedAt
+    : startedAt.toLocaleString();
+  return `${label} (${startedLabel})`;
 }
 
 function formatRelativeTime(value: string): string {

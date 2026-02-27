@@ -14,6 +14,7 @@ export type TrackQueryParams = {
   };
   gatewayId?: string;
   rxGatewayId?: string;
+  sessionBoundOnly?: boolean;
   sample?: number;
   limit: number;
   ownerId?: string;
@@ -42,6 +43,8 @@ export class TracksService {
     }
     if (params.sessionId) {
       where.sessionId = params.sessionId;
+    } else if (params.sessionBoundOnly) {
+      where.sessionId = { not: null };
     }
     if (params.from || params.to) {
       const capturedAt: Record<string, Date> = {};

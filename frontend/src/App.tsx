@@ -81,6 +81,7 @@ const DevDeviceIconGallery = import.meta.env.DEV
   : null;
 
 type SidebarTab = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
+type CoverageScope = 'device' | 'session';
 type ThemeMode = 'system' | 'light' | 'dark';
 type EffectiveTheme = 'light' | 'dark';
 
@@ -508,6 +509,108 @@ function buildCoverageFitTarget(
   return { points, bounds: buildBoundsFromPoints(points) };
 }
 
+type CoverageBinMergeAccumulator = {
+  latBin: number;
+  lonBin: number;
+  gatewayId: string | null;
+  count: number;
+  rssiMin: number | null;
+  rssiMax: number | null;
+  snrMin: number | null;
+  snrMax: number | null;
+  rssiAvgWeightedSum: number;
+  rssiAvgWeight: number;
+  snrAvgWeightedSum: number;
+  snrAvgWeight: number;
+};
+
+function mergeNullableMin(current: number | null, value: number | null): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return current;
+  }
+  if (typeof current !== 'number' || !Number.isFinite(current)) {
+    return value;
+  }
+  return Math.min(current, value);
+}
+
+function mergeNullableMax(current: number | null, value: number | null): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return current;
+  }
+  if (typeof current !== 'number' || !Number.isFinite(current)) {
+    return value;
+  }
+  return Math.max(current, value);
+}
+
+function toCoverageMergeKey(bin: Pick<CoverageBin, 'latBin' | 'lonBin' | 'gatewayId'>): string {
+  return `${bin.latBin}:${bin.lonBin}:${bin.gatewayId ?? 'all'}`;
+}
+
+function mergeCoverageBinsByGateway(bins: CoverageBin[] | undefined): CoverageBin[] {
+  if (!bins || bins.length === 0) {
+    return [];
+  }
+
+  const merged = new Map<string, CoverageBinMergeAccumulator>();
+  for (const bin of bins) {
+    if (!Number.isFinite(bin.latBin) || !Number.isFinite(bin.lonBin)) {
+      continue;
+    }
+
+    const key = toCoverageMergeKey(bin);
+    const existing = merged.get(key);
+    const accumulator: CoverageBinMergeAccumulator =
+      existing ?? {
+        latBin: bin.latBin,
+        lonBin: bin.lonBin,
+        gatewayId: bin.gatewayId ?? null,
+        count: 0,
+        rssiMin: null,
+        rssiMax: null,
+        snrMin: null,
+        snrMax: null,
+        rssiAvgWeightedSum: 0,
+        rssiAvgWeight: 0,
+        snrAvgWeightedSum: 0,
+        snrAvgWeight: 0
+      };
+
+    const countValue =
+      typeof bin.count === 'number' && Number.isFinite(bin.count) ? Math.max(0, bin.count) : 0;
+    accumulator.count += countValue;
+    accumulator.rssiMin = mergeNullableMin(accumulator.rssiMin, bin.rssiMin);
+    accumulator.rssiMax = mergeNullableMax(accumulator.rssiMax, bin.rssiMax);
+    accumulator.snrMin = mergeNullableMin(accumulator.snrMin, bin.snrMin);
+    accumulator.snrMax = mergeNullableMax(accumulator.snrMax, bin.snrMax);
+
+    if (typeof bin.rssiAvg === 'number' && Number.isFinite(bin.rssiAvg) && countValue > 0) {
+      accumulator.rssiAvgWeightedSum += bin.rssiAvg * countValue;
+      accumulator.rssiAvgWeight += countValue;
+    }
+    if (typeof bin.snrAvg === 'number' && Number.isFinite(bin.snrAvg) && countValue > 0) {
+      accumulator.snrAvgWeightedSum += bin.snrAvg * countValue;
+      accumulator.snrAvgWeight += countValue;
+    }
+
+    merged.set(key, accumulator);
+  }
+
+  return Array.from(merged.values()).map((bin) => ({
+    latBin: bin.latBin,
+    lonBin: bin.lonBin,
+    gatewayId: bin.gatewayId,
+    count: bin.count,
+    rssiMin: bin.rssiMin,
+    rssiMax: bin.rssiMax,
+    snrMin: bin.snrMin,
+    snrMax: bin.snrMax,
+    rssiAvg: bin.rssiAvgWeight > 0 ? bin.rssiAvgWeightedSum / bin.rssiAvgWeight : null,
+    snrAvg: bin.snrAvgWeight > 0 ? bin.snrAvgWeightedSum / bin.snrAvgWeight : null
+  }));
+}
+
 function readInitialQueryState(): InitialQueryState {
   if (typeof window === 'undefined') {
     return {
@@ -580,6 +683,9 @@ function App() {
   const playbackCursorRef = useRef(0);
   const selectedSessionChangedAtRef = useRef(0);
   const playbackSessionChangedAtRef = useRef(0);
+  const previousDeviceIdRef = useRef<string | null>(initial.deviceId);
+  const previousCoverageMapLayerRef = useRef<'points' | 'coverage'>('points');
+  const previousFocusedCoverageSessionIdRef = useRef<string | null>(null);
 
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
@@ -609,6 +715,8 @@ function App() {
   const [playbackLastGoodItems, setPlaybackLastGoodItems] = useState<SessionWindowPoint[]>([]);
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
   const [coverageVisualizationMode, setCoverageVisualizationMode] = useState<'bins' | 'heatmap'>('bins');
+  const [coverageScope, setCoverageScope] = useState<CoverageScope>('device');
+  const [selectedCoverageSessionId, setSelectedCoverageSessionId] = useState<string | null>(null);
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() => readInitialSidebarTab());
   const sidebarTabRef = useRef<SidebarTab>(sidebarTab);
@@ -1027,6 +1135,13 @@ function App() {
 
   const isSessionMode = filterMode === 'session';
   const isPlaybackMode = viewMode === 'playback';
+  const focusedCoverageSessionId = isPlaybackMode
+    ? playbackSessionId
+    : isSessionMode
+      ? selectedSessionId
+      : null;
+  const effectiveCoverageSessionId =
+    coverageScope === 'session' ? selectedCoverageSessionId : null;
   const hasPlaybackSession = Boolean(playbackSessionId);
   const isMeshtasticSource = receiverSource === 'meshtastic';
 
@@ -1034,19 +1149,20 @@ function App() {
     enabled: Boolean(playbackSessionId)
   });
   const sessionPickerQuery = useSessions(deviceId ?? undefined, { enabled: Boolean(deviceId) });
-  const selectedSessionSummary = useMemo(
-    () =>
-      selectedSessionId
-        ? (sessionPickerQuery.data?.items ?? []).find((session) => session.id === selectedSessionId) ?? null
-        : null,
-    [sessionPickerQuery.data?.items, selectedSessionId]
-  );
+  const coverageSessionOptions = sessionPickerQuery.data?.items ?? [];
   const playbackSessionSummary = useMemo(
     () =>
       playbackSessionId
         ? (sessionPickerQuery.data?.items ?? []).find((session) => session.id === playbackSessionId) ?? null
         : null,
     [sessionPickerQuery.data?.items, playbackSessionId]
+  );
+  const selectedCoverageSessionSummary = useMemo(
+    () =>
+      effectiveCoverageSessionId
+        ? coverageSessionOptions.find((session) => session.id === effectiveCoverageSessionId) ?? null
+        : null,
+    [coverageSessionOptions, effectiveCoverageSessionId]
   );
   const nonArchivedSessionIds = useMemo(
     () => new Set((sessionPickerQuery.data?.items ?? []).map((session) => session.id)),
@@ -1112,77 +1228,6 @@ function App() {
     return { sample, limit };
   }, [currentZoom, playbackWindowMs]);
 
-  const exploreMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
-    const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
-    const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
-    if (isSessionMode) {
-      return {
-        sessionId: selectedSessionId ?? undefined,
-        bbox: bboxPayload,
-        receiverId,
-        rxGatewayId,
-        sample: effectiveSample,
-        limit: effectiveLimit
-      };
-    }
-    return {
-      deviceId: deviceId ?? undefined,
-      from: exploreRange.from,
-      to: exploreRange.to,
-      bbox: bboxPayload,
-      receiverId,
-      rxGatewayId,
-      sample: effectiveSample,
-      limit: effectiveLimit
-    };
-  }, [
-    isSessionMode,
-    selectedSessionId,
-    bboxPayload,
-    deviceId,
-    exploreRange.from,
-    exploreRange.to,
-    selectedGatewayId,
-    selectedReceiverId,
-    isMeshtasticSource,
-    effectiveSample,
-    effectiveLimit
-  ]);
-
-  const exploreTrackParams = useMemo<MeasurementQueryParams>(() => {
-    const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
-    const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
-    if (isSessionMode) {
-      return {
-        sessionId: selectedSessionId ?? undefined,
-        receiverId,
-        rxGatewayId,
-        sample: effectiveSample,
-        limit: effectiveLimit
-      };
-    }
-    return {
-      deviceId: deviceId ?? undefined,
-      from: exploreRange.from,
-      to: exploreRange.to,
-      receiverId,
-      rxGatewayId,
-      sample: effectiveSample,
-      limit: effectiveLimit
-    };
-  }, [
-    isSessionMode,
-    selectedSessionId,
-    deviceId,
-    exploreRange.from,
-    exploreRange.to,
-    selectedGatewayId,
-    selectedReceiverId,
-    isMeshtasticSource,
-    effectiveSample,
-    effectiveLimit
-  ]);
-
   const playbackWindowParams = useMemo(
     () => ({
       sessionId: playbackSessionId ?? '',
@@ -1203,22 +1248,117 @@ function App() {
   );
 
   const exploreEnabled = viewMode !== 'playback';
+  const isCoverageExploreMode = exploreEnabled && mapLayerMode === 'coverage';
+  const scopedExploreSessionId =
+    isCoverageExploreMode
+      ? coverageScope === 'session'
+        ? effectiveCoverageSessionId
+        : null
+      : isSessionMode
+        ? selectedSessionId
+        : null;
+  const scopedExploreDeviceId =
+    isCoverageExploreMode && coverageScope === 'device'
+      ? deviceId
+      : !isCoverageExploreMode && !isSessionMode
+        ? deviceId
+        : null;
+  const scopedExploreFrom =
+    isCoverageExploreMode && coverageScope === 'device' ? undefined : exploreRange.from;
+  const scopedExploreTo =
+    isCoverageExploreMode && coverageScope === 'device' ? undefined : exploreRange.to;
+  const exploreScopeEnabled = Boolean(scopedExploreSessionId || scopedExploreDeviceId);
+  const exploreQueryFilterMode: 'time' | 'session' = scopedExploreSessionId ? 'session' : 'time';
+  const sessionBoundOnlyForCoverageDevice = isCoverageExploreMode && coverageScope === 'device';
   const playbackEnabled = isPlaybackMode && hasPlaybackSession;
-  const sessionPolling = exploreEnabled && isSessionMode ? 2000 : false;
+  const sessionPolling = exploreEnabled && Boolean(scopedExploreSessionId) ? 2000 : false;
+  const effectiveExploreMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
+    const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
+    const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
+    if (scopedExploreSessionId) {
+      return {
+        sessionId: scopedExploreSessionId,
+        bbox: bboxPayload,
+        receiverId,
+        rxGatewayId,
+        sessionBoundOnly: sessionBoundOnlyForCoverageDevice,
+        sample: effectiveSample,
+        limit: effectiveLimit
+      };
+    }
+    return {
+      deviceId: scopedExploreDeviceId ?? undefined,
+      from: scopedExploreFrom,
+      to: scopedExploreTo,
+      bbox: bboxPayload,
+      receiverId,
+      rxGatewayId,
+      sessionBoundOnly: sessionBoundOnlyForCoverageDevice,
+      sample: effectiveSample,
+      limit: effectiveLimit
+    };
+  }, [
+    scopedExploreSessionId,
+    scopedExploreDeviceId,
+    scopedExploreFrom,
+    scopedExploreTo,
+    bboxPayload,
+    selectedGatewayId,
+    selectedReceiverId,
+    isMeshtasticSource,
+    sessionBoundOnlyForCoverageDevice,
+    effectiveSample,
+    effectiveLimit
+  ]);
+  const effectiveExploreTrackParams = useMemo<MeasurementQueryParams>(() => {
+    const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
+    const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
+    if (scopedExploreSessionId) {
+      return {
+        sessionId: scopedExploreSessionId,
+        receiverId,
+        rxGatewayId,
+        sessionBoundOnly: sessionBoundOnlyForCoverageDevice,
+        sample: effectiveSample,
+        limit: effectiveLimit
+      };
+    }
+    return {
+      deviceId: scopedExploreDeviceId ?? undefined,
+      from: scopedExploreFrom,
+      to: scopedExploreTo,
+      receiverId,
+      rxGatewayId,
+      sessionBoundOnly: sessionBoundOnlyForCoverageDevice,
+      sample: effectiveSample,
+      limit: effectiveLimit
+    };
+  }, [
+    scopedExploreSessionId,
+    scopedExploreDeviceId,
+    scopedExploreFrom,
+    scopedExploreTo,
+    selectedGatewayId,
+    selectedReceiverId,
+    isMeshtasticSource,
+    sessionBoundOnlyForCoverageDevice,
+    effectiveSample,
+    effectiveLimit
+  ]);
 
   const exploreMeasurementsQuery = useMeasurements(
-    exploreMeasurementsParams,
+    effectiveExploreMeasurementsParams,
     {
-      enabled: exploreEnabled && (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+      enabled: exploreEnabled && exploreScopeEnabled
     },
-    { filterMode, refetchIntervalMs: sessionPolling }
+    { filterMode: exploreQueryFilterMode, refetchIntervalMs: sessionPolling }
   );
   const exploreTrackQuery = useTrack(
-    exploreTrackParams,
+    effectiveExploreTrackParams,
     {
-      enabled: exploreEnabled && (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+      enabled: exploreEnabled && exploreScopeEnabled
     },
-    { filterMode, refetchIntervalMs: sessionPolling }
+    { filterMode: exploreQueryFilterMode, refetchIntervalMs: sessionPolling }
   );
   const playbackWindowQuery = useSessionWindow(playbackWindowParams, {
     enabled: playbackEnabled,
@@ -1541,6 +1681,16 @@ function App() {
     return latest;
   }, [activeMeasurements]);
   const coverageDay = useMemo(() => {
+    if (coverageScope === 'session') {
+      return (
+        toUtcDayIso(selectedCoverageSessionSummary?.endedAt) ??
+        toUtcDayIso(selectedCoverageSessionSummary?.startedAt) ??
+        (isPlaybackMode && Number.isFinite(playbackCursorMs)
+          ? toUtcDayIso(playbackCursorMs)
+          : null) ??
+        toUtcDayIso(latestActiveMeasurementMs)
+      );
+    }
     if (isPlaybackMode) {
       if (Number.isFinite(playbackCursorMs)) {
         return toUtcDayIso(playbackCursorMs);
@@ -1554,19 +1704,15 @@ function App() {
         toUtcDayIso(latestActiveMeasurementMs)
       );
     }
-    if (isSessionMode) {
-      return (
-        toUtcDayIso(selectedSessionSummary?.endedAt) ??
-        toUtcDayIso(selectedSessionSummary?.startedAt) ??
-        toUtcDayIso(latestActiveMeasurementMs)
-      );
-    }
     return (
       toUtcDayIso(exploreRange.to) ??
       toUtcDayIso(exploreRange.from) ??
       toUtcDayIso(latestActiveMeasurementMs)
     );
   }, [
+    coverageScope,
+    selectedCoverageSessionSummary?.endedAt,
+    selectedCoverageSessionSummary?.startedAt,
     isPlaybackMode,
     playbackCursorMs,
     playbackTimelineQuery.data?.maxCapturedAt,
@@ -1575,9 +1721,6 @@ function App() {
     playbackSessionSummary?.endedAt,
     playbackSessionSummary?.startedAt,
     latestActiveMeasurementMs,
-    isSessionMode,
-    selectedSessionSummary?.endedAt,
-    selectedSessionSummary?.startedAt,
     exploreRange.to,
     exploreRange.from
   ]);
@@ -1598,19 +1741,12 @@ function App() {
   const statsQuery = useStats(statsParams, {
     enabled: isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)
   });
+  const coverageFilterMode: 'time' | 'session' = coverageScope === 'session' ? 'session' : 'time';
   const coverageParams = useMemo<CoverageQueryParams>(() => {
     const gatewayId = receiverSource === 'lorawan' ? selectedGatewayId ?? undefined : undefined;
-    if (isPlaybackMode) {
+    if (coverageScope === 'session') {
       return {
-        sessionId: playbackSessionId ?? undefined,
-        day: coverageDay,
-        bbox: debouncedBbox ?? undefined,
-        gatewayId
-      };
-    }
-    if (isSessionMode) {
-      return {
-        sessionId: selectedSessionId ?? undefined,
+        sessionId: effectiveCoverageSessionId ?? undefined,
         day: coverageDay,
         bbox: debouncedBbox ?? undefined,
         gatewayId
@@ -1623,10 +1759,8 @@ function App() {
       gatewayId
     };
   }, [
-    isPlaybackMode,
-    playbackSessionId,
-    isSessionMode,
-    selectedSessionId,
+    coverageScope,
+    effectiveCoverageSessionId,
     coverageDay,
     debouncedBbox,
     deviceId,
@@ -1639,20 +1773,24 @@ function App() {
       enabled:
         mapLayerMode === 'coverage' &&
         Boolean(bboxPayload) &&
-        (isPlaybackMode
-          ? Boolean(playbackSessionId)
-          : isSessionMode
-            ? Boolean(selectedSessionId)
-            : Boolean(deviceId))
+        (coverageScope === 'session'
+          ? Boolean(effectiveCoverageSessionId)
+          : Boolean(deviceId))
     },
-    { filterMode }
+    { filterMode: coverageFilterMode }
+  );
+  const coverageBins = useMemo(
+    () =>
+      coverageScope === 'device'
+        ? mergeCoverageBinsByGateway(coverageQuery.data?.items)
+        : (coverageQuery.data?.items ?? []),
+    [coverageScope, coverageQuery.data?.items]
   );
   const renderedPointCount =
     effectiveMapLayerMode === 'points'
       ? (showPoints ? mapMeasurements.length : 0) + mapCompareMeasurements.length
       : 0;
-  const renderedBinCount =
-    effectiveMapLayerMode === 'coverage' ? coverageQuery.data?.items.length ?? 0 : 0;
+  const renderedBinCount = effectiveMapLayerMode === 'coverage' ? coverageBins.length : 0;
 
   useEffect(() => {
     if (!isPlaybackMode || !hasPlaybackSession || playbackMinMs === null || playbackMaxMs === null) {
@@ -2070,8 +2208,75 @@ function App() {
   }, [playbackSessionId]);
 
   useEffect(() => {
+    if (previousDeviceIdRef.current === deviceId) {
+      return;
+    }
+    previousDeviceIdRef.current = deviceId;
     setSelectedSessionId(null);
-  }, [deviceId]);
+    setPlaybackSessionId(null);
+    setPlaybackIsPlaying(false);
+    if (viewMode === 'playback') {
+      setViewMode('explore');
+    }
+    if (filterMode === 'session') {
+      setFilterMode('time');
+    }
+    setCoverageScope('device');
+    setSelectedCoverageSessionId(null);
+    previousFocusedCoverageSessionIdRef.current = null;
+  }, [deviceId, filterMode, viewMode]);
+
+  useEffect(() => {
+    if (coverageScope !== 'session') {
+      return;
+    }
+    if (coverageSessionOptions.length === 0) {
+      if (selectedCoverageSessionId !== null) {
+        setSelectedCoverageSessionId(null);
+      }
+      return;
+    }
+    if (
+      selectedCoverageSessionId &&
+      coverageSessionOptions.some((session) => session.id === selectedCoverageSessionId)
+    ) {
+      return;
+    }
+    setSelectedCoverageSessionId(coverageSessionOptions[0].id);
+  }, [coverageScope, coverageSessionOptions, selectedCoverageSessionId]);
+
+  useEffect(() => {
+    const previousLayer = previousCoverageMapLayerRef.current;
+    previousCoverageMapLayerRef.current = mapLayerMode;
+    if (previousLayer === mapLayerMode || mapLayerMode !== 'coverage') {
+      return;
+    }
+    if (focusedCoverageSessionId) {
+      setCoverageScope('session');
+      setSelectedCoverageSessionId(focusedCoverageSessionId);
+      previousFocusedCoverageSessionIdRef.current = focusedCoverageSessionId;
+      return;
+    }
+    setCoverageScope('device');
+    setSelectedCoverageSessionId(null);
+  }, [mapLayerMode, focusedCoverageSessionId]);
+
+  useEffect(() => {
+    if (previousFocusedCoverageSessionIdRef.current === focusedCoverageSessionId) {
+      return;
+    }
+    previousFocusedCoverageSessionIdRef.current = focusedCoverageSessionId;
+    if (mapLayerMode !== 'coverage') {
+      return;
+    }
+    if (focusedCoverageSessionId) {
+      setCoverageScope('session');
+      setSelectedCoverageSessionId(focusedCoverageSessionId);
+      return;
+    }
+    setCoverageScope('device');
+    setSelectedCoverageSessionId(null);
+  }, [focusedCoverageSessionId, mapLayerMode]);
 
   useEffect(() => {
     if (
@@ -2132,6 +2337,16 @@ function App() {
   }, [deviceId, selectedSessionId]);
 
   useEffect(() => {
+    if (mapLayerMode !== 'coverage') {
+      return;
+    }
+    setUserInteractedWithMap(false);
+    hasAutoFitRef.current = false;
+    setBbox(null);
+    setDebouncedBbox(null);
+  }, [mapLayerMode, coverageScope, effectiveCoverageSessionId]);
+
+  useEffect(() => {
     setSelectedGatewayId(null);
     setCompareGatewayId(null);
     setSelectedReceiverId(null);
@@ -2174,7 +2389,7 @@ function App() {
 
     const coverageTarget =
       mapLayerMode === 'coverage'
-        ? buildCoverageFitTarget(coverageQuery.data?.items, coverageQuery.data?.binSizeDeg)
+        ? buildCoverageFitTarget(coverageBins, coverageQuery.data?.binSizeDeg)
         : { points: [] as LatLonPoint[], bounds: null as LatLonBounds | null };
 
     const measurementPoints: LatLonPoint[] = [
@@ -2312,23 +2527,23 @@ function App() {
         const normalizeTime = (value?: string | Date) =>
           value ? (value instanceof Date ? value.toISOString() : value) : null;
         const measurementsKey = {
-          deviceId: exploreMeasurementsParams.deviceId ?? null,
-          sessionId: exploreMeasurementsParams.sessionId ?? null,
-          from: normalizeTime(exploreMeasurementsParams.from),
-          to: normalizeTime(exploreMeasurementsParams.to),
+          deviceId: effectiveExploreMeasurementsParams.deviceId ?? null,
+          sessionId: effectiveExploreMeasurementsParams.sessionId ?? null,
+          from: normalizeTime(effectiveExploreMeasurementsParams.from),
+          to: normalizeTime(effectiveExploreMeasurementsParams.to),
           bbox: bboxKey,
-          gatewayId: exploreMeasurementsParams.gatewayId ?? null,
-          receiverId: exploreMeasurementsParams.receiverId ?? null,
-          rxGatewayId: exploreMeasurementsParams.rxGatewayId ?? null,
+          gatewayId: effectiveExploreMeasurementsParams.gatewayId ?? null,
+          receiverId: effectiveExploreMeasurementsParams.receiverId ?? null,
+          rxGatewayId: effectiveExploreMeasurementsParams.rxGatewayId ?? null,
           sample:
-            typeof exploreMeasurementsParams.sample === 'number'
-              ? exploreMeasurementsParams.sample
+            typeof effectiveExploreMeasurementsParams.sample === 'number'
+              ? effectiveExploreMeasurementsParams.sample
               : null,
           limit:
-            typeof exploreMeasurementsParams.limit === 'number'
-              ? exploreMeasurementsParams.limit
+            typeof effectiveExploreMeasurementsParams.limit === 'number'
+              ? effectiveExploreMeasurementsParams.limit
               : null,
-          filterMode
+          filterMode: exploreQueryFilterMode
         };
         const compareKey =
           compareId && (compareMeasurementsParams.rxGatewayId || compareMeasurementsParams.receiverId)
@@ -2353,18 +2568,23 @@ function App() {
               }
             : null;
         const trackKey = {
-          deviceId: exploreTrackParams.deviceId ?? null,
-          sessionId: exploreTrackParams.sessionId ?? null,
-          from: normalizeTime(exploreTrackParams.from),
-          to: normalizeTime(exploreTrackParams.to),
+          deviceId: effectiveExploreTrackParams.deviceId ?? null,
+          sessionId: effectiveExploreTrackParams.sessionId ?? null,
+          from: normalizeTime(effectiveExploreTrackParams.from),
+          to: normalizeTime(effectiveExploreTrackParams.to),
           bbox: null,
-          gatewayId: exploreTrackParams.gatewayId ?? null,
-          receiverId: exploreTrackParams.receiverId ?? null,
-          rxGatewayId: exploreTrackParams.rxGatewayId ?? null,
+          gatewayId: effectiveExploreTrackParams.gatewayId ?? null,
+          receiverId: effectiveExploreTrackParams.receiverId ?? null,
+          rxGatewayId: effectiveExploreTrackParams.rxGatewayId ?? null,
           sample:
-            typeof exploreTrackParams.sample === 'number' ? exploreTrackParams.sample : null,
-          limit: typeof exploreTrackParams.limit === 'number' ? exploreTrackParams.limit : null,
-          filterMode
+            typeof effectiveExploreTrackParams.sample === 'number'
+              ? effectiveExploreTrackParams.sample
+              : null,
+          limit:
+            typeof effectiveExploreTrackParams.limit === 'number'
+              ? effectiveExploreTrackParams.limit
+              : null,
+          filterMode: exploreQueryFilterMode
         };
 
         queryClient.invalidateQueries({ queryKey: ['measurements', measurementsKey] });
@@ -2379,10 +2599,11 @@ function App() {
   }, [
     deviceId,
     latestDeviceQuery.data?.latestMeasurementAt,
-    exploreMeasurementsParams,
+    effectiveExploreMeasurementsParams,
     compareMeasurementsParams,
     compareId,
-    exploreTrackParams,
+    effectiveExploreTrackParams,
+    exploreQueryFilterMode,
     bboxPayload,
     filterMode,
     viewMode,
@@ -2651,6 +2872,11 @@ function App() {
       onCenterOnLatestLocation={handleCenterOnLatestLocation}
       mapLayerMode={mapLayerMode}
       onMapLayerModeChange={setMapLayerMode}
+      coverageScope={coverageScope}
+      onCoverageScopeChange={setCoverageScope}
+      selectedCoverageSessionId={selectedCoverageSessionId}
+      onSelectedCoverageSessionIdChange={setSelectedCoverageSessionId}
+      coverageSessionOptions={coverageSessionOptions}
       coverageVisualizationMode={coverageVisualizationMode}
       onCoverageVisualizationModeChange={setCoverageVisualizationMode}
       coverageMetric={coverageMetric}
@@ -2708,7 +2934,7 @@ function App() {
           compareMeasurements={mapCompareMeasurements}
           track={mapTrackPoints}
           overviewTrack={isPlaybackMode ? mapOverviewTrack : []}
-          coverageBins={coverageQuery.data?.items ?? []}
+          coverageBins={coverageBins}
           coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
           showPoints={showPoints}
           showTrack={showTrack}

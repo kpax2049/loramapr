@@ -34,6 +34,7 @@ describe('CoverageService listBins', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           deviceId: '5bf4376a-e7ca-4884-9558-f8bff5dbe89f',
+          sessionId: { not: null },
           day,
           gatewayId: 'gw-neg',
           latBin: {
@@ -128,5 +129,26 @@ describe('CoverageService listBins', () => {
       [10, 8, 'gw-b'],
       [11, -5, 'gw-z']
     ]);
+  });
+
+  it('does not inject non-null session filter when sessionId is explicitly provided', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const service = new CoverageService({
+      coverageBin: { findMany }
+    } as any);
+
+    await service.listBins({
+      sessionId: '56f46f26-ee3e-4438-aace-be1f9b69de7c',
+      day: new Date('2026-02-27T00:00:00.000Z'),
+      limit: 100
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          sessionId: '56f46f26-ee3e-4438-aace-be1f9b69de7c'
+        })
+      })
+    );
   });
 });

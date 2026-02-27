@@ -49,6 +49,7 @@ export type MeasurementQueryParams = {
   receiverId?: string;
   rxGatewayId?: string;
   includeRx?: boolean;
+  sessionBoundOnly?: boolean;
   sample?: number;
   limit?: number;
 };
@@ -155,6 +156,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   }
   if (params.includeRx) {
     searchParams.set('includeRx', 'true');
+  }
+  if (params.sessionBoundOnly) {
+    searchParams.set('sessionBoundOnly', 'true');
   }
   if (typeof params.sample === 'number') {
     searchParams.set('sample', String(params.sample));

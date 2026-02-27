@@ -54,6 +54,8 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
 
     if (params.deviceId) {
       where.deviceId = params.deviceId;
+      // Device-scope coverage should only include measurements attached to sessions.
+      where.sessionId = { not: null };
     }
     if (params.sessionId) {
       where.sessionId = params.sessionId;
