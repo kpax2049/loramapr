@@ -68,6 +68,7 @@ type CoverageKeyParams = {
   deviceId: string | null;
   sessionId: string | null;
   day: string | null;
+  allDays: boolean;
   bbox: string | null;
   gatewayId: string | null;
   limit: number | null;
@@ -130,6 +131,7 @@ function normalizeCoverageParams(
     deviceId: params.deviceId ?? null,
     sessionId: params.sessionId ?? null,
     day: params.day ?? null,
+    allDays: Boolean(params.allDays),
     bbox,
     gatewayId: params.gatewayId ?? null,
     limit: typeof params.limit === 'number' ? params.limit : null,
@@ -475,6 +477,7 @@ export function useCoverageBins(
       keyParams.deviceId,
       keyParams.sessionId,
       keyParams.day,
+      keyParams.allDays ? 'all-days' : 'single-day',
       keyParams.bbox ?? 'none',
       keyParams.gatewayId ?? 'all',
       keyParams.limit

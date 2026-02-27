@@ -6,6 +6,7 @@ type CoverageQuery = {
   deviceId?: string | string[];
   sessionId?: string | string[];
   day?: string | string[];
+  allDays?: string | string[];
   bbox?: string | string[];
   gatewayId?: string | string[];
   limit?: string | string[];
@@ -30,7 +31,9 @@ export class CoverageController {
       throw new BadRequestException('Provide either deviceId or sessionId, not both');
     }
 
-    const day = parseDay(getSingleValue(query.day, 'day'));
+    const allDaysRaw = getSingleValue(query.allDays, 'allDays');
+    const allDays = parseOptionalBoolean(allDaysRaw, 'allDays') ?? false;
+    const day = allDays ? undefined : parseDay(getSingleValue(query.day, 'day'));
     const bboxValue = getSingleValue(query.bbox, 'bbox');
     const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
     const gatewayId = getSingleValue(query.gatewayId, 'gatewayId');
@@ -48,7 +51,7 @@ export class CoverageController {
 
     return {
       binSizeDeg: BIN_SIZE_DEG,
-      day: day.toISOString(),
+      day: day ? day.toISOString() : 'all',
       items: bins,
       count: bins.length
     };
@@ -77,6 +80,20 @@ function parseDay(value?: string): Date {
     throw new BadRequestException('day must be a valid date');
   }
   return startOfUtcDay(parsed);
+}
+
+function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+  throw new BadRequestException(`${name} must be true or false`);
 }
 
 function parseLimit(value: string | undefined): number {

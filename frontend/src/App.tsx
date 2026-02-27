@@ -1748,13 +1748,14 @@ function App() {
       return {
         sessionId: effectiveCoverageSessionId ?? undefined,
         day: coverageDay,
+        allDays: false,
         bbox: debouncedBbox ?? undefined,
         gatewayId
       };
     }
     return {
       deviceId: deviceId ?? undefined,
-      day: coverageDay,
+      allDays: true,
       bbox: debouncedBbox ?? undefined,
       gatewayId
     };

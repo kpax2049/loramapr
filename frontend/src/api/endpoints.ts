@@ -86,6 +86,7 @@ export type CoverageQueryParams = {
   deviceId?: string;
   sessionId?: string;
   day?: string;
+  allDays?: boolean;
   bbox?: [number, number, number, number];
   gatewayId?: string;
   limit?: number;
@@ -200,6 +201,9 @@ function buildCoverageQuery(params: CoverageQueryParams): string {
   }
   if (params.day) {
     searchParams.set('day', params.day);
+  }
+  if (params.allDays) {
+    searchParams.set('allDays', 'true');
   }
   if (params.bbox) {
     searchParams.set('bbox', params.bbox.join(','));

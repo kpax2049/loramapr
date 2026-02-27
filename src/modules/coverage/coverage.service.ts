@@ -8,7 +8,7 @@ const INTERVAL_MS = 10_000;
 type CoverageQueryParams = {
   deviceId?: string;
   sessionId?: string;
-  day: Date;
+  day?: Date;
   bbox?: {
     minLon: number;
     minLat: number;
@@ -48,9 +48,11 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   async listBins(params: CoverageQueryParams) {
-    const where: Record<string, unknown> = {
-      day: params.day
-    };
+    const where: Record<string, unknown> = {};
+
+    if (params.day) {
+      where.day = params.day;
+    }
 
     if (params.deviceId) {
       where.deviceId = params.deviceId;
