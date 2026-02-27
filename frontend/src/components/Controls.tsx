@@ -84,6 +84,8 @@ type ControlsProps = {
   onCenterOnLatestLocation: (point: [number, number]) => void;
   mapLayerMode: 'points' | 'coverage';
   onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
+  coverageVisualizationMode: 'bins' | 'heatmap';
+  onCoverageVisualizationModeChange: (mode: 'bins' | 'heatmap') => void;
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
   onCoverageMetricChange: (metric: 'count' | 'rssiAvg' | 'snrAvg') => void;
   rangeFrom?: string | Date;
@@ -142,6 +144,8 @@ export default function Controls({
   onCenterOnLatestLocation,
   mapLayerMode,
   onMapLayerModeChange,
+  coverageVisualizationMode,
+  onCoverageVisualizationModeChange,
   coverageMetric,
   onCoverageMetricChange,
   rangeFrom,
@@ -1258,6 +1262,41 @@ export default function Controls({
 
       {showCoverageTab && mapLayerMode === 'coverage' ? (
         <div className="controls__group" data-tour="coverage-metric">
+          <span className="controls__label">Coverage</span>
+          <div
+            className="controls__segmented"
+            role="radiogroup"
+            aria-label="Coverage visualization"
+          >
+            <label
+              className={`controls__segment ${
+                coverageVisualizationMode === 'bins' ? 'is-active' : ''
+              }`}
+            >
+              <input
+                type="radio"
+                name="coverage-visualization"
+                value="bins"
+                checked={coverageVisualizationMode === 'bins'}
+                onChange={() => onCoverageVisualizationModeChange('bins')}
+              />
+              Bins
+            </label>
+            <label
+              className={`controls__segment ${
+                coverageVisualizationMode === 'heatmap' ? 'is-active' : ''
+              }`}
+            >
+              <input
+                type="radio"
+                name="coverage-visualization"
+                value="heatmap"
+                checked={coverageVisualizationMode === 'heatmap'}
+                onChange={() => onCoverageVisualizationModeChange('heatmap')}
+              />
+              Heatmap
+            </label>
+          </div>
           <label htmlFor="coverage-metric">Coverage metric</label>
           <select
             id="coverage-metric"

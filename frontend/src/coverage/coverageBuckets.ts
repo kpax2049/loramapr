@@ -1,5 +1,6 @@
 export type CoverageMetric = 'count' | 'rssiAvg' | 'snrAvg';
 export type CoverageBucket = 'low' | 'med' | 'high' | 'none';
+export type CoverageBucketIntensity = 0 | 0.33 | 0.66 | 1;
 
 const COVERAGE_FALLBACK_COLORS: Record<CoverageMetric | 'none', Record<CoverageBucket, string> | string> = {
   none: '#94a3b8',
@@ -21,6 +22,13 @@ const COVERAGE_FALLBACK_COLORS: Record<CoverageMetric | 'none', Record<CoverageB
     high: '#a78bfa',
     none: '#94a3b8'
   }
+};
+
+const COVERAGE_BUCKET_INTENSITIES: Record<CoverageBucket, CoverageBucketIntensity> = {
+  none: 0,
+  low: 0.33,
+  med: 0.66,
+  high: 1
 };
 
 export function getCoverageBucket(
@@ -107,6 +115,10 @@ export function bucketClass(metric: CoverageMetric, bucket: CoverageBucket): str
   const metricPrefix =
     metric === 'count' ? 'cov-count' : metric === 'rssiAvg' ? 'cov-rssi' : 'cov-snr';
   return `${metricPrefix}-${bucket}`;
+}
+
+export function bucketIntensity(bucket: CoverageBucket): CoverageBucketIntensity {
+  return COVERAGE_BUCKET_INTENSITIES[bucket];
 }
 
 export function bucketColor(metric: CoverageMetric, bucket: CoverageBucket): string {

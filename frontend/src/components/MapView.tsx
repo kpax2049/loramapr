@@ -40,11 +40,13 @@ import {
 } from '../utils/deviceOnlineStatus';
 import { createHomeGeofenceDivIcon } from '../map/homeGeofenceMarkerIcon';
 import {
+  bucketIntensity,
   bucketClass,
   getCoverageBucket,
   resolveBucketColor,
   type CoverageBucket
 } from '../coverage/coverageBuckets';
+import CoverageHeatmapLayer from './CoverageHeatmapLayer';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -65,6 +67,7 @@ type MapViewProps = {
   zoom?: number;
   theme?: 'light' | 'dark';
   mapLayerMode?: 'points' | 'coverage';
+  coverageVisualizationMode?: 'bins' | 'heatmap';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
@@ -441,6 +444,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   zoom = DEFAULT_ZOOM,
   theme = 'light',
   mapLayerMode = 'points',
+  coverageVisualizationMode = 'bins',
   coverageMetric = 'count',
   measurements = [],
   compareMeasurements = [],
@@ -625,7 +629,8 @@ ref
             bucketClassName: string;
             bucketColor: string;
           }
-        >
+        >,
+        heatPoints: [] as [number, number, number][]
       };
     }
     const bins = coverageBins.flatMap((bin) => {
@@ -663,7 +668,20 @@ ref
       };
     });
 
-    return { bins };
+    const heatPoints = bins.flatMap((bin) => {
+      const intensity = bucketIntensity(bin.bucket);
+      if (intensity <= 0) {
+        return [];
+      }
+      const centerLat = bin.bounds[0][0] + coverageBinSize / 2;
+      const centerLon = bin.bounds[0][1] + coverageBinSize / 2;
+      if (!Number.isFinite(centerLat) || !Number.isFinite(centerLon)) {
+        return [];
+      }
+      return [[centerLat, centerLon, intensity] as [number, number, number]];
+    });
+
+    return { bins, heatPoints };
   }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric, theme]);
 
   const latestLocationIconInput = useMemo<DeviceIdentityInput | null>(() => {
@@ -893,7 +911,11 @@ ref
           pathOptions={{ className: 'map-track map-track--window' }}
         />
       )}
+      {mapLayerMode === 'coverage' && coverageVisualizationMode === 'heatmap' ? (
+        <CoverageHeatmapLayer points={coverageData.heatPoints} />
+      ) : null}
       {mapLayerMode === 'coverage' &&
+        coverageVisualizationMode === 'bins' &&
         coverageData.bins.map((bin) => {
           const className = ['coverage-bin', bin.bucketClassName].join(' ');
           const fillOpacity =

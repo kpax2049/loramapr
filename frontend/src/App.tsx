@@ -608,6 +608,7 @@ function App() {
   const playbackCacheMissesRef = useRef<number[]>([]);
   const [playbackLastGoodItems, setPlaybackLastGoodItems] = useState<SessionWindowPoint[]>([]);
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
+  const [coverageVisualizationMode, setCoverageVisualizationMode] = useState<'bins' | 'heatmap'>('bins');
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() => readInitialSidebarTab());
   const sidebarTabRef = useRef<SidebarTab>(sidebarTab);
@@ -2650,6 +2651,8 @@ function App() {
       onCenterOnLatestLocation={handleCenterOnLatestLocation}
       mapLayerMode={mapLayerMode}
       onMapLayerModeChange={setMapLayerMode}
+      coverageVisualizationMode={coverageVisualizationMode}
+      onCoverageVisualizationModeChange={setCoverageVisualizationMode}
       coverageMetric={coverageMetric}
       onCoverageMetricChange={setCoverageMetric}
       rangeFrom={exploreRange.from}
@@ -2699,6 +2702,7 @@ function App() {
           ref={mapRef}
           theme={effectiveTheme}
           mapLayerMode={effectiveMapLayerMode}
+          coverageVisualizationMode={coverageVisualizationMode}
           coverageMetric={coverageMetric}
           measurements={mapMeasurements}
           compareMeasurements={mapCompareMeasurements}
