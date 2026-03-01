@@ -58,6 +58,7 @@ type MeasurementKeyParams = {
   receiverId: string | null;
   rxGatewayId: string | null;
   includeRx: boolean;
+  sessionBoundOnly: boolean;
   sample: number | null;
   limit: number | null;
   filterMode: 'time' | 'session' | null;
@@ -67,6 +68,7 @@ type CoverageKeyParams = {
   deviceId: string | null;
   sessionId: string | null;
   day: string | null;
+  allDays: boolean;
   bbox: string | null;
   gatewayId: string | null;
   limit: number | null;
@@ -112,6 +114,7 @@ function normalizeMeasurementParams(
     receiverId: params.receiverId ?? null,
     rxGatewayId: params.rxGatewayId ?? null,
     includeRx: Boolean(params.includeRx),
+    sessionBoundOnly: Boolean(params.sessionBoundOnly),
     sample: typeof params.sample === 'number' ? params.sample : null,
     limit: typeof params.limit === 'number' ? params.limit : null,
     filterMode: context?.filterMode ?? (params.sessionId ? 'session' : 'time')
@@ -128,6 +131,7 @@ function normalizeCoverageParams(
     deviceId: params.deviceId ?? null,
     sessionId: params.sessionId ?? null,
     day: params.day ?? null,
+    allDays: Boolean(params.allDays),
     bbox,
     gatewayId: params.gatewayId ?? null,
     limit: typeof params.limit === 'number' ? params.limit : null,
@@ -473,6 +477,7 @@ export function useCoverageBins(
       keyParams.deviceId,
       keyParams.sessionId,
       keyParams.day,
+      keyParams.allDays ? 'all-days' : 'single-day',
       keyParams.bbox ?? 'none',
       keyParams.gatewayId ?? 'all',
       keyParams.limit

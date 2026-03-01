@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type {
   AutoSessionConfig,
   DeviceLatest,
+  Session,
   DeviceTelemetrySample,
   SessionStats,
   UnifiedEventListItem
@@ -84,6 +85,13 @@ type ControlsProps = {
   onCenterOnLatestLocation: (point: [number, number]) => void;
   mapLayerMode: 'points' | 'coverage';
   onMapLayerModeChange: (mode: 'points' | 'coverage') => void;
+  coverageVisualizationMode: 'bins' | 'heatmap';
+  onCoverageVisualizationModeChange: (mode: 'bins' | 'heatmap') => void;
+  coverageScope: 'device' | 'session';
+  onCoverageScopeChange: (scope: 'device' | 'session') => void;
+  selectedCoverageSessionId: string | null;
+  onSelectedCoverageSessionIdChange: (sessionId: string | null) => void;
+  coverageSessionOptions: Session[];
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
   onCoverageMetricChange: (metric: 'count' | 'rssiAvg' | 'snrAvg') => void;
   rangeFrom?: string | Date;
@@ -94,6 +102,7 @@ type ControlsProps = {
   onToChange: (value: string) => void;
   showPoints: boolean;
   showTrack: boolean;
+  showCoverageTracks: boolean;
   showDeviceMarkers: boolean;
   showHomeGeofence: boolean;
   homeGeofenceConfigured: boolean;
@@ -101,6 +110,7 @@ type ControlsProps = {
   onShowDeviceMarkersChange: (value: boolean) => void;
   onShowPointsChange: (value: boolean) => void;
   onShowTrackChange: (value: boolean) => void;
+  onShowCoverageTracksChange: (value: boolean) => void;
   playbackControls?: ReactNode;
   fitFeedback?: string | null;
   sessionSelectionNotice?: string | null;
@@ -142,6 +152,13 @@ export default function Controls({
   onCenterOnLatestLocation,
   mapLayerMode,
   onMapLayerModeChange,
+  coverageVisualizationMode,
+  onCoverageVisualizationModeChange,
+  coverageScope,
+  onCoverageScopeChange,
+  selectedCoverageSessionId,
+  onSelectedCoverageSessionIdChange,
+  coverageSessionOptions,
   coverageMetric,
   onCoverageMetricChange,
   rangeFrom,
@@ -152,6 +169,7 @@ export default function Controls({
   onToChange,
   showPoints,
   showTrack,
+  showCoverageTracks,
   showDeviceMarkers,
   showHomeGeofence,
   homeGeofenceConfigured,
@@ -159,6 +177,7 @@ export default function Controls({
   onShowDeviceMarkersChange,
   onShowPointsChange,
   onShowTrackChange,
+  onShowCoverageTracksChange,
   playbackControls,
   fitFeedback,
   sessionSelectionNotice,
@@ -396,6 +415,8 @@ export default function Controls({
   const showCoverageTab = activeTab === 'coverage';
   const showDebugTab = activeTab === 'debug';
   const isPlaybackMode = viewMode === 'playback';
+  const mostRecentCoverageSession = coverageSessionOptions[0] ?? null;
+  const effectiveCoverageSessionId = selectedCoverageSessionId ?? mostRecentCoverageSession?.id ?? null;
   const selectedReceiver =
     receiverOptions.find((receiver) => receiver.id === selectedReceiverId) ?? null;
   const debugProbeEnabled = showDebugTab && hasQueryApiKey;
@@ -1258,6 +1279,103 @@ export default function Controls({
 
       {showCoverageTab && mapLayerMode === 'coverage' ? (
         <div className="controls__group" data-tour="coverage-metric">
+          <span className="controls__label">Coverage</span>
+          <span className="controls__sub-label">Scope</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="Coverage scope">
+            <label
+              className={`controls__segment ${coverageScope === 'device' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="coverage-scope"
+                value="device"
+                checked={coverageScope === 'device'}
+                onChange={() => {
+                  onCoverageScopeChange('device');
+                  onSelectedCoverageSessionIdChange(null);
+                }}
+              />
+              Device
+            </label>
+            <label
+              className={`controls__segment ${coverageScope === 'session' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="coverage-scope"
+                value="session"
+                checked={coverageScope === 'session'}
+                onChange={() => {
+                  onCoverageScopeChange('session');
+                  onSelectedCoverageSessionIdChange(
+                    selectedCoverageSessionId ?? mostRecentCoverageSession?.id ?? null
+                  );
+                }}
+              />
+              Session
+            </label>
+          </div>
+          {coverageScope === 'session' ? (
+            <>
+              <label htmlFor="coverage-session-select">Session</label>
+              <select
+                id="coverage-session-select"
+                value={effectiveCoverageSessionId ?? ''}
+                onChange={(event) => {
+                  const nextId = event.target.value || null;
+                  onCoverageScopeChange('session');
+                  onSelectedCoverageSessionIdChange(nextId);
+                }}
+                disabled={coverageSessionOptions.length === 0}
+              >
+                {coverageSessionOptions.length === 0 ? (
+                  <option value="">No sessions available</option>
+                ) : null}
+                {coverageSessionOptions.map((session) => (
+                  <option key={`coverage-session-${session.id}`} value={session.id}>
+                    {formatCoverageSessionOption(session)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="controls__inline-link"
+                onClick={() => {
+                  onCoverageScopeChange('device');
+                  onSelectedCoverageSessionIdChange(null);
+                }}
+              >
+                Back to all sessions
+              </button>
+            </>
+          ) : null}
+          <span className="controls__sub-label">Visualization</span>
+          <div className="controls__segmented" role="radiogroup" aria-label="Coverage visualization">
+            <label
+              className={`controls__segment ${coverageVisualizationMode === 'bins' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="coverage-visualization"
+                value="bins"
+                checked={coverageVisualizationMode === 'bins'}
+                onChange={() => onCoverageVisualizationModeChange('bins')}
+              />
+              Bins
+            </label>
+            <label
+              className={`controls__segment ${coverageVisualizationMode === 'heatmap' ? 'is-active' : ''}`}
+            >
+              <input
+                type="radio"
+                name="coverage-visualization"
+                value="heatmap"
+                checked={coverageVisualizationMode === 'heatmap'}
+                onChange={() => onCoverageVisualizationModeChange('heatmap')}
+              />
+              Heatmap
+            </label>
+          </div>
           <label htmlFor="coverage-metric">Coverage metric</label>
           <select
             id="coverage-metric"
@@ -1497,23 +1615,35 @@ export default function Controls({
         <div className="controls__group">
           <span className="controls__label">Layers</span>
           {mapLayerMode === 'points' && (
+            <>
+              <label className="controls__toggle">
+                <input
+                  type="checkbox"
+                  checked={showPoints}
+                  onChange={(event) => onShowPointsChange(event.target.checked)}
+                />
+                Show points
+              </label>
+              <label className="controls__toggle">
+                <input
+                  type="checkbox"
+                  checked={showTrack}
+                  onChange={(event) => onShowTrackChange(event.target.checked)}
+                />
+                Show track
+              </label>
+            </>
+          )}
+          {mapLayerMode === 'coverage' ? (
             <label className="controls__toggle">
               <input
                 type="checkbox"
-                checked={showPoints}
-                onChange={(event) => onShowPointsChange(event.target.checked)}
+                checked={showCoverageTracks}
+                onChange={(event) => onShowCoverageTracksChange(event.target.checked)}
               />
-              Show points
+              Show tracks
             </label>
-          )}
-          <label className="controls__toggle">
-            <input
-              type="checkbox"
-              checked={showTrack}
-              onChange={(event) => onShowTrackChange(event.target.checked)}
-            />
-            Show track
-          </label>
+          ) : null}
         </div>
       )}
 
@@ -1780,6 +1910,16 @@ function sanitizeIconPickerValue(
   fallback: DeviceIconKey
 ): DeviceIconKey {
   return isDeviceIconPickerValue(value) ? value : fallback;
+}
+
+function formatCoverageSessionOption(session: Session): string {
+  const name = session.name?.trim();
+  const label = name && name.length > 0 ? name : `Session ${session.id.slice(0, 8)}`;
+  const startedAt = new Date(session.startedAt);
+  const startedLabel = Number.isNaN(startedAt.getTime())
+    ? session.startedAt
+    : startedAt.toLocaleString();
+  return `${label} (${startedLabel})`;
 }
 
 function formatRelativeTime(value: string): string {

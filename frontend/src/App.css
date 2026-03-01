@@ -1954,6 +1954,14 @@
   font-family: var(--font-mono);
 }
 
+.controls__sub-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
 .controls select,
 .controls input[type='datetime-local'],
 .controls input[type='number'] {
@@ -2078,6 +2086,23 @@
 .controls__button:hover {
   background: var(--surface-hover);
   border-color: var(--border-hover);
+}
+
+.controls__inline-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--panel-accent);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.controls__inline-link:hover {
+  text-decoration: underline;
 }
 
 .controls select:disabled,

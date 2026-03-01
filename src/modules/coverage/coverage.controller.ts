@@ -1,16 +1,17 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { CoverageService } from './coverage.service';
+import { BIN_SIZE_DEG } from './coverage.constants';
 
 type CoverageQuery = {
   deviceId?: string | string[];
   sessionId?: string | string[];
   day?: string | string[];
+  allDays?: string | string[];
   bbox?: string | string[];
   gatewayId?: string | string[];
   limit?: string | string[];
 };
 
-const BIN_SIZE_DEG = 0.001;
 const DEFAULT_LIMIT = 5000;
 const MAX_LIMIT = 20000;
 
@@ -30,7 +31,9 @@ export class CoverageController {
       throw new BadRequestException('Provide either deviceId or sessionId, not both');
     }
 
-    const day = parseDay(getSingleValue(query.day, 'day'));
+    const allDaysRaw = getSingleValue(query.allDays, 'allDays');
+    const allDays = parseOptionalBoolean(allDaysRaw, 'allDays') ?? false;
+    const day = allDays ? undefined : parseDay(getSingleValue(query.day, 'day'));
     const bboxValue = getSingleValue(query.bbox, 'bbox');
     const bbox = bboxValue ? parseBbox(bboxValue) : undefined;
     const gatewayId = getSingleValue(query.gatewayId, 'gatewayId');
@@ -48,7 +51,7 @@ export class CoverageController {
 
     return {
       binSizeDeg: BIN_SIZE_DEG,
-      day: day.toISOString(),
+      day: day ? day.toISOString() : 'all',
       items: bins,
       count: bins.length
     };
@@ -69,7 +72,7 @@ function getSingleValue(value: string | string[] | undefined, name: string): str
 }
 
 function parseDay(value?: string): Date {
-  if (!value) {
+  if (value === undefined) {
     return startOfUtcDay(new Date());
   }
   const parsed = new Date(value);
@@ -79,12 +82,30 @@ function parseDay(value?: string): Date {
   return startOfUtcDay(parsed);
 }
 
+function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+  throw new BadRequestException(`${name} must be true or false`);
+}
+
 function parseLimit(value: string | undefined): number {
-  if (!value) {
+  if (value === undefined) {
     return DEFAULT_LIMIT;
   }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new BadRequestException('limit must be a positive integer');
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new BadRequestException('limit must be a positive integer');
   }
   return parsed;
@@ -101,13 +122,13 @@ function parseBbox(value: string): { minLon: number; minLat: number; maxLon: num
   }
 
   const numbers = parts.map((part) => Number(part));
-  if (numbers.some((part) => Number.isNaN(part))) {
+  if (numbers.some((part) => !Number.isFinite(part))) {
     throw new BadRequestException('bbox must contain valid numbers');
   }
 
   const [minLon, minLat, maxLon, maxLat] = numbers;
-  if (minLon > maxLon || minLat > maxLat) {
-    throw new BadRequestException('bbox min values must be <= max values');
+  if (minLon >= maxLon || minLat >= maxLat) {
+    throw new BadRequestException('bbox min values must be < max values');
   }
 
   return { minLon, minLat, maxLon, maxLat };

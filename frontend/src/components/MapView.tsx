@@ -45,6 +45,7 @@ import {
   resolveBucketColor,
   type CoverageBucket
 } from '../coverage/coverageBuckets';
+import CoverageHeatmapLayer from './CoverageHeatmapLayer';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -65,6 +66,8 @@ type MapViewProps = {
   zoom?: number;
   theme?: 'light' | 'dark';
   mapLayerMode?: 'points' | 'coverage';
+  coverageScope?: 'device' | 'session';
+  coverageVisualizationMode?: 'bins' | 'heatmap';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
@@ -74,6 +77,7 @@ type MapViewProps = {
   coverageBinSize?: number | null;
   showPoints?: boolean;
   showTrack?: boolean;
+  showCoverageTracks?: boolean;
   interactionEnabled?: boolean;
   playbackCursorPosition?: [number, number] | null;
   latestLocationMarker?: LatestLocationMarker | null;
@@ -441,6 +445,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   zoom = DEFAULT_ZOOM,
   theme = 'light',
   mapLayerMode = 'points',
+  coverageScope = 'device',
+  coverageVisualizationMode = 'bins',
   coverageMetric = 'count',
   measurements = [],
   compareMeasurements = [],
@@ -450,6 +456,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   coverageBinSize = 0.001,
   showPoints = true,
   showTrack = true,
+  showCoverageTracks = true,
   interactionEnabled = true,
   playbackCursorPosition = null,
   latestLocationMarker = null,
@@ -537,8 +544,10 @@ ref
     }
   }));
 
+  const shouldRenderTracks = mapLayerMode === 'coverage' ? showCoverageTracks : showTrack;
+
   const trackPositions = useMemo(() => {
-    if (!showTrack || track.length === 0) {
+    if (!shouldRenderTracks || track.length === 0) {
       return [];
     }
     const validTrack = track.filter(hasFiniteLatLon);
@@ -565,7 +574,7 @@ ref
     }
 
     return positions;
-  }, [track, currentZoom, showTrack]);
+  }, [track, currentZoom, shouldRenderTracks]);
 
   const overviewTrackPoints = useMemo(
     () =>
@@ -580,7 +589,7 @@ ref
   );
 
   const overviewTrackPositions = useMemo(() => {
-    if (!showTrack || overviewTrack.length === 0) {
+    if (!shouldRenderTracks || overviewTrack.length === 0) {
       return [];
     }
     const validOverview = overviewTrack.filter(hasFiniteLatLon);
@@ -607,7 +616,7 @@ ref
     }
 
     return positions;
-  }, [overviewTrack, currentZoom, showTrack]);
+  }, [overviewTrack, currentZoom, shouldRenderTracks]);
 
   useEffect(() => {
     if (onZoomChange) {
@@ -664,7 +673,7 @@ ref
     });
 
     return { bins };
-  }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric, theme]);
+  }, [mapLayerMode, coverageBins, coverageBinSize, coverageMetric]);
 
   const latestLocationIconInput = useMemo<DeviceIdentityInput | null>(() => {
     if (!latestLocationMarker) {
@@ -856,7 +865,16 @@ ref
           subdomains={['a', 'b', 'c']}
         />
       )}
-      {showTrack && overviewTrackPositions.length > 0 && (
+      {mapLayerMode === 'coverage' && coverageVisualizationMode === 'heatmap' && (
+        <CoverageHeatmapLayer
+          bins={coverageBins}
+          binSizeDeg={coverageBinSize}
+          metric={coverageMetric}
+          scope={coverageScope}
+          theme={theme}
+        />
+      )}
+      {shouldRenderTracks && overviewTrackPositions.length > 0 && (
         <Polyline
           positions={overviewTrackPositions}
           pathOptions={{ className: 'map-track map-track--overview' }}
@@ -887,13 +905,14 @@ ref
           }
         />
       )}
-      {showTrack && trackPositions.length > 0 && (
+      {shouldRenderTracks && trackPositions.length > 0 && (
         <Polyline
           positions={trackPositions}
           pathOptions={{ className: 'map-track map-track--window' }}
         />
       )}
       {mapLayerMode === 'coverage' &&
+        coverageVisualizationMode === 'bins' &&
         coverageData.bins.map((bin) => {
           const className = ['coverage-bin', bin.bucketClassName].join(' ');
           const fillOpacity =
@@ -907,7 +926,7 @@ ref
 
           return (
             <Rectangle
-              key={`${bin.latBin}-${bin.lonBin}`}
+              key={`${bin.latBin}-${bin.lonBin}-${bin.gatewayId ?? 'all'}`}
               bounds={bin.bounds}
               pathOptions={{
                 color: bin.bucketColor,

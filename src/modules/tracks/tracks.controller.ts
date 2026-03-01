@@ -14,6 +14,7 @@ type TracksQuery = {
   gatewayId?: string | string[];
   receiverId?: string | string[];
   rxGatewayId?: string | string[];
+  sessionBoundOnly?: string | string[];
 };
 
 const DEFAULT_LIMIT = 500;
@@ -60,6 +61,10 @@ export class TracksController {
     const requestedLimit = parseLimit(getSingleValue(query.limit, 'limit'));
     const limit = Math.min(requestedLimit, MAX_LIMIT);
     const sample = parseSample(getSingleValue(query.sample, 'sample'));
+    const sessionBoundOnly = parseBoolean(
+      getSingleValue(query.sessionBoundOnly, 'sessionBoundOnly'),
+      'sessionBoundOnly'
+    );
 
     return this.tracksService.getTrack({
       deviceId: deviceId ?? undefined,
@@ -71,6 +76,7 @@ export class TracksController {
       sample,
       gatewayId: effectiveGatewayId ?? undefined,
       rxGatewayId: rxGatewayId ?? undefined,
+      sessionBoundOnly,
       ownerId
     });
   }
@@ -120,6 +126,22 @@ function parseSample(value: string | undefined): number | undefined {
     throw new BadRequestException('sample must be a positive integer');
   }
   return parsed;
+}
+
+function parseBoolean(value: string | undefined, name: string): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+
+  throw new BadRequestException(`${name} must be true or false`);
 }
 
 function parseBbox(value: string): { minLon: number; minLat: number; maxLon: number; maxLat: number } {

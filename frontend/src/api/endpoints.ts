@@ -49,6 +49,7 @@ export type MeasurementQueryParams = {
   receiverId?: string;
   rxGatewayId?: string;
   includeRx?: boolean;
+  sessionBoundOnly?: boolean;
   sample?: number;
   limit?: number;
 };
@@ -85,6 +86,7 @@ export type CoverageQueryParams = {
   deviceId?: string;
   sessionId?: string;
   day?: string;
+  allDays?: boolean;
   bbox?: [number, number, number, number];
   gatewayId?: string;
   limit?: number;
@@ -156,6 +158,9 @@ function buildQuery(params: MeasurementQueryParams): string {
   if (params.includeRx) {
     searchParams.set('includeRx', 'true');
   }
+  if (params.sessionBoundOnly) {
+    searchParams.set('sessionBoundOnly', 'true');
+  }
   if (typeof params.sample === 'number') {
     searchParams.set('sample', String(params.sample));
   }
@@ -196,6 +201,9 @@ function buildCoverageQuery(params: CoverageQueryParams): string {
   }
   if (params.day) {
     searchParams.set('day', params.day);
+  }
+  if (params.allDays) {
+    searchParams.set('allDays', 'true');
   }
   if (params.bbox) {
     searchParams.set('bbox', params.bbox.join(','));

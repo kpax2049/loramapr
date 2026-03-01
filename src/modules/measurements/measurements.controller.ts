@@ -21,6 +21,7 @@ type MeasurementsQuery = {
   receiverId?: string | string[];
   rxGatewayId?: string | string[];
   includeRx?: string | string[];
+  sessionBoundOnly?: string | string[];
 };
 
 const DEFAULT_LIMIT = 500;
@@ -68,6 +69,10 @@ export class MeasurementsController {
     const limit = Math.min(requestedLimit, MAX_LIMIT);
     const sample = parseSample(getSingleValue(query.sample, 'sample'));
     const includeRx = parseBoolean(getSingleValue(query.includeRx, 'includeRx'), 'includeRx');
+    const sessionBoundOnly = parseBoolean(
+      getSingleValue(query.sessionBoundOnly, 'sessionBoundOnly'),
+      'sessionBoundOnly'
+    );
 
     return this.measurementsService.query({
       deviceId: deviceId ?? undefined,
@@ -80,6 +85,7 @@ export class MeasurementsController {
       gatewayId: effectiveGatewayId ?? undefined,
       rxGatewayId: rxGatewayId ?? undefined,
       includeRx,
+      sessionBoundOnly,
       ownerId
     });
   }

@@ -1,14 +1,14 @@
 import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BIN_SIZE_DEG } from './coverage.constants';
 
-const BIN_SIZE_DEG = 0.001;
 const BATCH_SIZE = 500;
 const INTERVAL_MS = 10_000;
 
 type CoverageQueryParams = {
   deviceId?: string;
   sessionId?: string;
-  day: Date;
+  day?: Date;
   bbox?: {
     minLon: number;
     minLat: number;
@@ -48,12 +48,16 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   async listBins(params: CoverageQueryParams) {
-    const where: Record<string, unknown> = {
-      day: params.day
-    };
+    const where: Record<string, unknown> = {};
+
+    if (params.day) {
+      where.day = params.day;
+    }
 
     if (params.deviceId) {
       where.deviceId = params.deviceId;
+      // Device-scope coverage should only include measurements attached to sessions.
+      where.sessionId = { not: null };
     }
     if (params.sessionId) {
       where.sessionId = params.sessionId;
@@ -74,6 +78,7 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
     return this.prisma.coverageBin.findMany({
       where,
       take: params.limit,
+      orderBy: [{ latBin: 'asc' }, { lonBin: 'asc' }, { gatewayId: 'asc' }],
       select: {
         latBin: true,
         lonBin: true,
