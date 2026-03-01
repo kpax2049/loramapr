@@ -66,6 +66,7 @@ type MapViewProps = {
   zoom?: number;
   theme?: 'light' | 'dark';
   mapLayerMode?: 'points' | 'coverage';
+  coverageScope?: 'device' | 'session';
   coverageVisualizationMode?: 'bins' | 'heatmap';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
@@ -443,6 +444,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   zoom = DEFAULT_ZOOM,
   theme = 'light',
   mapLayerMode = 'points',
+  coverageScope = 'device',
   coverageVisualizationMode = 'bins',
   coverageMetric = 'count',
   measurements = [],
@@ -864,6 +866,7 @@ ref
           bins={coverageBins}
           binSizeDeg={coverageBinSize}
           metric={coverageMetric}
+          scope={coverageScope}
         />
       )}
       {showTrack && overviewTrackPositions.length > 0 && (

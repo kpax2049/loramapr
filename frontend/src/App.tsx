@@ -1746,20 +1746,25 @@ function App() {
   const coverageFilterMode: 'time' | 'session' = coverageScope === 'session' ? 'session' : 'time';
   const coverageParams = useMemo<CoverageQueryParams>(() => {
     const gatewayId = receiverSource === 'lorawan' ? selectedGatewayId ?? undefined : undefined;
+    const coverageLimit = coverageVisualizationMode === 'heatmap' ? 12000 : undefined;
+    const coverageBbox =
+      coverageVisualizationMode === 'heatmap' ? undefined : debouncedBbox ?? undefined;
     if (coverageScope === 'session') {
       return {
         sessionId: effectiveCoverageSessionId ?? undefined,
         day: coverageDay,
         allDays: false,
-        bbox: debouncedBbox ?? undefined,
-        gatewayId
+        bbox: coverageBbox,
+        gatewayId,
+        limit: coverageLimit
       };
     }
     return {
       deviceId: deviceId ?? undefined,
       allDays: true,
-      bbox: debouncedBbox ?? undefined,
-      gatewayId
+      bbox: coverageBbox,
+      gatewayId,
+      limit: coverageLimit
     };
   }, [
     coverageScope,
@@ -1768,14 +1773,15 @@ function App() {
     debouncedBbox,
     deviceId,
     selectedGatewayId,
-    receiverSource
+    receiverSource,
+    coverageVisualizationMode
   ]);
   const coverageQuery = useCoverageBins(
     coverageParams,
     {
       enabled:
         mapLayerMode === 'coverage' &&
-        Boolean(bboxPayload) &&
+        (coverageVisualizationMode === 'heatmap' || Boolean(bboxPayload)) &&
         (coverageScope === 'session'
           ? Boolean(effectiveCoverageSessionId)
           : Boolean(deviceId))
@@ -2931,6 +2937,7 @@ function App() {
           ref={mapRef}
           theme={effectiveTheme}
           mapLayerMode={effectiveMapLayerMode}
+          coverageScope={coverageScope}
           coverageVisualizationMode={coverageVisualizationMode}
           coverageMetric={coverageMetric}
           measurements={mapMeasurements}

@@ -8,6 +8,7 @@ type CoverageHeatmapLayerProps = {
   bins: CoverageBin[];
   binSizeDeg: number | null;
   metric: CoverageMetric;
+  scope?: 'device' | 'session';
 };
 
 type HeatPoint = {
@@ -16,9 +17,93 @@ type HeatPoint = {
   value: number;
 };
 
-type HeatPointWithRadius = HeatPoint & {
-  radius: number;
+type HeatDataPayload = {
+  max: number;
+  data: HeatPoint[];
 };
+
+function patchHeatmapColorize(overlay: any): void {
+  const renderer = overlay?._heatmap?._renderer;
+  if (!renderer || renderer.__loramaprColorizePatched || typeof renderer._colorize !== 'function') {
+    return;
+  }
+
+  // Avoid Chromium readback warning by recreating the shadow context with willReadFrequently.
+  const previousShadowCanvas = renderer.shadowCanvas as HTMLCanvasElement | undefined;
+  if (previousShadowCanvas) {
+    const nextShadowCanvas = document.createElement('canvas');
+    nextShadowCanvas.width = previousShadowCanvas.width;
+    nextShadowCanvas.height = previousShadowCanvas.height;
+    const readbackCtx = nextShadowCanvas.getContext('2d', { willReadFrequently: true });
+    if (readbackCtx) {
+      readbackCtx.drawImage(previousShadowCanvas, 0, 0);
+      renderer.shadowCanvas = nextShadowCanvas;
+      renderer.shadowCtx = readbackCtx;
+    }
+  }
+
+  renderer._colorize = function colorizePatched(this: any) {
+    let x = this._renderBoundaries[0];
+    let y = this._renderBoundaries[1];
+    let width = this._renderBoundaries[2] - x;
+    let height = this._renderBoundaries[3] - y;
+    const maxWidth = this._width;
+    const maxHeight = this._height;
+    const opacity = this._opacity;
+    const maxOpacity = this._maxOpacity;
+    const minOpacity = this._minOpacity;
+    const useGradientOpacity = this._useGradientOpacity;
+
+    if (x < 0) {
+      x = 0;
+    }
+    if (y < 0) {
+      y = 0;
+    }
+    if (x + width > maxWidth) {
+      width = maxWidth - x;
+    }
+    if (y + height > maxHeight) {
+      height = maxHeight - y;
+    }
+
+    if (width <= 0 || height <= 0) {
+      this._renderBoundaries = [1000, 1000, 0, 0];
+      return;
+    }
+
+    const image = this.shadowCtx.getImageData(x, y, width, height);
+    const imageData = image.data;
+    const palette = this._palette;
+
+    for (let index = 3; index < imageData.length; index += 4) {
+      const alpha = imageData[index];
+      const paletteOffset = alpha * 4;
+      if (!paletteOffset) {
+        continue;
+      }
+
+      let finalAlpha = alpha;
+      if (opacity > 0) {
+        finalAlpha = opacity;
+      } else if (alpha < maxOpacity) {
+        finalAlpha = alpha < minOpacity ? minOpacity : alpha;
+      } else {
+        finalAlpha = maxOpacity;
+      }
+
+      imageData[index - 3] = palette[paletteOffset];
+      imageData[index - 2] = palette[paletteOffset + 1];
+      imageData[index - 1] = palette[paletteOffset + 2];
+      imageData[index] = useGradientOpacity ? palette[paletteOffset + 3] : finalAlpha;
+    }
+
+    this.ctx.putImageData(image, x, y);
+    this._renderBoundaries = [1000, 1000, 0, 0];
+  };
+
+  renderer.__loramaprColorizePatched = true;
+}
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) {
@@ -79,12 +164,20 @@ function metricToWeight(metric: CoverageMetric, bin: CoverageBin): number {
   return 1;
 }
 
-export default function CoverageHeatmapLayer({ bins, binSizeDeg, metric }: CoverageHeatmapLayerProps) {
+export default function CoverageHeatmapLayer({
+  bins,
+  binSizeDeg,
+  metric,
+  scope = 'device'
+}: CoverageHeatmapLayerProps) {
   const map = useMap();
   const overlayRef = useRef<any>(null);
+  const pendingDataRef = useRef<HeatDataPayload | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const zoomingRef = useRef(false);
 
-  const basePoints = useMemo<HeatPoint[]>(() => {
-    if (!binSizeDeg || !Number.isFinite(binSizeDeg) || bins.length === 0) {
+  const heatPoints = useMemo<HeatPoint[]>(() => {
+    if (!binSizeDeg || !Number.isFinite(binSizeDeg) || binSizeDeg <= 0 || bins.length === 0) {
       return [];
     }
 
@@ -94,55 +187,62 @@ export default function CoverageHeatmapLayer({ bins, binSizeDeg, metric }: Cover
         continue;
       }
 
-      const lat = (bin.latBin + 0.5) * binSizeDeg;
-      const lng = (bin.lonBin + 0.5) * binSizeDeg;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      const centerLat = (bin.latBin + 0.5) * binSizeDeg;
+      const centerLng = (bin.lonBin + 0.5) * binSizeDeg;
+      if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng)) {
         continue;
       }
 
-      const weight = metricToWeight(metric, bin);
-      if (weight <= 0) {
+      const value01 = clamp(metricToWeight(metric, bin), 0, 1);
+      if (value01 <= 0) {
         continue;
       }
 
       points.push({
-        lat,
-        lng,
-        value: clamp(weight, 0, 1)
+        lat: centerLat,
+        lng: centerLng,
+        value: value01
       });
     }
 
-    if (points.length <= 10_000) {
+    const MAX_POINTS = 6000;
+    if (points.length <= MAX_POINTS) {
       return points;
     }
 
-    const stride = Math.ceil(points.length / 10_000);
+    const stride = Math.ceil(points.length / MAX_POINTS);
     return points.filter((_, index) => index % stride === 0);
   }, [bins, binSizeDeg, metric]);
 
-  const updateOverlayData = useCallback(() => {
-    const overlay = overlayRef.current;
-    if (!overlay || !binSizeDeg || !Number.isFinite(binSizeDeg)) {
-      overlay?.setData({ max: 1, data: [] });
+  const enqueueData = useCallback((payload: HeatDataPayload) => {
+    pendingDataRef.current = payload;
+    if (zoomingRef.current) {
       return;
     }
 
-    const center = map.getCenter();
-    const origin = map.latLngToContainerPoint(center);
-    const adjacent = map.latLngToContainerPoint([center.lat, center.lng + binSizeDeg]);
-    const stepPx = Math.abs(adjacent.x - origin.x);
-    const radiusPx = clamp(stepPx * 1.6, 12, 120);
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+    }
 
-    const data: HeatPointWithRadius[] = basePoints.map((point) => ({
-      ...point,
-      radius: radiusPx
-    }));
-
-    overlay.setData({
-      max: 1,
-      data
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const nextPayload = pendingDataRef.current;
+      const overlay = overlayRef.current;
+      if (!nextPayload || !overlay) {
+        return;
+      }
+      overlay.setData(nextPayload);
+      pendingDataRef.current = null;
     });
-  }, [map, basePoints, binSizeDeg]);
+  }, []);
+
+  const flushPending = useCallback(() => {
+    const nextPayload = pendingDataRef.current;
+    if (!nextPayload) {
+      return;
+    }
+    enqueueData(nextPayload);
+  }, [enqueueData]);
 
   useEffect(() => {
     const pane = map.getPane('covHeat') ?? map.createPane('covHeat');
@@ -151,46 +251,114 @@ export default function CoverageHeatmapLayer({ bins, binSizeDeg, metric }: Cover
 
     const overlay = new HeatmapOverlay({
       pane: 'covHeat',
-      radius: 20,
-      scaleRadius: false,
-      useLocalExtrema: false,
-      maxOpacity: 0.8,
-      minOpacity: 0.08,
-      blur: 0.85,
       latField: 'lat',
       lngField: 'lng',
-      valueField: 'value'
+      valueField: 'value',
+      scaleRadius: true,
+      useLocalExtrema: false,
+      radius: 10,
+      maxOpacity: 0.55,
+      minOpacity: 0.05,
+      blur: 0.85
     });
 
     overlay.addTo(map);
+    patchHeatmapColorize(overlay);
     overlayRef.current = overlay;
 
-    const handleMoveEnd = () => {
-      updateOverlayData();
-    };
-
-    const handleZoomEnd = () => {
-      updateOverlayData();
-    };
-
-    map.on('moveend', handleMoveEnd);
-    map.on('zoomend', handleZoomEnd);
-
-    updateOverlayData();
-
     return () => {
-      map.off('moveend', handleMoveEnd);
-      map.off('zoomend', handleZoomEnd);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      pendingDataRef.current = null;
       if (overlayRef.current) {
         map.removeLayer(overlayRef.current);
         overlayRef.current = null;
       }
     };
-  }, [map, updateOverlayData]);
+  }, [map]);
 
   useEffect(() => {
-    updateOverlayData();
-  }, [updateOverlayData]);
+    const handleZoomStart = () => {
+      zoomingRef.current = true;
+    };
+    const handleZoomEnd = () => {
+      zoomingRef.current = false;
+      flushPending();
+    };
+
+    map.on('zoomstart', handleZoomStart);
+    map.on('zoomend', handleZoomEnd);
+
+    return () => {
+      map.off('zoomstart', handleZoomStart);
+      map.off('zoomend', handleZoomEnd);
+    };
+  }, [map, flushPending]);
+
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay || typeof binSizeDeg !== 'number' || !Number.isFinite(binSizeDeg) || binSizeDeg <= 0) {
+      return;
+    }
+
+    const overlapBins = 2.2;
+    const step0 = (256 * binSizeDeg) / 360;
+    const radius = overlapBins * step0;
+    overlay.cfg = {
+      ...overlay.cfg,
+      radius
+    };
+
+    if (import.meta.env.DEV) {
+      console.debug('[heat] radius', { radius });
+    }
+  }, [binSizeDeg]);
+
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) {
+      return;
+    }
+
+    if (heatPoints.length === 0) {
+      const emptyPayload: HeatDataPayload = { max: 1, data: [] };
+      enqueueData(emptyPayload);
+      if (import.meta.env.DEV) {
+        console.debug('[heat] setData', { points: 0, max: 1, scope });
+      }
+      return;
+    }
+
+    let datasetMax = 0;
+    for (const point of heatPoints) {
+      if (point.value > datasetMax) {
+        datasetMax = point.value;
+      }
+    }
+
+    if (!Number.isFinite(datasetMax) || datasetMax <= 0) {
+      const emptyPayload: HeatDataPayload = { max: 1, data: [] };
+      enqueueData(emptyPayload);
+      if (import.meta.env.DEV) {
+        console.debug('[heat] setData', { points: 0, max: 1, scope });
+      }
+      return;
+    }
+
+    const dataMax = scope === 'session' ? datasetMax : 1;
+    const payload: HeatDataPayload = {
+      max: dataMax,
+      data: heatPoints
+    };
+
+    enqueueData(payload);
+
+    if (import.meta.env.DEV) {
+      console.debug('[heat] setData', { points: heatPoints.length, max: dataMax, scope });
+    }
+  }, [heatPoints, enqueueData, scope]);
 
   return null;
 }
