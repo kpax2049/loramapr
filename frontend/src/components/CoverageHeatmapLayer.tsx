@@ -4,9 +4,22 @@ import type { CoverageBin } from '../api/types';
 import type { CoverageMetric } from '../coverage/coverageBuckets';
 import HeatmapOverlay from 'heatmap.js/plugins/leaflet-heatmap/leaflet-heatmap.js';
 
-const HEAT_LAYER_OPACITY = 0.5;
-const HEAT_MAX_OPACITY = 0.35;
-const HEAT_MIN_OPACITY = 0.02;
+const HEAT_STYLE_DARK = {
+  layerOpacity: 0.78,
+  maxOpacity: 0.62,
+  minOpacity: 0.06,
+  filter: 'saturate(1.35) contrast(1.20)',
+  mixBlendMode: 'normal'
+} as const;
+
+const HEAT_STYLE_LIGHT = {
+  layerOpacity: 0.9,
+  maxOpacity: 0.75,
+  minOpacity: 0.1,
+  filter: 'saturate(1.60) contrast(1.30)',
+  mixBlendMode: 'multiply'
+} as const;
+
 const HEAT_BLUR = 0.85;
 
 type CoverageHeatmapLayerProps = {
@@ -14,6 +27,7 @@ type CoverageHeatmapLayerProps = {
   binSizeDeg: number | null;
   metric: CoverageMetric;
   scope?: 'device' | 'session';
+  theme?: 'light' | 'dark';
 };
 
 type HeatPoint = {
@@ -26,6 +40,43 @@ type HeatDataPayload = {
   max: number;
   data: HeatPoint[];
 };
+
+function resolveIsDarkTheme(theme?: 'light' | 'dark'): boolean {
+  if (theme === 'light' || theme === 'dark') {
+    return theme === 'dark';
+  }
+  if (typeof document === 'undefined') {
+    return true;
+  }
+  const themeAttr = document.documentElement.dataset.theme;
+  if (themeAttr === 'light' || themeAttr === 'dark') {
+    return themeAttr === 'dark';
+  }
+  return document.documentElement.classList.contains('dark');
+}
+
+function applyHeatStyles(overlay: any, isDark: boolean): void {
+  const style = isDark ? HEAT_STYLE_DARK : HEAT_STYLE_LIGHT;
+  const overlayElement = overlay?._el as HTMLDivElement | undefined;
+  if (overlayElement) {
+    overlayElement.style.opacity = String(style.layerOpacity);
+    overlayElement.style.pointerEvents = 'none';
+    overlayElement.style.filter = style.filter;
+    overlayElement.style.mixBlendMode = style.mixBlendMode;
+    overlayElement.style.willChange = 'transform, filter, opacity';
+  }
+
+  const heatmapRendererCanvas = overlay?._heatmap?._renderer?.canvas as HTMLCanvasElement | undefined;
+  if (heatmapRendererCanvas) {
+    heatmapRendererCanvas.style.opacity = '1';
+  }
+
+  overlay?._heatmap?.configure?.({
+    maxOpacity: style.maxOpacity,
+    minOpacity: style.minOpacity,
+    blur: HEAT_BLUR
+  });
+}
 
 function patchHeatmapColorize(overlay: any): void {
   const renderer = overlay?._heatmap?._renderer;
@@ -173,7 +224,8 @@ export default function CoverageHeatmapLayer({
   bins,
   binSizeDeg,
   metric,
-  scope = 'device'
+  scope = 'device',
+  theme
 }: CoverageHeatmapLayerProps) {
   const map = useMap();
   const overlayRef = useRef<any>(null);
@@ -262,33 +314,15 @@ export default function CoverageHeatmapLayer({
       scaleRadius: true,
       useLocalExtrema: false,
       radius: 10,
-      maxOpacity: HEAT_MAX_OPACITY,
-      minOpacity: HEAT_MIN_OPACITY,
+      maxOpacity: HEAT_STYLE_DARK.maxOpacity,
+      minOpacity: HEAT_STYLE_DARK.minOpacity,
       blur: HEAT_BLUR
     });
 
     overlay.addTo(map);
     patchHeatmapColorize(overlay);
     overlayRef.current = overlay;
-
-    const overlayElement = overlayRef.current?._el as HTMLDivElement | undefined;
-    if (overlayElement) {
-      overlayElement.style.opacity = String(HEAT_LAYER_OPACITY);
-      overlayElement.style.pointerEvents = 'none';
-    }
-
-    const heatmapRendererCanvas = overlayRef.current?._heatmap?._renderer?.canvas as
-      | HTMLCanvasElement
-      | undefined;
-    if (heatmapRendererCanvas) {
-      heatmapRendererCanvas.style.opacity = '1';
-    }
-
-    overlayRef.current?._heatmap?.configure?.({
-      maxOpacity: HEAT_MAX_OPACITY,
-      minOpacity: HEAT_MIN_OPACITY,
-      blur: HEAT_BLUR
-    });
+    applyHeatStyles(overlayRef.current, resolveIsDarkTheme(theme));
 
     return () => {
       if (rafRef.current !== null) {
@@ -302,6 +336,13 @@ export default function CoverageHeatmapLayer({
       }
     };
   }, [map]);
+
+  useEffect(() => {
+    if (!overlayRef.current) {
+      return;
+    }
+    applyHeatStyles(overlayRef.current, resolveIsDarkTheme(theme));
+  }, [theme]);
 
   useEffect(() => {
     const handleZoomStart = () => {

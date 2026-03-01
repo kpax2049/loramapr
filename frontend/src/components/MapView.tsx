@@ -871,6 +871,7 @@ ref
           binSizeDeg={coverageBinSize}
           metric={coverageMetric}
           scope={coverageScope}
+          theme={theme}
         />
       )}
       {shouldRenderTracks && overviewTrackPositions.length > 0 && (
