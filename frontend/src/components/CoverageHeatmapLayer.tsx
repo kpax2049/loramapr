@@ -57,6 +57,8 @@ function resolveIsDarkTheme(theme?: 'light' | 'dark'): boolean {
 
 function applyHeatStyles(overlay: any, isDark: boolean): void {
   const style = isDark ? HEAT_STYLE_DARK : HEAT_STYLE_LIGHT;
+  // HeatmapOverlay does not expose public style hooks for the host element/canvas,
+  // so keep private-field usage centralized here.
   const overlayElement = overlay?._el as HTMLDivElement | undefined;
   if (overlayElement) {
     overlayElement.style.opacity = String(style.layerOpacity);
@@ -375,10 +377,6 @@ export default function CoverageHeatmapLayer({
       ...overlay.cfg,
       radius
     };
-
-    if (import.meta.env.DEV) {
-      console.debug('[heat] radius', { radius });
-    }
   }, [binSizeDeg]);
 
   useEffect(() => {
@@ -390,9 +388,6 @@ export default function CoverageHeatmapLayer({
     if (heatPoints.length === 0) {
       const emptyPayload: HeatDataPayload = { max: 1, data: [] };
       enqueueData(emptyPayload);
-      if (import.meta.env.DEV) {
-        console.debug('[heat] setData', { points: 0, max: 1, scope });
-      }
       return;
     }
 
@@ -406,9 +401,6 @@ export default function CoverageHeatmapLayer({
     if (!Number.isFinite(datasetMax) || datasetMax <= 0) {
       const emptyPayload: HeatDataPayload = { max: 1, data: [] };
       enqueueData(emptyPayload);
-      if (import.meta.env.DEV) {
-        console.debug('[heat] setData', { points: 0, max: 1, scope });
-      }
       return;
     }
 
@@ -419,10 +411,6 @@ export default function CoverageHeatmapLayer({
     };
 
     enqueueData(payload);
-
-    if (import.meta.env.DEV) {
-      console.debug('[heat] setData', { points: heatPoints.length, max: dataMax, scope });
-    }
   }, [heatPoints, enqueueData, scope]);
 
   return null;
