@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v1.1.0 (2026-03-01)
+
+- Coverage heatmap release: added Heatmap visualization alongside existing Bins rendering for at-a-glance hotspot analysis.
+- Coverage scope release: added Device (all sessions) vs Session scope switching for aggregate vs run-specific coverage inspection.
+- Coverage controls update: added Bins/Heatmap toggle and independent Show tracks toggle so coverage layers can be inspected without polyline clutter.
+- Release notes: `docs/release-v1.1.0.md`.
+
 ## v0.10.4 (2026-02-22)
 
 - Session Details UX refresh: selected-session details now stay near the session workflow, default to a compact summary, and expand on demand for full metadata/actions/charts.

@@ -2,13 +2,19 @@
 
 ## Current coverage features
 
-Coverage in the current app is grid-bin based, rendered as map rectangles from `CoverageBin` data.
-It is not an interpolated "heat cloud" yet.
+Coverage in the app supports two visualizations from the same `CoverageBin` data:
+- **Bins** (rectangle grid)
+- **Heatmap** (HeatmapOverlay layer)
 
 Implemented UI features:
 
 - Coverage tab controls in sidebar
 - Map layer toggle: `Points` vs `Coverage`
+- Coverage visualization toggle: `Bins` vs `Heatmap`
+- Coverage scope toggle:
+  - `Device` (aggregate all sessions)
+  - `Session` (single selected session)
+- Coverage tracks toggle: show/hide track polylines while staying in Coverage mode
 - Metric selector:
   - `count`
   - `rssiAvg`
@@ -54,20 +60,14 @@ API used by frontend:
 
 Current frontend source behavior:
 
-- In session filter mode, coverage requests use `sessionId`.
-- In time/device mode, coverage requests use `deviceId`.
-- Frontend passes current map `bbox`.
+- In Coverage **Session** scope, requests use `sessionId`.
+- In Coverage **Device** scope, requests use `deviceId` with all-days aggregation.
+- In **Bins** visualization, frontend passes current map `bbox`.
+- In **Heatmap** visualization, frontend omits `bbox` for a stable dataset while navigating.
 - Frontend applies `gatewayId` only for LoRaWAN source selection.
-- Frontend does not currently set `day`, so backend default is current UTC day.
+- Frontend sets `day` when session scope/day context requires it.
 
-## Planned (v1.1.0): Coverage Heatmaps from Sessions
+## Release tracking
 
-Planned, not implemented yet:
-
-- Add session-focused heatmap views for faster "where was coverage strongest/weakest" analysis.
-- Keep current bin metrics (`count`, `rssiAvg`, `snrAvg`) and add optional derived views (for example density-focused views) where useful.
-- Introduce a heatmap-oriented API shape (concept), e.g. session-first query with metric + resolution controls while keeping `/api/coverage/bins` for raw bins.
-
-Milestone tracking:
-
-- See planned milestones in [`Changelog`](./Changelog.md).
+- See `docs/release-v1.1.0.md`.
+- See [`Changelog`](./Changelog.md).

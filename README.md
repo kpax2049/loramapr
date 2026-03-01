@@ -8,19 +8,20 @@
   </picture>
 </p>
 
-> ✅ **Stable release (v1.0.0)**  
-> LoRaMapr has reached **v1.0.0** and is ready for self-hosted use.  
+> ✅ **Stable release (v1.1.0)**  
+> LoRaMapr has reached **v1.1.0** and is ready for self-hosted use.  
 > Development continues for new features and refinements, with changes tracked through normal release/version notes.
 
-## LoRaMapr v1.0.0 is live
+## LoRaMapr v1.1.0 is live
 
-LoRaMapr has officially reached **v1.0.0**.  
+LoRaMapr has officially reached **v1.1.0**.  
 This release marks the first stable version of a fully self-hosted workflow for **recording, replaying, and analyzing real-world radio coverage** from GPS-tagged telemetry.
 
-## What's in v1.0.0
+## What's in v1.1.0
 
 - Stable ingest pipelines for **LoRaWAN** (TTS webhooks) and **Meshtastic** (Pi Forwarder).
 - Session-first workflow for manual and hands-free capture, plus playback and map-based analysis.
+- Coverage workflow now includes **Bins + Heatmap** visualization with **Device vs Session** scope switching.
 - Production-ready self-hosting baseline with Docker Compose, reverse proxy, health/readiness checks, and startup migration flow.
 - Built-in operational tooling for API keys, database backup/restore, and retention safety defaults.
 - Expanded project documentation in the GitHub Wiki for quickstart, deployment, ingestion, troubleshooting, and operations.
