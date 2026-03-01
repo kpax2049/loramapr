@@ -102,6 +102,7 @@ type ControlsProps = {
   onToChange: (value: string) => void;
   showPoints: boolean;
   showTrack: boolean;
+  showCoverageTracks: boolean;
   showDeviceMarkers: boolean;
   showHomeGeofence: boolean;
   homeGeofenceConfigured: boolean;
@@ -109,6 +110,7 @@ type ControlsProps = {
   onShowDeviceMarkersChange: (value: boolean) => void;
   onShowPointsChange: (value: boolean) => void;
   onShowTrackChange: (value: boolean) => void;
+  onShowCoverageTracksChange: (value: boolean) => void;
   playbackControls?: ReactNode;
   fitFeedback?: string | null;
   sessionSelectionNotice?: string | null;
@@ -167,6 +169,7 @@ export default function Controls({
   onToChange,
   showPoints,
   showTrack,
+  showCoverageTracks,
   showDeviceMarkers,
   showHomeGeofence,
   homeGeofenceConfigured,
@@ -174,6 +177,7 @@ export default function Controls({
   onShowDeviceMarkersChange,
   onShowPointsChange,
   onShowTrackChange,
+  onShowCoverageTracksChange,
   playbackControls,
   fitFeedback,
   sessionSelectionNotice,
@@ -1611,23 +1615,35 @@ export default function Controls({
         <div className="controls__group">
           <span className="controls__label">Layers</span>
           {mapLayerMode === 'points' && (
+            <>
+              <label className="controls__toggle">
+                <input
+                  type="checkbox"
+                  checked={showPoints}
+                  onChange={(event) => onShowPointsChange(event.target.checked)}
+                />
+                Show points
+              </label>
+              <label className="controls__toggle">
+                <input
+                  type="checkbox"
+                  checked={showTrack}
+                  onChange={(event) => onShowTrackChange(event.target.checked)}
+                />
+                Show track
+              </label>
+            </>
+          )}
+          {mapLayerMode === 'coverage' ? (
             <label className="controls__toggle">
               <input
                 type="checkbox"
-                checked={showPoints}
-                onChange={(event) => onShowPointsChange(event.target.checked)}
+                checked={showCoverageTracks}
+                onChange={(event) => onShowCoverageTracksChange(event.target.checked)}
               />
-              Show points
+              Show tracks
             </label>
-          )}
-          <label className="controls__toggle">
-            <input
-              type="checkbox"
-              checked={showTrack}
-              onChange={(event) => onShowTrackChange(event.target.checked)}
-            />
-            Show track
-          </label>
+          ) : null}
         </div>
       )}
 

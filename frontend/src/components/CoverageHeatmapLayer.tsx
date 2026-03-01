@@ -4,6 +4,11 @@ import type { CoverageBin } from '../api/types';
 import type { CoverageMetric } from '../coverage/coverageBuckets';
 import HeatmapOverlay from 'heatmap.js/plugins/leaflet-heatmap/leaflet-heatmap.js';
 
+const HEAT_LAYER_OPACITY = 0.5;
+const HEAT_MAX_OPACITY = 0.35;
+const HEAT_MIN_OPACITY = 0.02;
+const HEAT_BLUR = 0.85;
+
 type CoverageHeatmapLayerProps = {
   bins: CoverageBin[];
   binSizeDeg: number | null;
@@ -257,14 +262,33 @@ export default function CoverageHeatmapLayer({
       scaleRadius: true,
       useLocalExtrema: false,
       radius: 10,
-      maxOpacity: 0.55,
-      minOpacity: 0.05,
-      blur: 0.85
+      maxOpacity: HEAT_MAX_OPACITY,
+      minOpacity: HEAT_MIN_OPACITY,
+      blur: HEAT_BLUR
     });
 
     overlay.addTo(map);
     patchHeatmapColorize(overlay);
     overlayRef.current = overlay;
+
+    const overlayElement = overlayRef.current?._el as HTMLDivElement | undefined;
+    if (overlayElement) {
+      overlayElement.style.opacity = String(HEAT_LAYER_OPACITY);
+      overlayElement.style.pointerEvents = 'none';
+    }
+
+    const heatmapRendererCanvas = overlayRef.current?._heatmap?._renderer?.canvas as
+      | HTMLCanvasElement
+      | undefined;
+    if (heatmapRendererCanvas) {
+      heatmapRendererCanvas.style.opacity = '1';
+    }
+
+    overlayRef.current?._heatmap?.configure?.({
+      maxOpacity: HEAT_MAX_OPACITY,
+      minOpacity: HEAT_MIN_OPACITY,
+      blur: HEAT_BLUR
+    });
 
     return () => {
       if (rafRef.current !== null) {

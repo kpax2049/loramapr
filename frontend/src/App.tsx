@@ -57,6 +57,7 @@ const SIDEBAR_TAB_KEY = 'sidebarTab';
 const ZEN_MODE_KEY = 'zenMode';
 const THEME_MODE_KEY = 'themeMode';
 const SHOW_DEVICE_MARKERS_KEY = 'showDeviceMarkers';
+const SHOW_COVERAGE_TRACKS_KEY = 'showCoverageTracks';
 const SHOW_HOME_GEOFENCE_PREFIX = 'showHomeGeofence:';
 const POINT_DETAILS_COLLAPSED_KEY = 'rightPanelPointDetailsCollapsed';
 const STATS_PANEL_COLLAPSED_KEY = 'rightPanelStatsCollapsed';
@@ -217,6 +218,17 @@ function readStoredShowDeviceMarkers(): boolean {
     return false;
   }
   return window.localStorage.getItem(SHOW_DEVICE_MARKERS_KEY) === 'true';
+}
+
+function readStoredShowCoverageTracks(): boolean {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+  const raw = window.localStorage.getItem(SHOW_COVERAGE_TRACKS_KEY);
+  if (raw === null) {
+    return true;
+  }
+  return raw === 'true';
 }
 
 function buildHomeGeofenceStorageKey(deviceId: string): string {
@@ -727,6 +739,9 @@ function App() {
   const [systemTheme, setSystemTheme] = useState<EffectiveTheme>(() => readSystemTheme());
   const [showPoints, setShowPoints] = useState(initial.showPoints);
   const [showTrack, setShowTrack] = useState(initial.showTrack);
+  const [showCoverageTracks, setShowCoverageTracks] = useState<boolean>(() =>
+    readStoredShowCoverageTracks()
+  );
   const [showDeviceMarkers, setShowDeviceMarkers] = useState<boolean>(() => readStoredShowDeviceMarkers());
   const [showHomeGeofence, setShowHomeGeofence] = useState<boolean>(() =>
     readStoredShowHomeGeofence(initial.deviceId)
@@ -849,6 +864,16 @@ function App() {
     }
     window.localStorage.setItem(SHOW_DEVICE_MARKERS_KEY, showDeviceMarkers ? 'true' : 'false');
   }, [showDeviceMarkers]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(
+      SHOW_COVERAGE_TRACKS_KEY,
+      showCoverageTracks ? 'true' : 'false'
+    );
+  }, [showCoverageTracks]);
 
   useEffect(() => {
     setShowHomeGeofence(readStoredShowHomeGeofence(deviceId));
@@ -2898,6 +2923,7 @@ function App() {
       onToChange={setTo}
       showPoints={showPoints}
       showTrack={showTrack}
+      showCoverageTracks={showCoverageTracks}
       showDeviceMarkers={showDeviceMarkers}
       onShowDeviceMarkersChange={setShowDeviceMarkers}
       showHomeGeofence={showHomeGeofence}
@@ -2905,6 +2931,7 @@ function App() {
       onShowHomeGeofenceChange={setShowHomeGeofence}
       onShowPointsChange={setShowPoints}
       onShowTrackChange={setShowTrack}
+      onShowCoverageTracksChange={setShowCoverageTracks}
       playbackControls={playbackControls}
       fitFeedback={fitFeedback}
       sessionSelectionNotice={sessionSelectionNotice}
@@ -2948,6 +2975,7 @@ function App() {
           coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
           showPoints={showPoints}
           showTrack={showTrack}
+          showCoverageTracks={showCoverageTracks}
           interactionEnabled={!isTourActive}
           playbackCursorPosition={safePlaybackCursorPosition}
           latestLocationMarker={latestLocationMarker}

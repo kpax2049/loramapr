@@ -77,6 +77,7 @@ type MapViewProps = {
   coverageBinSize?: number | null;
   showPoints?: boolean;
   showTrack?: boolean;
+  showCoverageTracks?: boolean;
   interactionEnabled?: boolean;
   playbackCursorPosition?: [number, number] | null;
   latestLocationMarker?: LatestLocationMarker | null;
@@ -455,6 +456,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   coverageBinSize = 0.001,
   showPoints = true,
   showTrack = true,
+  showCoverageTracks = true,
   interactionEnabled = true,
   playbackCursorPosition = null,
   latestLocationMarker = null,
@@ -542,8 +544,10 @@ ref
     }
   }));
 
+  const shouldRenderTracks = mapLayerMode === 'coverage' ? showCoverageTracks : showTrack;
+
   const trackPositions = useMemo(() => {
-    if (!showTrack || track.length === 0) {
+    if (!shouldRenderTracks || track.length === 0) {
       return [];
     }
     const validTrack = track.filter(hasFiniteLatLon);
@@ -570,7 +574,7 @@ ref
     }
 
     return positions;
-  }, [track, currentZoom, showTrack]);
+  }, [track, currentZoom, shouldRenderTracks]);
 
   const overviewTrackPoints = useMemo(
     () =>
@@ -585,7 +589,7 @@ ref
   );
 
   const overviewTrackPositions = useMemo(() => {
-    if (!showTrack || overviewTrack.length === 0) {
+    if (!shouldRenderTracks || overviewTrack.length === 0) {
       return [];
     }
     const validOverview = overviewTrack.filter(hasFiniteLatLon);
@@ -612,7 +616,7 @@ ref
     }
 
     return positions;
-  }, [overviewTrack, currentZoom, showTrack]);
+  }, [overviewTrack, currentZoom, shouldRenderTracks]);
 
   useEffect(() => {
     if (onZoomChange) {
@@ -869,7 +873,7 @@ ref
           scope={coverageScope}
         />
       )}
-      {showTrack && overviewTrackPositions.length > 0 && (
+      {shouldRenderTracks && overviewTrackPositions.length > 0 && (
         <Polyline
           positions={overviewTrackPositions}
           pathOptions={{ className: 'map-track map-track--overview' }}
@@ -900,7 +904,7 @@ ref
           }
         />
       )}
-      {showTrack && trackPositions.length > 0 && (
+      {shouldRenderTracks && trackPositions.length > 0 && (
         <Polyline
           positions={trackPositions}
           pathOptions={{ className: 'map-track map-track--window' }}
