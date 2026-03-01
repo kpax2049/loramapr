@@ -67,6 +67,38 @@ Restore prompts for confirmation by default. To skip prompts in automation:
 CONFIRM_RESTORE=1 scripts/db/restore.sh backups/loramapr-20260216-103000.sql.gz
 ```
 
+## Sanitize Device Sessions for Screenshots
+
+Shift all session-bound measurements for one device to a new map center (preserves route shape/coverage pattern), then rebuild coverage bins for that device.
+
+By device UID:
+
+```bash
+scripts/db/sanitize-device-sessions.sh \
+  --device-uid '!e616744a' \
+  --target-lat 37.7749 \
+  --target-lon -122.4194
+```
+
+By device ID:
+
+```bash
+scripts/db/sanitize-device-sessions.sh \
+  --device-id 9550b7ed-e722-4b12-afc0-e899cd3e3bf2 \
+  --target-lat 37.7749 \
+  --target-lon -122.4194
+```
+
+Dry-run only (no DB writes):
+
+```bash
+scripts/db/sanitize-device-sessions.sh \
+  --device-uid '!e616744a' \
+  --target-lat 37.7749 \
+  --target-lon -122.4194 \
+  --dry-run
+```
+
 ## systemd (Daily Backup at 03:15)
 
 1. Copy unit files:

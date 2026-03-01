@@ -65,6 +65,52 @@ Restore safety behavior:
 - `--drop-first` requires additional `DROP` confirmation
 - Stops app service before restore (tries `api`, falls back to `backend`) unless `--no-stop-api`
 
+## Sanitize locations for screenshots (all sessions by device)
+
+Use `scripts/db/sanitize-device-sessions.sh` to shift all session-bound measurements
+for one device to a target map center. This preserves route/coverage shape while
+removing original location context.
+
+By device UID:
+
+```bash
+scripts/db/sanitize-device-sessions.sh \
+  --device-uid '!e616744a' \
+  --target-lat 49.4918 \
+  --target-lon 8.1771
+```
+
+By device ID:
+
+```bash
+scripts/db/sanitize-device-sessions.sh \
+  --device-id 9550b7ed-e722-4b12-afc0-e899cd3e3bf2 \
+  --target-lat 49.4918 \
+  --target-lon 8.1771
+```
+
+Dry-run first:
+
+```bash
+scripts/db/sanitize-device-sessions.sh \
+  --device-uid '!e616744a' \
+  --target-lat 49.4918 \
+  --target-lon 8.1771 \
+  --dry-run
+```
+
+Notes:
+
+- Script updates measurements in place and rebuilds coverage bins for that device by default.
+- `--no-rebuild-coverage` skips bin rebuild if you only want coordinate edits.
+- Script targets measurements attached to sessions (`sessionId IS NOT NULL`).
+
+Revert to exact original data:
+
+```bash
+scripts/db/restore.sh --drop-first backups/<your-backup>.sql.gz
+```
+
 ## Retention
 
 Retention is implemented in `backup.sh`:
