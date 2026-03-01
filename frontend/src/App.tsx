@@ -714,7 +714,6 @@ function App() {
   const playbackCacheMissesRef = useRef<number[]>([]);
   const [playbackLastGoodItems, setPlaybackLastGoodItems] = useState<SessionWindowPoint[]>([]);
   const [mapLayerMode, setMapLayerMode] = useState<'points' | 'coverage'>('points');
-  const [coverageVisualizationMode, setCoverageVisualizationMode] = useState<'bins' | 'heatmap'>('bins');
   const [coverageScope, setCoverageScope] = useState<CoverageScope>('device');
   const [selectedCoverageSessionId, setSelectedCoverageSessionId] = useState<string | null>(null);
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
@@ -2878,8 +2877,6 @@ function App() {
       selectedCoverageSessionId={selectedCoverageSessionId}
       onSelectedCoverageSessionIdChange={setSelectedCoverageSessionId}
       coverageSessionOptions={coverageSessionOptions}
-      coverageVisualizationMode={coverageVisualizationMode}
-      onCoverageVisualizationModeChange={setCoverageVisualizationMode}
       coverageMetric={coverageMetric}
       onCoverageMetricChange={setCoverageMetric}
       rangeFrom={exploreRange.from}
@@ -2929,7 +2926,6 @@ function App() {
           ref={mapRef}
           theme={effectiveTheme}
           mapLayerMode={effectiveMapLayerMode}
-          coverageVisualizationMode={coverageVisualizationMode}
           coverageMetric={coverageMetric}
           measurements={mapMeasurements}
           compareMeasurements={mapCompareMeasurements}

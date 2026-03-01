@@ -90,8 +90,6 @@ type ControlsProps = {
   selectedCoverageSessionId: string | null;
   onSelectedCoverageSessionIdChange: (sessionId: string | null) => void;
   coverageSessionOptions: Session[];
-  coverageVisualizationMode: 'bins' | 'heatmap';
-  onCoverageVisualizationModeChange: (mode: 'bins' | 'heatmap') => void;
   coverageMetric: 'count' | 'rssiAvg' | 'snrAvg';
   onCoverageMetricChange: (metric: 'count' | 'rssiAvg' | 'snrAvg') => void;
   rangeFrom?: string | Date;
@@ -155,8 +153,6 @@ export default function Controls({
   selectedCoverageSessionId,
   onSelectedCoverageSessionIdChange,
   coverageSessionOptions,
-  coverageVisualizationMode,
-  onCoverageVisualizationModeChange,
   coverageMetric,
   onCoverageMetricChange,
   rangeFrom,
@@ -1345,41 +1341,7 @@ export default function Controls({
               </button>
             </>
           ) : null}
-          <span className="controls__sub-label">Visualization</span>
-          <div
-            className="controls__segmented"
-            role="radiogroup"
-            aria-label="Coverage visualization"
-          >
-            <label
-              className={`controls__segment ${
-                coverageVisualizationMode === 'bins' ? 'is-active' : ''
-              }`}
-            >
-              <input
-                type="radio"
-                name="coverage-visualization"
-                value="bins"
-                checked={coverageVisualizationMode === 'bins'}
-                onChange={() => onCoverageVisualizationModeChange('bins')}
-              />
-              Bins
-            </label>
-            <label
-              className={`controls__segment ${
-                coverageVisualizationMode === 'heatmap' ? 'is-active' : ''
-              }`}
-            >
-              <input
-                type="radio"
-                name="coverage-visualization"
-                value="heatmap"
-                checked={coverageVisualizationMode === 'heatmap'}
-                onChange={() => onCoverageVisualizationModeChange('heatmap')}
-              />
-              Heatmap
-            </label>
-          </div>
+          <span className="controls__sub-label">Visualization: Bins</span>
           <label htmlFor="coverage-metric">Coverage metric</label>
           <select
             id="coverage-metric"
