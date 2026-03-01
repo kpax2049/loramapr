@@ -45,6 +45,7 @@ import {
   resolveBucketColor,
   type CoverageBucket
 } from '../coverage/coverageBuckets';
+import CoverageHeatmapLayer from './CoverageHeatmapLayer';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -65,6 +66,7 @@ type MapViewProps = {
   zoom?: number;
   theme?: 'light' | 'dark';
   mapLayerMode?: 'points' | 'coverage';
+  coverageVisualizationMode?: 'bins' | 'heatmap';
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
@@ -441,6 +443,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   zoom = DEFAULT_ZOOM,
   theme = 'light',
   mapLayerMode = 'points',
+  coverageVisualizationMode = 'bins',
   coverageMetric = 'count',
   measurements = [],
   compareMeasurements = [],
@@ -856,6 +859,13 @@ ref
           subdomains={['a', 'b', 'c']}
         />
       )}
+      {mapLayerMode === 'coverage' && coverageVisualizationMode === 'heatmap' && (
+        <CoverageHeatmapLayer
+          bins={coverageBins}
+          binSizeDeg={coverageBinSize}
+          metric={coverageMetric}
+        />
+      )}
       {showTrack && overviewTrackPositions.length > 0 && (
         <Polyline
           positions={overviewTrackPositions}
@@ -894,6 +904,7 @@ ref
         />
       )}
       {mapLayerMode === 'coverage' &&
+        coverageVisualizationMode === 'bins' &&
         coverageData.bins.map((bin) => {
           const className = ['coverage-bin', bin.bucketClassName].join(' ');
           const fillOpacity =
