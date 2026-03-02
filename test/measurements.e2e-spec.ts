@@ -40,11 +40,21 @@ describe('Measurements e2e', () => {
   });
 
   afterAll(async () => {
+    const device = await prisma.device.findUnique({
+      where: { deviceUid },
+      select: { id: true }
+    });
+
     await prisma.measurement.deleteMany({
       where: {
         device: { deviceUid }
       }
     });
+    if (device?.id) {
+      await prisma.session.deleteMany({
+        where: { deviceId: device.id }
+      });
+    }
     await prisma.device.deleteMany({
       where: { deviceUid }
     });
@@ -169,9 +179,24 @@ describe('Measurements e2e', () => {
   });
 
   it('coverage bins endpoint returns items after ingest', async () => {
+    const device = await prisma.device.findUnique({ where: { deviceUid }, select: { id: true } });
+    expect(device?.id).toBeTruthy();
+    if (!device?.id) {
+      throw new Error('Expected device to exist');
+    }
+
+    const session = await prisma.session.create({
+      data: {
+        deviceId: device.id,
+        startedAt: new Date()
+      },
+      select: { id: true }
+    });
+
     const capturedAt = new Date().toISOString();
     const items = Array.from({ length: 200 }, (_, index) => ({
       deviceUid,
+      sessionId: session.id,
       capturedAt,
       lat: 37.77 + (index % 20) * 0.00005,
       lon: -122.43 + (index % 10) * 0.00005
@@ -183,15 +208,11 @@ describe('Measurements e2e', () => {
       .send({ items })
       .expect(201);
 
-    const device = await prisma.device.findUnique({ where: { deviceUid }, select: { id: true } });
-    expect(device?.id).toBeTruthy();
-    if (device?.id) {
-      await coverageService.aggregateForDeviceDay(device.id, new Date(capturedAt));
-    }
+    await coverageService.aggregateForDeviceDay(device.id, new Date(capturedAt));
 
     const bbox = [-122.44, 37.76, -122.42, 37.78].join(',');
     const response = await request(app.getHttpServer())
-      .get(`/api/coverage/bins?deviceId=${device?.id}&bbox=${bbox}`)
+      .get(`/api/coverage/bins?deviceId=${device.id}&bbox=${bbox}`)
       .expect(200);
 
     expect(response.body.binSizeDeg).toBe(0.001);
