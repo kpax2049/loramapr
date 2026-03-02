@@ -125,6 +125,21 @@ function parseBoolean(value: string | null, defaultValue: boolean): boolean {
   return defaultValue;
 }
 
+function areBboxesEqual(
+  left: [number, number, number, number] | null,
+  right: [number, number, number, number] | null
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+  return (
+    left[0] === right[0] &&
+    left[1] === right[1] &&
+    left[2] === right[2] &&
+    left[3] === right[3]
+  );
+}
+
 function parsePlaybackSpeed(value: string | null): 0.25 | 0.5 | 1 | 2 | 4 {
   if (!value) {
     return 1;
@@ -710,6 +725,9 @@ function App() {
   const [useAdvancedRange, setUseAdvancedRange] = useState(initial.useAdvancedRange);
   const [presetAnchorMs, setPresetAnchorMs] = useState(Date.now());
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
+  const [pointsBboxCommitted, setPointsBboxCommitted] = useState<
+    [number, number, number, number] | null
+  >(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
   const [currentZoom, setCurrentZoom] = useState(12);
   const [viewMode, setViewMode] = useState<'explore' | 'playback'>(initial.viewMode);
@@ -1147,6 +1165,13 @@ function App() {
     setEventsNavigationNonce((value) => value + 1);
   }, []);
 
+  const handleBoundsChange = useCallback((nextBbox: [number, number, number, number]) => {
+    setBbox(nextBbox);
+    setPointsBboxCommitted((previous) =>
+      areBboxesEqual(previous, nextBbox) ? previous : nextBbox
+    );
+  }, []);
+
   const bboxPayload = useMemo(
     () =>
       debouncedBbox
@@ -1158,6 +1183,18 @@ function App() {
           }
         : undefined,
     [debouncedBbox]
+  );
+  const pointsBboxPayload = useMemo(
+    () =>
+      pointsBboxCommitted
+        ? {
+            minLon: pointsBboxCommitted[0],
+            minLat: pointsBboxCommitted[1],
+            maxLon: pointsBboxCommitted[2],
+            maxLat: pointsBboxCommitted[3]
+          }
+        : undefined,
+    [pointsBboxCommitted]
   );
 
   const isSessionMode = filterMode === 'session';
@@ -1299,13 +1336,15 @@ function App() {
   const sessionBoundOnlyForCoverageDevice = isCoverageExploreMode && coverageScope === 'device';
   const playbackEnabled = isPlaybackMode && hasPlaybackSession;
   const sessionPolling = exploreEnabled && Boolean(scopedExploreSessionId) ? 2000 : false;
+  const exploreMeasurementsBboxPayload =
+    mapLayerMode === 'points' ? pointsBboxPayload : bboxPayload;
   const effectiveExploreMeasurementsParams = useMemo<MeasurementQueryParams>(() => {
     const receiverId = isMeshtasticSource ? selectedReceiverId ?? undefined : undefined;
     const rxGatewayId = !isMeshtasticSource ? selectedGatewayId ?? undefined : undefined;
     if (scopedExploreSessionId) {
       return {
         sessionId: scopedExploreSessionId,
-        bbox: bboxPayload,
+        bbox: exploreMeasurementsBboxPayload,
         receiverId,
         rxGatewayId,
         sessionBoundOnly: sessionBoundOnlyForCoverageDevice,
@@ -1317,7 +1356,7 @@ function App() {
       deviceId: scopedExploreDeviceId ?? undefined,
       from: scopedExploreFrom,
       to: scopedExploreTo,
-      bbox: bboxPayload,
+      bbox: exploreMeasurementsBboxPayload,
       receiverId,
       rxGatewayId,
       sessionBoundOnly: sessionBoundOnlyForCoverageDevice,
@@ -1329,7 +1368,7 @@ function App() {
     scopedExploreDeviceId,
     scopedExploreFrom,
     scopedExploreTo,
-    bboxPayload,
+    exploreMeasurementsBboxPayload,
     selectedGatewayId,
     selectedReceiverId,
     isMeshtasticSource,
@@ -1376,7 +1415,8 @@ function App() {
   const exploreMeasurementsQuery = useMeasurements(
     effectiveExploreMeasurementsParams,
     {
-      enabled: exploreEnabled && exploreScopeEnabled
+      enabled: exploreEnabled && exploreScopeEnabled,
+      placeholderData: keepPreviousData
     },
     { filterMode: exploreQueryFilterMode, refetchIntervalMs: sessionPolling }
   );
@@ -1405,7 +1445,7 @@ function App() {
     if (isSessionMode) {
       return {
         sessionId: selectedSessionId ?? undefined,
-        bbox: bboxPayload,
+        bbox: pointsBboxPayload,
         receiverId,
         rxGatewayId,
         sample: compareSample,
@@ -1416,7 +1456,7 @@ function App() {
       deviceId: deviceId ?? undefined,
       from: exploreRange.from,
       to: exploreRange.to,
-      bbox: bboxPayload,
+      bbox: pointsBboxPayload,
       receiverId,
       rxGatewayId,
       sample: compareSample,
@@ -1425,7 +1465,7 @@ function App() {
   }, [
     isSessionMode,
     selectedSessionId,
-    bboxPayload,
+    pointsBboxPayload,
     compareGatewayId,
     compareReceiverId,
     receiverSource,
@@ -1442,7 +1482,8 @@ function App() {
         exploreEnabled &&
         mapLayerMode === 'points' &&
         Boolean(compareId) &&
-        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId))
+        (isSessionMode ? Boolean(selectedSessionId) : Boolean(deviceId)),
+      placeholderData: keepPreviousData
     },
     { filterMode, refetchIntervalMs: sessionPolling }
   );
@@ -2367,6 +2408,7 @@ function App() {
     // Clear map bounds when the scope changes so the first fetch is not clipped to
     // the previous viewport (e.g. switching from SF to a Germany session).
     setBbox(null);
+    setPointsBboxCommitted(null);
     setDebouncedBbox(null);
   }, [deviceId, selectedSessionId]);
 
@@ -2983,7 +3025,7 @@ function App() {
           deviceLocationMarkers={!isPlaybackMode && showDeviceMarkers ? deviceLocationMarkers : []}
           homeGeofenceOverlay={visibleHomeGeofenceOverlay}
           onSelectDeviceMarker={setDeviceId}
-          onBoundsChange={setBbox}
+          onBoundsChange={handleBoundsChange}
           onSelectPoint={setSelectedPointId}
           onOverviewSelectTime={isPlaybackMode ? handlePlaybackCursorMsChange : undefined}
           onZoomChange={setCurrentZoom}
