@@ -218,6 +218,8 @@ function BoundsListener({
   onUserInteraction?: () => void;
 }) {
   const map = useMap();
+  const emitTimerRef = useRef<number | null>(null);
+  const isZoomingRef = useRef(false);
 
   const emitBounds = () => {
     if (!onChange) {
@@ -233,6 +235,21 @@ function BoundsListener({
     }
   };
 
+  const cancelPendingEmit = () => {
+    if (emitTimerRef.current !== null) {
+      window.clearTimeout(emitTimerRef.current);
+      emitTimerRef.current = null;
+    }
+  };
+
+  const scheduleBoundsEmit = (delayMs: number) => {
+    cancelPendingEmit();
+    emitTimerRef.current = window.setTimeout(() => {
+      emitTimerRef.current = null;
+      emitBounds();
+    }, delayMs);
+  };
+
   const emitZoom = () => {
     if (!onZoomChange) {
       return;
@@ -245,28 +262,39 @@ function BoundsListener({
 
   useMapEvents({
     load: () => {
-      emitBounds();
       emitZoom();
+      scheduleBoundsEmit(0);
+    },
+    movestart: () => {
+      cancelPendingEmit();
     },
     moveend: () => {
-      emitBounds();
+      if (isZoomingRef.current) {
+        return;
+      }
+      scheduleBoundsEmit(150);
     },
     dragstart: () => {
       onUserInteraction?.();
     },
     zoomstart: () => {
       onUserInteraction?.();
+      isZoomingRef.current = true;
+      cancelPendingEmit();
     },
     zoomend: () => {
-      emitBounds();
       emitZoom();
+      isZoomingRef.current = false;
     }
   });
 
   useEffect(() => {
-    emitBounds();
     emitZoom();
-  }, [map, onChange, onZoomChange]);
+    scheduleBoundsEmit(0);
+    return () => {
+      cancelPendingEmit();
+    };
+  }, []);
 
   return null;
 }
