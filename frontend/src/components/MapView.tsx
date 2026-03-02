@@ -219,7 +219,7 @@ function BoundsListener({
 }) {
   const map = useMap();
   const emitTimerRef = useRef<number | null>(null);
-  const lastZoomCommitAtRef = useRef(0);
+  const isZoomingRef = useRef(false);
 
   const emitBounds = () => {
     if (!onChange) {
@@ -269,8 +269,7 @@ function BoundsListener({
       cancelPendingEmit();
     },
     moveend: () => {
-      // zoomend can trigger an immediate moveend; avoid committing the same bounds twice.
-      if (Date.now() - lastZoomCommitAtRef.current < 80) {
+      if (isZoomingRef.current) {
         return;
       }
       scheduleBoundsEmit(150);
@@ -280,16 +279,18 @@ function BoundsListener({
     },
     zoomstart: () => {
       onUserInteraction?.();
+      isZoomingRef.current = true;
       cancelPendingEmit();
     },
     zoomend: () => {
       emitZoom();
-      lastZoomCommitAtRef.current = Date.now();
-      scheduleBoundsEmit(150);
+      isZoomingRef.current = false;
     }
   });
 
   useEffect(() => {
+    emitZoom();
+    scheduleBoundsEmit(0);
     return () => {
       cancelPendingEmit();
     };

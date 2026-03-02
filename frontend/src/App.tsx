@@ -713,6 +713,7 @@ function App() {
   const previousDeviceIdRef = useRef<string | null>(initial.deviceId);
   const previousCoverageMapLayerRef = useRef<'points' | 'coverage'>('points');
   const previousFocusedCoverageSessionIdRef = useRef<string | null>(null);
+  const coverageBinsBboxCommitTimerRef = useRef<number | null>(null);
 
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
@@ -726,6 +727,9 @@ function App() {
   const [presetAnchorMs, setPresetAnchorMs] = useState(Date.now());
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [pointsBboxCommitted, setPointsBboxCommitted] = useState<
+    [number, number, number, number] | null
+  >(null);
+  const [coverageBinsBboxCommitted, setCoverageBinsBboxCommitted] = useState<
     [number, number, number, number] | null
   >(null);
   const [debouncedBbox, setDebouncedBbox] = useState<[number, number, number, number] | null>(null);
@@ -854,6 +858,63 @@ function App() {
 
     return () => window.clearTimeout(handle);
   }, [bbox]);
+
+  useEffect(() => {
+    if (mapLayerMode !== 'coverage' || coverageVisualizationMode !== 'bins') {
+      if (coverageBinsBboxCommitTimerRef.current !== null) {
+        window.clearTimeout(coverageBinsBboxCommitTimerRef.current);
+        coverageBinsBboxCommitTimerRef.current = null;
+      }
+      return;
+    }
+    if (!bbox) {
+      return;
+    }
+
+    if (coverageBinsBboxCommitTimerRef.current !== null) {
+      window.clearTimeout(coverageBinsBboxCommitTimerRef.current);
+    }
+
+    coverageBinsBboxCommitTimerRef.current = window.setTimeout(() => {
+      coverageBinsBboxCommitTimerRef.current = null;
+      setCoverageBinsBboxCommitted((previous) =>
+        areBboxesEqual(previous, bbox) ? previous : bbox
+      );
+    }, 150);
+
+    return () => {
+      if (coverageBinsBboxCommitTimerRef.current !== null) {
+        window.clearTimeout(coverageBinsBboxCommitTimerRef.current);
+        coverageBinsBboxCommitTimerRef.current = null;
+      }
+    };
+  }, [bbox, mapLayerMode, coverageVisualizationMode]);
+
+  useEffect(() => {
+    if (
+      mapLayerMode !== 'coverage' ||
+      coverageVisualizationMode !== 'bins' ||
+      coverageBinsBboxCommitted ||
+      !bbox
+    ) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setCoverageBinsBboxCommitted((previous) =>
+        areBboxesEqual(previous, bbox) ? previous : bbox
+      );
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [mapLayerMode, coverageVisualizationMode, coverageBinsBboxCommitted, bbox]);
+
+  useEffect(() => {
+    return () => {
+      if (coverageBinsBboxCommitTimerRef.current !== null) {
+        window.clearTimeout(coverageBinsBboxCommitTimerRef.current);
+        coverageBinsBboxCommitTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1166,7 +1227,7 @@ function App() {
   }, []);
 
   const handleBoundsChange = useCallback((nextBbox: [number, number, number, number]) => {
-    setBbox(nextBbox);
+    setBbox((previous) => (areBboxesEqual(previous, nextBbox) ? previous : nextBbox));
     setPointsBboxCommitted((previous) =>
       areBboxesEqual(previous, nextBbox) ? previous : nextBbox
     );
@@ -1814,7 +1875,9 @@ function App() {
     const gatewayId = receiverSource === 'lorawan' ? selectedGatewayId ?? undefined : undefined;
     const coverageLimit = coverageVisualizationMode === 'heatmap' ? 12000 : undefined;
     const coverageBbox =
-      coverageVisualizationMode === 'heatmap' ? undefined : debouncedBbox ?? undefined;
+      coverageVisualizationMode === 'heatmap'
+        ? undefined
+        : coverageBinsBboxCommitted ?? undefined;
     if (coverageScope === 'session') {
       return {
         sessionId: effectiveCoverageSessionId ?? undefined,
@@ -1836,7 +1899,7 @@ function App() {
     coverageScope,
     effectiveCoverageSessionId,
     coverageDay,
-    debouncedBbox,
+    coverageBinsBboxCommitted,
     deviceId,
     selectedGatewayId,
     receiverSource,
@@ -1847,10 +1910,11 @@ function App() {
     {
       enabled:
         mapLayerMode === 'coverage' &&
-        (coverageVisualizationMode === 'heatmap' || Boolean(bboxPayload)) &&
+        (coverageVisualizationMode === 'heatmap' || Boolean(coverageBinsBboxCommitted)) &&
         (coverageScope === 'session'
           ? Boolean(effectiveCoverageSessionId)
-          : Boolean(deviceId))
+          : Boolean(deviceId)),
+      placeholderData: keepPreviousData
     },
     { filterMode: coverageFilterMode }
   );
@@ -2409,6 +2473,7 @@ function App() {
     // the previous viewport (e.g. switching from SF to a Germany session).
     setBbox(null);
     setPointsBboxCommitted(null);
+    setCoverageBinsBboxCommitted(null);
     setDebouncedBbox(null);
   }, [deviceId, selectedSessionId]);
 
@@ -2419,6 +2484,7 @@ function App() {
     setUserInteractedWithMap(false);
     hasAutoFitRef.current = false;
     setBbox(null);
+    setCoverageBinsBboxCommitted(null);
     setDebouncedBbox(null);
   }, [mapLayerMode, coverageScope, effectiveCoverageSessionId]);
 
