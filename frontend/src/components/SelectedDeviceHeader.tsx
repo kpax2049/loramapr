@@ -79,7 +79,7 @@ export default function SelectedDeviceHeader({
   return (
     <div className="selected-device-header" data-tour="selected-device-header">
       <div className="selected-device-header__row">
-        <div className="selected-device-header__identity-wrap">
+        <div className="selected-device-header__identity-wrap minw0">
           <DeviceIcon
             device={device ?? {}}
             iconKey={iconKey}
@@ -88,8 +88,8 @@ export default function SelectedDeviceHeader({
             showBadge={Boolean(device)}
             title={iconDefinition.label}
           />
-          <div className="selected-device-header__identity">
-            <div className="selected-device-header__name-row">
+          <div className="selected-device-header__identity flex1 minw0">
+            <div className="selected-device-header__name-row minw0">
               <DeviceOnlineDot
                 latestMeasurementAt={latestMeasurementAt}
                 latestWebhookReceivedAt={latestWebhookReceivedAt}
@@ -97,7 +97,7 @@ export default function SelectedDeviceHeader({
                 className="selected-device-header__online-dot"
                 dataTour="device-online-dot"
               />
-              <strong>{deviceName}</strong>
+              <strong className="flex1 minw0">{deviceName}</strong>
             </div>
             <span className="selected-device-header__uid-row">
               {deviceUid ? (

@@ -1075,8 +1075,8 @@ export default function Controls({
                 />
                 Enabled
               </label>
-              <div className="controls__row">
-                <div className="controls__group">
+              <div className="controls__row minw0">
+                <div className="controls__group minw0 flex1">
                   <label htmlFor="auto-home-lat">homeLat</label>
                   <input
                     id="auto-home-lat"
@@ -1085,7 +1085,7 @@ export default function Controls({
                     onChange={(event) => updateAutoSessionField('homeLat', event.target.value)}
                   />
                 </div>
-                <div className="controls__group">
+                <div className="controls__group minw0 flex1">
                   <label htmlFor="auto-home-lon">homeLon</label>
                   <input
                     id="auto-home-lon"
@@ -1095,8 +1095,8 @@ export default function Controls({
                   />
                 </div>
               </div>
-              <div className="controls__row">
-                <div className="controls__group">
+              <div className="controls__row minw0">
+                <div className="controls__group minw0 flex1">
                   <label htmlFor="auto-radius">radiusMeters</label>
                   <input
                     id="auto-radius"
@@ -1105,7 +1105,7 @@ export default function Controls({
                     onChange={(event) => updateAutoSessionField('radiusMeters', event.target.value)}
                   />
                 </div>
-                <div className="controls__group">
+                <div className="controls__group minw0 flex1">
                   <label htmlFor="auto-min-outside">minOutsideSeconds</label>
                   <input
                     id="auto-min-outside"
@@ -1115,8 +1115,8 @@ export default function Controls({
                   />
                 </div>
               </div>
-              <div className="controls__row">
-                <div className="controls__group">
+              <div className="controls__row minw0">
+                <div className="controls__group minw0 flex1">
                   <label htmlFor="auto-min-inside">minInsideSeconds</label>
                   <input
                     id="auto-min-inside"

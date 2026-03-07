@@ -8,6 +8,14 @@
   color: var(--fg);
 }
 
+.minw0 {
+  min-width: 0;
+}
+
+.flex1 {
+  flex: 1 1 auto;
+}
+
 .app :is(button, select, [role='button'], [role='tab']) {
   cursor: pointer;
 }
@@ -37,11 +45,14 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   flex: 0 0 auto;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-soft);
+  overflow: hidden;
 }
 
 .layout__sidebar--collapsed {
@@ -52,6 +63,8 @@
 .layout__sidebar-footer {
   flex: 0 0 auto;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: stretch;
   padding: 0.5rem;
@@ -153,12 +166,16 @@
 .layout__sidebar-body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .layout__sidebar-content {
   min-height: 0;
+  min-width: 0;
   padding: 1rem;
+  overflow-x: hidden;
 }
 
 .layout__toggle-button {
@@ -485,14 +502,13 @@
 
 .sidebar-header__tabs {
   display: flex;
-  width: calc(100% + var(--sidebar-top-right-reserve, 0rem));
-  margin-right: calc(var(--sidebar-top-right-reserve, 0rem) * -1);
+  width: 100%;
   margin-top: 1.35rem;
   min-width: 0;
   flex-wrap: wrap;
   gap: 0.35rem;
-  overflow: visible;
-  padding-right: 0;
+  overflow: hidden;
+  padding-right: var(--sidebar-top-right-reserve, 0rem);
 }
 
 .sidebar-header__tab {
@@ -1092,6 +1108,7 @@
 .controls {
   position: relative;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   display: grid;
   align-content: start;
@@ -1102,6 +1119,7 @@
   background: var(--panel-bg);
   box-shadow: var(--panel-shadow);
   border-left: 1px solid var(--panel-border);
+  overflow-x: hidden;
 }
 
 .dev-counter {
@@ -1235,6 +1253,9 @@
   color: var(--panel-text);
   box-shadow: var(--panel-shadow);
   border-left: 1px solid var(--panel-border);
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .playback-panel__header h3 {
@@ -1474,10 +1495,15 @@
   border-radius: 10px;
   border: 1px solid var(--border-soft);
   background: var(--panel-surface);
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .auto-session-panel__toggle {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--panel-bg);
@@ -1491,6 +1517,13 @@
   text-transform: uppercase;
   font-family: var(--font-mono);
   cursor: pointer;
+}
+
+.auto-session-panel__toggle > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .auto-session-panel__toggle:hover {
@@ -1515,6 +1548,8 @@
 
 .device-details__toggle {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--panel-bg);
@@ -1528,6 +1563,13 @@
   text-transform: uppercase;
   font-family: var(--font-mono);
   cursor: pointer;
+}
+
+.device-details__toggle > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .device-details__toggle:hover {
@@ -1633,6 +1675,7 @@
   display: flex;
   gap: 0.35rem;
   align-items: center;
+  min-width: 0;
 }
 
 .device-details__name-edit input {
@@ -1659,6 +1702,7 @@
   letter-spacing: 0.08em;
   font-family: var(--font-mono);
   cursor: pointer;
+  max-width: 100%;
 }
 
 .device-details__name-edit button:hover,
@@ -1680,6 +1724,8 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .device-details__sparkline {
@@ -1718,15 +1764,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.45rem;
   min-width: 0;
 }
 
 .device-details__notes strong {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .device-details__icon {
@@ -1966,6 +2011,7 @@
 .controls input[type='datetime-local'],
 .controls input[type='number'] {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
@@ -2064,6 +2110,7 @@
 
 .controls__button {
   width: 100%;
+  max-width: 100%;
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
   border: 1px solid var(--border-strong);
@@ -2078,6 +2125,7 @@
 
 .controls__button--compact {
   width: auto;
+  max-width: 100%;
   padding: 0.35rem 0.6rem;
   font-size: 0.7rem;
   flex: 0 0 auto;
@@ -2114,9 +2162,13 @@
 .controls__toggle {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   font-size: 0.9rem;
   color: var(--panel-text);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .controls__toggle input {
@@ -2348,6 +2400,8 @@
   border: 1px solid var(--border-soft);
   background: var(--panel-surface);
   min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .events-explorer__header h3 {
@@ -2472,13 +2526,13 @@
   border: 1px solid var(--border-soft);
   border-radius: 8px;
   background: var(--panel-bg);
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
 }
 
 .events-explorer__table {
-  width: max(100%, 44rem);
-  min-width: 44rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .events-explorer__virtual-list {
@@ -3018,6 +3072,9 @@
   border-radius: 10px;
   border: 1px solid var(--border-soft);
   background: var(--panel-surface);
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .devices-manager__toolbar {
@@ -3114,7 +3171,9 @@
   gap: 0.35rem;
   max-height: 280px;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 0.1rem;
 }
 
@@ -3129,6 +3188,8 @@
   border: 1px solid var(--border-soft);
   background: var(--panel-bg);
   transition: border-color 120ms ease, background-color 120ms ease;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .devices-manager__row:hover {
@@ -3153,8 +3214,10 @@
 .devices-manager__cell--name {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  overflow: visible;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .devices-manager__online-dot {
@@ -3439,6 +3502,148 @@
 @media (max-width: 720px) {
   .controls__row {
     grid-template-columns: 1fr;
+  }
+
+  .selected-device-header__row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .selected-device-header__meta {
+    width: 100%;
+    justify-items: start;
+  }
+
+  .selected-device-header__badges {
+    justify-items: start;
+  }
+
+  .sessions-panel__buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .layout__sidebar-theme-select {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .sidebar-header__tabs {
+    padding-right: 0;
+    margin-top: 1.8rem;
+  }
+
+  .playback-panel__controls-row:first-child,
+  .playback-panel__jump {
+    grid-template-columns: 1fr;
+  }
+
+  .sessions-panel__header {
+    flex-wrap: wrap;
+  }
+
+  .sessions-panel__header-meta {
+    justify-items: start;
+  }
+
+  .events-explorer__virtual-row {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .events-explorer__virtual-row > div {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 0.6rem;
+    padding: 0.3rem 0.34rem;
+  }
+
+  .devices-manager__header {
+    display: none;
+  }
+
+  .devices-manager__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name actions'
+      'uid actions'
+      'last actions'
+      'measurement actions';
+    align-items: start;
+    row-gap: 0.35rem;
+  }
+
+  .devices-manager__row > .devices-manager__cell--name {
+    grid-area: name;
+  }
+
+  .devices-manager__row > .devices-manager__cell--uid {
+    grid-area: uid;
+  }
+
+  .devices-manager__row > .devices-manager__cell:nth-of-type(3) {
+    grid-area: last;
+  }
+
+  .devices-manager__row > .devices-manager__cell:nth-of-type(4) {
+    grid-area: measurement;
+  }
+
+  .devices-manager__row > .devices-manager__cell--actions {
+    grid-area: actions;
+    align-self: start;
+  }
+
+  .devices-manager__cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .devices-manager__identity-primary,
+  .devices-manager__identity-secondary {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 420px) {
+  .layout__sidebar-content {
+    padding: 0.8rem;
+  }
+
+  .controls {
+    padding: 0.8rem;
+    gap: 0.65rem;
+  }
+
+  .device-details__row {
+    grid-template-columns: 1fr;
+    gap: 0.22rem;
+  }
+
+  .device-details__row > span {
+    margin-bottom: 0.1rem;
+  }
+
+  .device-details__name-edit {
+    flex-wrap: wrap;
+  }
+
+  .selected-device-header__name-row strong {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .selected-device-header__uid-row > span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .controls__toggle {
+    align-items: flex-start;
   }
 }
 
@@ -4413,6 +4618,9 @@
   border-left: 1px solid var(--panel-border);
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .sessions-panel__header {
@@ -4420,12 +4628,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .sessions-panel__header-meta {
   display: grid;
   justify-items: end;
   gap: 0.3rem;
+  min-width: 0;
 }
 
 .sessions-panel__header h3 {
@@ -5286,6 +5496,64 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-family: var(--font-mono);
+}
+
+.sidebar-layout-test {
+  min-height: 100vh;
+  padding: 1rem;
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+  color: var(--panel-text);
+}
+
+.sidebar-layout-test__header h1 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.sidebar-layout-test__header p {
+  margin: 0.35rem 0 0;
+  color: var(--panel-muted);
+  font-size: 0.78rem;
+  max-width: 68ch;
+}
+
+.sidebar-layout-test__cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.sidebar-layout-test__case {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sidebar-layout-test__case h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-muted);
+  font-family: var(--font-mono);
+}
+
+.sidebar-layout-test__sidebar {
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--sidebar-bg);
+  padding: 0.75rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  max-width: 100%;
+  min-height: 76vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 @media (max-width: 1600px) {

@@ -64,6 +64,7 @@ const STATS_PANEL_COLLAPSED_KEY = 'rightPanelStatsCollapsed';
 const APP_NAME = __APP_NAME__;
 const APP_VERSION = __APP_VERSION__;
 const DEVICE_ICON_GALLERY_ROUTE = '/dev/device-icons';
+const SIDEBAR_LAYOUT_TEST_ROUTE = '/dev/sidebar-layout';
 
 function normalizePathname(pathname: string): string {
   if (!pathname) {
@@ -77,8 +78,15 @@ const SHOW_DEVICE_ICON_GALLERY =
   import.meta.env.DEV &&
   typeof window !== 'undefined' &&
   normalizePathname(window.location.pathname) === DEVICE_ICON_GALLERY_ROUTE;
+const SHOW_SIDEBAR_LAYOUT_TEST =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  normalizePathname(window.location.pathname) === SIDEBAR_LAYOUT_TEST_ROUTE;
 const DevDeviceIconGallery = import.meta.env.DEV
   ? lazy(() => import('./components/dev/DeviceIconGallery'))
+  : null;
+const DevSidebarLayoutTest = import.meta.env.DEV
+  ? lazy(() => import('./components/dev/SidebarLayoutTest'))
   : null;
 
 type SidebarTab = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
@@ -693,6 +701,14 @@ function App() {
     return (
       <Suspense fallback={<div className="device-icon-gallery">Loading icon gallery...</div>}>
         <DevDeviceIconGallery />
+      </Suspense>
+    );
+  }
+
+  if (SHOW_SIDEBAR_LAYOUT_TEST && DevSidebarLayoutTest) {
+    return (
+      <Suspense fallback={<div className="sidebar-layout-test">Loading sidebar layout test...</div>}>
+        <DevSidebarLayoutTest />
       </Suspense>
     );
   }
