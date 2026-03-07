@@ -1,4 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  IconAntennaBars5,
+  IconCircuitCapacitor,
+  IconCpu,
+  IconHomeSignal,
+  IconMapPin,
+  IconMapPinBolt
+} from '@tabler/icons-react';
 import type {
   AutoSessionConfig,
   DeviceLatest,
@@ -41,6 +49,7 @@ import DeviceIcon, {
 } from './DeviceIcon';
 import DeviceOnlineDot from './DeviceOnlineDot';
 import DevicesManager from './DevicesManager';
+import CollapsedSummaryChips, { type CollapsedSummaryChipItem } from './CollapsedSummaryChips';
 import type { EventsNavigationInput } from '../utils/eventsNavigation';
 import MiniLineChart from './charts/MiniLineChart';
 import {
@@ -500,6 +509,174 @@ export default function Controls({
   const notesPreviewRaw = deviceDetail?.notes ?? '';
   const notesPreview =
     notesPreviewRaw.length > 120 ? `${notesPreviewRaw.slice(0, 120)}...` : notesPreviewRaw || '—';
+  const measurementStatusCompactLabel = measurementStatusLabel === 'Offline' ? 'Off' : measurementStatusLabel;
+  const detailsStatusTone: CollapsedSummaryChipItem['tone'] =
+    measurementStatus === 'online'
+      ? 'success'
+      : measurementStatus === 'recent'
+        ? 'warn'
+        : measurementStatus === 'stale' || measurementStatus === 'offline'
+          ? 'danger'
+          : 'neutral';
+  const detailLastSeenValue = deviceDetail?.lastSeenAt ?? latestMeasurementTimestamp;
+  const detailBatteryLevel =
+    typeof latestTelemetry?.batteryLevel === 'number' && Number.isFinite(latestTelemetry.batteryLevel)
+      ? Math.max(0, Math.round(latestTelemetry.batteryLevel))
+      : null;
+  const detailDeviceTypeLabel = toCompactDeviceTypeLabel(
+    meshtasticHwModel ?? detailIcon.label ?? selectedDevice?.hwModel ?? null
+  );
+  const detailsCollapsedSummaryItems = useMemo<CollapsedSummaryChipItem[]>(() => {
+    const items: CollapsedSummaryChipItem[] = [
+      {
+        key: 'status',
+        priority: 1,
+        icon: (
+          <DeviceOnlineDot
+            latestMeasurementAt={latestMeasurementTimestamp}
+            latestWebhookReceivedAt={latestWebhookTimestamp}
+            latestWebhookSource={latest?.latestWebhookSource ?? null}
+            formatRelativeTime={formatRelativeTime}
+          />
+        ),
+        text: measurementStatusCompactLabel,
+        tone: detailsStatusTone,
+        title: `Status: ${measurementStatusLabel}`
+      },
+      {
+        key: 'last-seen',
+        priority: 2,
+        icon: <IconAntennaBars5 size={14} stroke={1.8} />,
+        text: detailLastSeenValue ? formatRelativeTime(detailLastSeenValue) : 'Never',
+        title: detailLastSeenValue ? `Last seen ${formatRelativeTime(detailLastSeenValue)}` : 'Last seen never'
+      },
+      {
+        key: 'location',
+        priority: 3,
+        icon: <IconMapPin size={14} stroke={1.8} />,
+        text: latestLocation ? formatLatLonCompact(latestLocation.lat, latestLocation.lon) : 'GPS—',
+        title: latestLocation
+          ? `Latest location ${latestLocation.lat.toFixed(6)}, ${latestLocation.lon.toFixed(6)}`
+          : 'No GPS location yet'
+      }
+    ];
+
+    if (detailBatteryLevel !== null) {
+      items.push({
+        key: 'battery',
+        priority: 4,
+        icon: <IconCircuitCapacitor size={14} stroke={1.8} />,
+        text: `${detailBatteryLevel}%`,
+        title: `Battery ${detailBatteryLevel}%`
+      });
+    }
+
+    if (detailDeviceTypeLabel) {
+      items.push({
+        key: 'device-type',
+        priority: 5,
+        icon: <IconCpu size={14} stroke={1.8} />,
+        text: detailDeviceTypeLabel,
+        title: `Device type ${detailDeviceTypeLabel}`
+      });
+    }
+
+    return items;
+  }, [
+    detailBatteryLevel,
+    detailDeviceTypeLabel,
+    detailLastSeenValue,
+    detailsStatusTone,
+    latest,
+    latestLocation,
+    latestMeasurementTimestamp,
+    latestWebhookTimestamp,
+    measurementStatusCompactLabel,
+    measurementStatusLabel
+  ]);
+
+  const autoHomeLat = toFiniteNumber(autoSessionForm.homeLat);
+  const autoHomeLon = toFiniteNumber(autoSessionForm.homeLon);
+  const autoRadiusMeters = toFiniteNumber(autoSessionForm.radiusMeters);
+  const autoHomeConfigured = autoHomeLat !== null && autoHomeLon !== null;
+  const autoInsideOutsideText = useMemo(() => {
+    if (!autoHomeConfigured || autoRadiusMeters === null || autoRadiusMeters <= 0 || !latestLocation) {
+      return null;
+    }
+    const distanceMeters = getApproxDistanceMeters(
+      autoHomeLat,
+      autoHomeLon,
+      latestLocation.lat,
+      latestLocation.lon
+    );
+    if (!Number.isFinite(distanceMeters)) {
+      return null;
+    }
+    return distanceMeters <= autoRadiusMeters ? 'Inside' : 'Outside';
+  }, [autoHomeConfigured, autoHomeLat, autoHomeLon, autoRadiusMeters, latestLocation]);
+
+  const autoSessionCollapsedSummaryItems = useMemo<CollapsedSummaryChipItem[]>(() => {
+    const items: CollapsedSummaryChipItem[] = [
+      {
+        key: 'enabled',
+        priority: 1,
+        icon: <IconAntennaBars5 size={14} stroke={1.8} />,
+        text: autoSessionForm.enabled ? 'On' : 'Off',
+        tone: autoSessionForm.enabled ? 'success' : 'neutral',
+        title: autoSessionForm.enabled ? 'Auto session enabled' : 'Auto session disabled'
+      },
+      {
+        key: 'home',
+        priority: 2,
+        icon: <IconHomeSignal size={14} stroke={1.8} />,
+        text: autoHomeConfigured ? 'Home set' : 'Home—',
+        tone: autoHomeConfigured ? 'success' : 'warn',
+        title: autoHomeConfigured
+          ? `Home ${autoHomeLat?.toFixed(5)}, ${autoHomeLon?.toFixed(5)}`
+          : 'Home location not configured'
+      },
+      {
+        key: 'radius',
+        priority: 3,
+        icon: <IconMapPinBolt size={14} stroke={1.8} />,
+        text: autoRadiusMeters !== null ? `${Math.max(0, Math.round(autoRadiusMeters))}m` : 'Radius—',
+        title:
+          autoRadiusMeters !== null
+            ? `Radius ${Math.max(0, Math.round(autoRadiusMeters))} meters`
+            : 'Radius not configured'
+      }
+    ];
+
+    if (autoInsideOutsideText) {
+      items.push({
+        key: 'inside',
+        priority: 4,
+        icon: <IconMapPin size={14} stroke={1.8} />,
+        text: autoInsideOutsideText,
+        tone: autoInsideOutsideText === 'Inside' ? 'success' : 'warn',
+        title: `Latest point is ${autoInsideOutsideText.toLowerCase()} home radius`
+      });
+    }
+
+    items.push({
+      key: 'overlay',
+      priority: 5,
+      icon: <IconMapPinBolt size={14} stroke={1.8} />,
+      text: showHomeGeofence ? 'Map on' : 'Map off',
+      tone: showHomeGeofence ? 'success' : 'neutral',
+      title: showHomeGeofence ? 'Home geofence overlay shown on map' : 'Home geofence overlay hidden'
+    });
+
+    return items;
+  }, [
+    autoHomeConfigured,
+    autoHomeLat,
+    autoHomeLon,
+    autoInsideOutsideText,
+    autoRadiusMeters,
+    autoSessionForm.enabled,
+    showHomeGeofence
+  ]);
 
   const handleSaveDetailsName = () => {
     if (!deviceDetail || !hasQueryApiKey || !detailsNameDirty) {
@@ -703,8 +880,13 @@ export default function Controls({
             aria-expanded={detailsExpanded}
             aria-controls="device-details-panel"
           >
-            <span>Details</span>
-            <span>{detailsExpanded ? '-' : '+'}</span>
+            <span className="panel-toggle__content">
+              <span className="panel-toggle__title">Details</span>
+              {!detailsExpanded ? (
+                <CollapsedSummaryChips items={detailsCollapsedSummaryItems} />
+              ) : null}
+            </span>
+            <span className="device-details__toggle-meta">{detailsExpanded ? '-' : '+'}</span>
           </button>
           {detailsExpanded ? (
             <div id="device-details-panel" className="device-details__body">
@@ -1062,7 +1244,12 @@ export default function Controls({
             aria-expanded={autoSessionExpanded}
             aria-controls="auto-session-panel-body"
           >
-            <span>Auto Session (Home Geofence)</span>
+            <span className="panel-toggle__content">
+              <span className="panel-toggle__title">Auto Session (Home Geofence)</span>
+              {!autoSessionExpanded ? (
+                <CollapsedSummaryChips items={autoSessionCollapsedSummaryItems} />
+              ) : null}
+            </span>
             <span className="auto-session-panel__toggle-meta">{autoSessionExpanded ? '-' : '+'}</span>
           </button>
           {autoSessionExpanded ? (
@@ -1992,6 +2179,47 @@ function formatTelemetrySeconds(value: number | null | undefined): string {
     return '—';
   }
   return `${Math.max(0, Math.round(value))}s`;
+}
+
+function toFiniteNumber(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatLatLonCompact(lat: number, lon: number): string {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return 'GPS—';
+  }
+  return `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+}
+
+function toCompactDeviceTypeLabel(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.replace(/[_\s]+/g, ' ').trim();
+  if (!normalized) {
+    return null;
+  }
+  return normalized.length > 16 ? `${normalized.slice(0, 16)}…` : normalized;
+}
+
+function getApproxDistanceMeters(
+  fromLat: number,
+  fromLon: number,
+  toLat: number,
+  toLon: number
+): number {
+  const latMeters = (fromLat - toLat) * 111_320;
+  const avgLatRad = ((fromLat + toLat) / 2) * (Math.PI / 180);
+  const lonMeters = (fromLon - toLon) * 111_320 * Math.cos(avgLatRad);
+  return Math.hypot(latMeters, lonMeters);
 }
 
 type TelemetrySeries = {
