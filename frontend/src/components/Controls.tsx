@@ -212,8 +212,8 @@ export default function Controls({
   });
   const [autoSessionDirty, setAutoSessionDirty] = useState(false);
   const [autoSessionError, setAutoSessionError] = useState<string | null>(null);
-  const [autoSessionExpanded, setAutoSessionExpanded] = useState(true);
-  const [detailsExpanded, setDetailsExpanded] = useState(true);
+  const [autoSessionExpanded, setAutoSessionExpanded] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [detailsNameDraft, setDetailsNameDraft] = useState('');
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [notesModalOpen, setNotesModalOpen] = useState(false);

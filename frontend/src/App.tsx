@@ -2802,29 +2802,33 @@ function App() {
 
   const sidebarHeader = (
     <div className="sidebar-header" aria-label="Sidebar header" data-tour="sidebar-header">
-      <SelectedDeviceHeader
-        device={selectedDevice}
-        latestMeasurementAt={latestMeasurementAt}
-        latestWebhookReceivedAt={latestDeviceQuery.data?.latestWebhookReceivedAt ?? null}
-        latestWebhookSource={latestDeviceQuery.data?.latestWebhookSource ?? null}
-        onFitToData={handleFitToData}
-        fitFeedback={fitFeedback}
-      />
-      <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs" data-tour="sidebar-tabs">
-        {SIDEBAR_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-label={tab.label}
-            aria-selected={sidebarTab === tab.key}
-            className={`sidebar-header__tab${sidebarTab === tab.key ? ' is-active' : ''}`}
-            onClick={() => setSidebarTab(tab.key)}
-            data-tour={`sidebar-tab-${tab.key}`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="sidebar-header__summary">
+        <SelectedDeviceHeader
+          device={selectedDevice}
+          latestMeasurementAt={latestMeasurementAt}
+          latestWebhookReceivedAt={latestDeviceQuery.data?.latestWebhookReceivedAt ?? null}
+          latestWebhookSource={latestDeviceQuery.data?.latestWebhookSource ?? null}
+          onFitToData={handleFitToData}
+          fitFeedback={fitFeedback}
+        />
+      </div>
+      <div className="sidebar-header__tabs-row" data-tour="sidebar-tabs">
+        <div className="sidebar-header__tabs" role="tablist" aria-label="Sidebar tabs">
+          {SIDEBAR_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-label={tab.label}
+              aria-selected={sidebarTab === tab.key}
+              className={`sidebar-header__tab${sidebarTab === tab.key ? ' is-active' : ''}`}
+              onClick={() => setSidebarTab(tab.key)}
+              data-tour={`sidebar-tab-${tab.key}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

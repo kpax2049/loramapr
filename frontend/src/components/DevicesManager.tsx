@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Device } from '../api/types';
 import { ApiError } from '../api/http';
 import { useArchiveDevice, useDeleteDevice, useDevices, useUpdateDevice } from '../query/hooks';
@@ -117,6 +117,9 @@ export default function DevicesManager({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
+  const [isTightLayout, setIsTightLayout] = useState(false);
+  const containerRef = useRef<HTMLElement | null>(null);
 
   const hasQueryApiKey = Boolean((import.meta.env.VITE_QUERY_API_KEY ?? '').trim());
   const devicesQuery = useDevices(showArchived, {
@@ -209,6 +212,21 @@ export default function DevicesManager({
     window.addEventListener('pointerdown', handleWindowPointerDown);
     return () => window.removeEventListener('pointerdown', handleWindowPointerDown);
   }, [actionMenuDeviceId]);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsCompactLayout(width < 500);
+      setIsTightLayout(width < 360);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const toForbiddenMessage = (fallback: string) => {
     const mutationErrors = [
@@ -367,7 +385,13 @@ export default function DevicesManager({
   };
 
   return (
-    <section className="devices-manager" aria-label="Device list and actions">
+    <section
+      ref={containerRef}
+      className={`devices-manager${isCompactLayout ? ' devices-manager--compact' : ''}${
+        isTightLayout ? ' devices-manager--tight' : ''
+      }`}
+      aria-label="Device list and actions"
+    >
       <div className="devices-manager__toolbar">
         <input
           type="search"
