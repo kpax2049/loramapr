@@ -509,20 +509,27 @@ export default function Controls({
   const notesPreviewRaw = deviceDetail?.notes ?? '';
   const notesPreview =
     notesPreviewRaw.length > 120 ? `${notesPreviewRaw.slice(0, 120)}...` : notesPreviewRaw || '—';
-  const measurementStatusCompactLabel = measurementStatusLabel === 'Offline' ? 'Off' : measurementStatusLabel;
+  const measurementStatusCompactLabel =
+    measurementStatusLabel === 'Offline' ? 'OFFLINE' : measurementStatusLabel;
   const detailsStatusTone: CollapsedSummaryChipItem['tone'] =
     measurementStatus === 'online'
       ? 'success'
       : measurementStatus === 'recent'
-        ? 'warn'
+        ? 'info'
         : measurementStatus === 'stale' || measurementStatus === 'offline'
           ? 'danger'
-          : 'neutral';
+          : 'muted';
   const detailLastSeenValue = deviceDetail?.lastSeenAt ?? latestMeasurementTimestamp;
+  const detailLastSeenStatus = getDeviceOnlineStatuses({
+    latestMeasurementAt: detailLastSeenValue ?? null,
+    latestWebhookReceivedAt: null
+  }).measurementStatus;
+  const detailLastSeenTone = toStatusTone(detailLastSeenStatus);
   const detailBatteryLevel =
     typeof latestTelemetry?.batteryLevel === 'number' && Number.isFinite(latestTelemetry.batteryLevel)
       ? Math.max(0, Math.round(latestTelemetry.batteryLevel))
       : null;
+  const detailBatteryTone = toBatteryTone(detailBatteryLevel);
   const detailDeviceTypeLabel = toCompactDeviceTypeLabel(
     meshtasticHwModel ?? detailIcon.label ?? selectedDevice?.hwModel ?? null
   );
@@ -548,6 +555,7 @@ export default function Controls({
         priority: 2,
         icon: <IconAntennaBars5 size={14} stroke={1.8} />,
         text: detailLastSeenValue ? formatRelativeTime(detailLastSeenValue) : 'Never',
+        tone: detailLastSeenTone,
         title: detailLastSeenValue ? `Last seen ${formatRelativeTime(detailLastSeenValue)}` : 'Last seen never'
       },
       {
@@ -555,6 +563,7 @@ export default function Controls({
         priority: 3,
         icon: <IconMapPin size={14} stroke={1.8} />,
         text: latestLocation ? formatLatLonCompact(latestLocation.lat, latestLocation.lon) : 'GPS—',
+        tone: latestLocation ? 'info' : 'muted',
         title: latestLocation
           ? `Latest location ${latestLocation.lat.toFixed(6)}, ${latestLocation.lon.toFixed(6)}`
           : 'No GPS location yet'
@@ -567,6 +576,7 @@ export default function Controls({
         priority: 4,
         icon: <IconCircuitCapacitor size={14} stroke={1.8} />,
         text: `${detailBatteryLevel}%`,
+        tone: detailBatteryTone,
         title: `Battery ${detailBatteryLevel}%`
       });
     }
@@ -577,6 +587,7 @@ export default function Controls({
         priority: 5,
         icon: <IconCpu size={14} stroke={1.8} />,
         text: detailDeviceTypeLabel,
+        tone: 'neutral',
         title: `Device type ${detailDeviceTypeLabel}`
       });
     }
@@ -584,7 +595,10 @@ export default function Controls({
     return items;
   }, [
     detailBatteryLevel,
+    detailBatteryTone,
     detailDeviceTypeLabel,
+    detailLastSeenStatus,
+    detailLastSeenTone,
     detailLastSeenValue,
     detailsStatusTone,
     latest,
@@ -622,7 +636,7 @@ export default function Controls({
         priority: 1,
         icon: <IconAntennaBars5 size={14} stroke={1.8} />,
         text: autoSessionForm.enabled ? 'On' : 'Off',
-        tone: autoSessionForm.enabled ? 'success' : 'neutral',
+        tone: autoSessionForm.enabled ? 'success' : 'muted',
         title: autoSessionForm.enabled ? 'Auto session enabled' : 'Auto session disabled'
       },
       {
@@ -630,7 +644,7 @@ export default function Controls({
         priority: 2,
         icon: <IconHomeSignal size={14} stroke={1.8} />,
         text: autoHomeConfigured ? 'Home set' : 'Home—',
-        tone: autoHomeConfigured ? 'success' : 'warn',
+        tone: autoHomeConfigured ? 'info' : 'warning',
         title: autoHomeConfigured
           ? `Home ${autoHomeLat?.toFixed(5)}, ${autoHomeLon?.toFixed(5)}`
           : 'Home location not configured'
@@ -640,6 +654,7 @@ export default function Controls({
         priority: 3,
         icon: <IconMapPinBolt size={14} stroke={1.8} />,
         text: autoRadiusMeters !== null ? `${Math.max(0, Math.round(autoRadiusMeters))}m` : 'Radius—',
+        tone: 'neutral',
         title:
           autoRadiusMeters !== null
             ? `Radius ${Math.max(0, Math.round(autoRadiusMeters))} meters`
@@ -653,8 +668,21 @@ export default function Controls({
         priority: 4,
         icon: <IconMapPin size={14} stroke={1.8} />,
         text: autoInsideOutsideText,
-        tone: autoInsideOutsideText === 'Inside' ? 'success' : 'warn',
+        tone: autoInsideOutsideText === 'Inside' ? 'info' : 'warning',
         title: `Latest point is ${autoInsideOutsideText.toLowerCase()} home radius`
+      });
+    }
+
+    const minOutsideSeconds = toFiniteNumber(autoSessionForm.minOutsideSeconds);
+    const minInsideSeconds = toFiniteNumber(autoSessionForm.minInsideSeconds);
+    if (minOutsideSeconds !== null || minInsideSeconds !== null) {
+      items.push({
+        key: 'window',
+        priority: 6,
+        icon: <IconAntennaBars5 size={14} stroke={1.8} />,
+        text: `${minOutsideSeconds !== null ? Math.max(0, Math.round(minOutsideSeconds)) : '—'}s/${minInsideSeconds !== null ? Math.max(0, Math.round(minInsideSeconds)) : '—'}s`,
+        tone: 'muted',
+        title: `Outside/Inside minimums: ${minOutsideSeconds ?? '—'}s / ${minInsideSeconds ?? '—'}s`
       });
     }
 
@@ -663,7 +691,7 @@ export default function Controls({
       priority: 5,
       icon: <IconMapPinBolt size={14} stroke={1.8} />,
       text: showHomeGeofence ? 'Map on' : 'Map off',
-      tone: showHomeGeofence ? 'success' : 'neutral',
+      tone: showHomeGeofence ? 'info' : 'muted',
       title: showHomeGeofence ? 'Home geofence overlay shown on map' : 'Home geofence overlay hidden'
     });
 
@@ -675,6 +703,8 @@ export default function Controls({
     autoInsideOutsideText,
     autoRadiusMeters,
     autoSessionForm.enabled,
+    autoSessionForm.minInsideSeconds,
+    autoSessionForm.minOutsideSeconds,
     showHomeGeofence
   ]);
 
@@ -2163,6 +2193,35 @@ function formatDeviceStatusBucket(status: DeviceStatusBucket): 'Online' | 'Recen
     return 'Offline';
   }
   return 'Unknown';
+}
+
+function toStatusTone(status: DeviceStatusBucket): CollapsedSummaryChipItem['tone'] {
+  if (status === 'online') {
+    return 'success';
+  }
+  if (status === 'recent') {
+    return 'info';
+  }
+  if (status === 'stale') {
+    return 'warning';
+  }
+  if (status === 'offline') {
+    return 'danger';
+  }
+  return 'muted';
+}
+
+function toBatteryTone(level: number | null): CollapsedSummaryChipItem['tone'] {
+  if (level === null) {
+    return 'muted';
+  }
+  if (level >= 60) {
+    return 'success';
+  }
+  if (level >= 30) {
+    return 'warning';
+  }
+  return 'danger';
 }
 
 function formatTelemetryMetric(value: number | null | undefined, unit: string): string {

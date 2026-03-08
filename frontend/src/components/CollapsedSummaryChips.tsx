@@ -1,6 +1,12 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
-export type CollapsedSummaryChipTone = 'neutral' | 'success' | 'warn' | 'danger';
+export type CollapsedSummaryChipTone =
+  | 'neutral'
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'muted';
 
 export type CollapsedSummaryChipItem = {
   key: string;
@@ -57,7 +63,9 @@ export default function CollapsedSummaryChips({ items }: CollapsedSummaryChipsPr
       {visibleItems.map((item) => (
         <span
           key={item.key}
-          className={`collapsed-summary-chips__item collapsed-summary-chips__item--${item.tone ?? 'neutral'}`}
+          className={`collapsed-summary-chips__item chip--${item.tone ?? 'neutral'}${
+            item.priority === 1 ? ' collapsed-summary-chips__item--top' : ''
+          }`}
           title={item.title ?? item.text}
         >
           <span className="collapsed-summary-chips__icon" aria-hidden="true">

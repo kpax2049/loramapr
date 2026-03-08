@@ -100,6 +100,24 @@
   --session-badge-idle-fg: #38bdf8;
   --session-badge-idle-border: rgba(56, 189, 248, 0.45);
   --session-badge-idle-bg: rgba(14, 165, 233, 0.14);
+  --chip-bg-neutral: rgba(255, 255, 255, 0.08);
+  --chip-border-neutral: rgba(255, 255, 255, 0.24);
+  --chip-fg-neutral: rgba(242, 243, 245, 0.84);
+  --chip-bg-info: rgba(56, 189, 248, 0.18);
+  --chip-border-info: rgba(56, 189, 248, 0.44);
+  --chip-fg-info: #7dd3fc;
+  --chip-bg-success: rgba(34, 197, 94, 0.16);
+  --chip-border-success: rgba(74, 222, 128, 0.44);
+  --chip-fg-success: #86efac;
+  --chip-bg-warning: rgba(245, 158, 11, 0.16);
+  --chip-border-warning: rgba(251, 191, 36, 0.44);
+  --chip-fg-warning: #fcd34d;
+  --chip-bg-danger: rgba(239, 68, 68, 0.16);
+  --chip-border-danger: rgba(248, 113, 113, 0.48);
+  --chip-fg-danger: #fecaca;
+  --chip-bg-muted: rgba(148, 163, 184, 0.14);
+  --chip-border-muted: rgba(148, 163, 184, 0.35);
+  --chip-fg-muted: #cbd5e1;
   --map-controls-clearance-x: 4.75rem;
 }
 
@@ -143,6 +161,24 @@
   --accent-border: rgba(215, 234, 85, 0.62);
   --accent-bg-soft: rgba(215, 234, 85, 0.2);
   --accent-bg-strong: rgba(215, 234, 85, 0.28);
+  --chip-bg-neutral: rgba(255, 255, 255, 0.08);
+  --chip-border-neutral: rgba(255, 255, 255, 0.24);
+  --chip-fg-neutral: rgba(242, 243, 245, 0.84);
+  --chip-bg-info: rgba(56, 189, 248, 0.18);
+  --chip-border-info: rgba(56, 189, 248, 0.44);
+  --chip-fg-info: #7dd3fc;
+  --chip-bg-success: rgba(34, 197, 94, 0.16);
+  --chip-border-success: rgba(74, 222, 128, 0.44);
+  --chip-fg-success: #86efac;
+  --chip-bg-warning: rgba(245, 158, 11, 0.16);
+  --chip-border-warning: rgba(251, 191, 36, 0.44);
+  --chip-fg-warning: #fcd34d;
+  --chip-bg-danger: rgba(239, 68, 68, 0.16);
+  --chip-border-danger: rgba(248, 113, 113, 0.48);
+  --chip-fg-danger: #fecaca;
+  --chip-bg-muted: rgba(148, 163, 184, 0.14);
+  --chip-border-muted: rgba(148, 163, 184, 0.35);
+  --chip-fg-muted: #cbd5e1;
 }
 
 :root[data-theme='light'],
@@ -220,4 +256,22 @@
   --session-badge-idle-fg: #0a466e;
   --session-badge-idle-border: rgba(3, 105, 161, 0.58);
   --session-badge-idle-bg: rgba(14, 165, 233, 0.3);
+  --chip-bg-neutral: rgba(13, 16, 20, 0.06);
+  --chip-border-neutral: rgba(13, 16, 20, 0.2);
+  --chip-fg-neutral: rgba(13, 16, 20, 0.78);
+  --chip-bg-info: rgba(14, 165, 233, 0.18);
+  --chip-border-info: rgba(3, 105, 161, 0.4);
+  --chip-fg-info: #075985;
+  --chip-bg-success: rgba(34, 197, 94, 0.24);
+  --chip-border-success: rgba(21, 128, 61, 0.42);
+  --chip-fg-success: #14532d;
+  --chip-bg-warning: rgba(245, 158, 11, 0.2);
+  --chip-border-warning: rgba(217, 119, 6, 0.42);
+  --chip-fg-warning: #7c2d12;
+  --chip-bg-danger: rgba(239, 68, 68, 0.18);
+  --chip-border-danger: rgba(220, 38, 38, 0.4);
+  --chip-fg-danger: #991b1b;
+  --chip-bg-muted: rgba(100, 116, 139, 0.16);
+  --chip-border-muted: rgba(100, 116, 139, 0.34);
+  --chip-fg-muted: #334155;
 }

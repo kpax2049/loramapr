@@ -1638,31 +1638,68 @@
   max-width: 100%;
   padding: 0.1rem 0.35rem;
   border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  background: var(--panel-surface);
-  color: var(--panel-muted);
+  border: 1px solid var(--chip-border-neutral);
+  background: var(--chip-bg-neutral);
+  color: var(--chip-fg-neutral);
   text-transform: none;
   letter-spacing: 0.02em;
   font-size: 0.64rem;
   line-height: 1.2;
 }
 
-.collapsed-summary-chips__item--success {
-  border-color: var(--success-border);
-  background: color-mix(in srgb, var(--success-bg) 42%, transparent);
-  color: var(--success-fg);
+.collapsed-summary-chips__item--top::before {
+  content: '';
+  width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.86;
 }
 
-.collapsed-summary-chips__item--warn {
-  border-color: var(--warning-border);
-  background: color-mix(in srgb, var(--warning-bg) 34%, transparent);
-  color: var(--warning-fg);
+.chip--neutral {
+  border-color: var(--chip-border-neutral);
+  background: var(--chip-bg-neutral);
+  color: var(--chip-fg-neutral);
 }
 
-.collapsed-summary-chips__item--danger {
-  border-color: var(--danger-border);
-  background: color-mix(in srgb, var(--danger-bg) 30%, transparent);
-  color: var(--danger-fg);
+.chip--info {
+  border-color: var(--chip-border-info);
+  background: var(--chip-bg-info);
+  color: var(--chip-fg-info);
+}
+
+.chip--success {
+  border-color: var(--chip-border-success);
+  background: var(--chip-bg-success);
+  color: var(--chip-fg-success);
+}
+
+.chip--warning {
+  border-color: var(--chip-border-warning);
+  background: var(--chip-bg-warning);
+  color: var(--chip-fg-warning);
+}
+
+.chip--danger {
+  border-color: var(--chip-border-danger);
+  background: var(--chip-bg-danger);
+  color: var(--chip-fg-danger);
+}
+
+.chip--muted {
+  border-color: var(--chip-border-muted);
+  background: var(--chip-bg-muted);
+  color: var(--chip-fg-muted);
+}
+
+.chip--danger {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.collapsed-summary-chips__item--top.chip--success,
+.collapsed-summary-chips__item--top.chip--danger {
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 24%, transparent);
 }
 
 .collapsed-summary-chips__icon {
@@ -1671,6 +1708,7 @@
   justify-content: center;
   flex: 0 0 auto;
   min-width: 0;
+  color: inherit;
 }
 
 .collapsed-summary-chips__icon .device-online-dot {
