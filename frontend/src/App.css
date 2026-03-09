@@ -1206,10 +1206,24 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  overflow: visible;
+  min-width: 0;
 }
 
 .status-strip__online-dot {
   --device-online-dot-size: 11px;
+  margin-left: 1px;
+}
+
+.status-strip__online-dot .device-online-dot__ring {
+  inset: -1px;
+}
+
+.status-strip__device-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-strip__device-icon {
@@ -3493,11 +3507,17 @@
   flex-wrap: nowrap;
   gap: 0.35rem;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+  padding-left: 0.08rem;
 }
 
 .devices-manager__online-dot {
   --device-online-dot-size: 10px;
+  margin-left: 1px;
+}
+
+.devices-manager__online-dot .device-online-dot__ring {
+  inset: -1px;
 }
 
 .devices-manager__cell--name input {

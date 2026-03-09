@@ -62,7 +62,7 @@ export default function StatusStrip({
               title={iconDefinition.label}
             />
           ) : null}
-          <span>{deviceLabel}</span>
+          <span className="status-strip__device-text">{deviceLabel}</span>
         </span>
       </span>
       {latestMeasurementAt ? (
