@@ -53,6 +53,8 @@
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-soft);
   overflow: hidden;
+  container-type: inline-size;
+  container-name: sidebar;
 }
 
 .layout__sidebar--collapsed {
@@ -76,7 +78,7 @@
   --sidebar-top-right-reserve: 7.9rem;
   --sidebar-top-right-stack-height: 4.2rem;
   justify-content: flex-start;
-  padding-right: calc(0.5rem + var(--sidebar-top-right-reserve));
+  padding-right: 0.5rem;
 }
 
 .layout__sidebar-header--collapsed {
@@ -502,6 +504,8 @@
 }
 
 .sidebar-header__summary {
+  width: 100%;
+  padding-right: var(--sidebar-top-right-reserve);
   min-width: 0;
 }
 
@@ -510,11 +514,13 @@
   width: 100%;
   min-width: 0;
   margin-top: 1.35rem;
+  align-self: stretch;
 }
 
 .sidebar-header__tabs {
   display: flex;
   width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
   flex-wrap: wrap;
   gap: 0.35rem;
@@ -709,7 +715,7 @@
 .selected-device-header__row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.55rem;
   min-width: 0;
 }
@@ -731,7 +737,7 @@
 .selected-device-header__identity-wrap {
   display: flex;
   align-items: center;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   gap: 0.5rem;
   min-width: 0;
 }
@@ -783,6 +789,8 @@
   align-content: center;
   justify-items: end;
   flex: 0 0 auto;
+  min-width: 0;
+  max-width: 48%;
   gap: 0.25rem;
 }
 
@@ -832,6 +840,7 @@
   display: grid;
   align-content: center;
   justify-items: end;
+  min-width: 0;
   gap: 0.25rem;
 }
 
@@ -846,6 +855,27 @@
   text-transform: uppercase;
   font-family: var(--font-mono);
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container sidebar (max-width: 360px) {
+  .selected-device-header__row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .selected-device-header__meta {
+    flex-basis: 100%;
+    width: 100%;
+    max-width: none;
+    justify-items: start;
+  }
+
+  .selected-device-header__badges {
+    justify-items: start;
+  }
 }
 
 [data-theme='dark'] .selected-device-header__badge:not(.selected-device-header__badge--session) {
@@ -3897,6 +3927,8 @@
 
   .selected-device-header__meta {
     width: 100%;
+    min-width: 0;
+    max-width: none;
     justify-items: start;
   }
 
