@@ -816,8 +816,10 @@ export default function Controls({
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const controlsClassName = `controls ${showDeviceTab ? 'controls--device' : 'controls--subtle'}`;
+
   return (
-    <section className="controls" aria-label="Map controls">
+    <section className={controlsClassName} aria-label="Map controls">
       {sessionSelectionNotice && (showSessionsTab || showPlaybackTab) ? (
         <div className="controls__session-notice" role="status" aria-live="polite">
           {sessionSelectionNotice}
@@ -902,7 +904,10 @@ export default function Controls({
       )}
 
       {showDeviceTab && deviceId ? (
-        <div className="controls__group device-details" data-tour="device-details">
+        <div
+          className={`controls__group device-details ${detailsExpanded ? 'is-expanded' : 'is-collapsed'}`}
+          data-tour="device-details"
+        >
           <button
             type="button"
             className="device-details__toggle"
@@ -1266,7 +1271,10 @@ export default function Controls({
       ) : null}
 
       {showDeviceTab && deviceId && (
-        <div className="controls__group auto-session-panel" id="auto-session-section">
+        <div
+          className={`controls__group auto-session-panel ${autoSessionExpanded ? 'is-expanded' : 'is-collapsed'}`}
+          id="auto-session-section"
+        >
           <button
             type="button"
             className="auto-session-panel__toggle"

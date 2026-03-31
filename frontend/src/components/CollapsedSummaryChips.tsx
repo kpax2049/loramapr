@@ -60,12 +60,12 @@ export default function CollapsedSummaryChips({ items }: CollapsedSummaryChipsPr
 
   return (
     <div className="collapsed-summary-chips" aria-label="Collapsed summary">
-      {visibleItems.map((item) => (
+      {visibleItems.map((item, index) => (
         <span
           key={item.key}
-          className={`collapsed-summary-chips__item chip--${item.tone ?? 'neutral'}${
-            item.priority === 1 ? ' collapsed-summary-chips__item--top' : ''
-          }`}
+          className={`collapsed-summary-chips__item tone--${item.tone ?? (index === 0 ? 'neutral' : 'muted')}${
+            index === 0 ? ' collapsed-summary-chips__item--primary' : ''
+          }${index > 0 && item.priority > 3 ? ' collapsed-summary-chips__item--low' : ''}`}
           title={item.title ?? item.text}
         >
           <span className="collapsed-summary-chips__icon" aria-hidden="true">
