@@ -230,7 +230,7 @@
 - Documentation Wiki Pack
 
 ### Added
-- Added a structured docs wiki pack under `docs/wiki/` covering quickstart, architecture, data model, ingestion, pi-forwarder, hands-free sessions, playback, coverage, deployment, backup/restore, troubleshooting, API key scopes, and changelog.
+- Added a structured docs wiki pack under `docs/wiki/` covering quickstart, architecture, data model, ingestion, pi-forwarder, Home Auto Session (HAS), playback, coverage, deployment, backup/restore, troubleshooting, API key scopes, and changelog.
 - Added reusable wiki sync automation via `scripts/wiki/sync-wiki.sh` supporting SSH-first or HTTPS modes, delete-sync behavior, and commit message override flags.
 - Added sync workflow guidance and failure troubleshooting in `docs/wiki/SYNC_TO_GITHUB_WIKI.md`.
 
@@ -447,7 +447,7 @@
 ## v0.9.0 - 2026-02-10
 
 ### Highlights
-- Home session agent for hands-free session capture with geofence transitions and idempotent start/stop.
+- Home Auto Session (HAS) agent for automated coverage-run capture with geofence transitions and idempotent start/stop.
 - Auto-session device config (home lat/lon, radius, inside/outside timers) with GET/PUT API and UI editing (QUERY key protected).
 - Geo utilities for Haversine distance + geofence checks, plus latest-position lookup for agents.
 - Ops docs for running the agent as a service (systemd example + env config).

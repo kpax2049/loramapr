@@ -1,7 +1,30 @@
-# Hands-Free Sessions
+# Home Auto Session (HAS)
 
-`Hands-Free Sessions` are driven by the home session agent (`scripts/home-session-agent.ts`).
+Home Auto Session (HAS) is LoRaMapr's hands-free coverage-run workflow for Meshtastic fixed-base + mobile-field testing.
+
+Default example:
+
+- leave one node at home (or another fixed base point)
+- carry another node through the field
+- let the base-side workflow open/close runs around real activity
+
+## What HAS does
+
+HAS is driven by the Home Auto Session (HAS) agent (`scripts/home-session-agent.ts`).
 The agent polls per-device config and latest position, applies a geofence state machine, then calls backend start/stop endpoints.
+
+## When to use HAS
+
+Use HAS when you are repeating walk/drive tests from the same base location and want more consistent capture with less manual run handling.
+
+Manual run control is still valid; HAS is a supporting workflow, not a replacement for every scenario.
+
+## Setup expectations and current limits
+
+- HAS requires a running Home Auto Session (HAS) agent process.
+- HAS decisions are geofence-driven (`homeLat`, `homeLon`, radius, and time thresholds).
+- HAS only acts when recent position updates are available; stale/missing position data pauses start/stop actions.
+- Per-device runtime state is currently in-memory and is not persisted across agent restarts.
 
 ## Required backend endpoints
 
@@ -129,7 +152,7 @@ curl -s -H "X-API-Key: $QUERY_API_KEY" \
 - Persisting per-device agent in-memory state across agent restarts.
 - Dedicated UI view for full agent decision history (API exists; latest decision is shown in status).
 
-## Related session UI (details + signal charts)
+## Related run UI (details + signal charts)
 
 For selected sessions, the frontend Session Details panel is documented in [[Playback-and-Time|Playback and Time]].
 That page also documents signal chart source resolution (`MeshtasticRx` -> `RxMetadata` -> `Measurement` fallback when `source=auto`).

@@ -1,5 +1,11 @@
 # Coverage and Heatmaps
 
+Coverage in LoRaMapr is designed for Meshtastic coverage runs: leave one node at a fixed base location and carry another through the field.
+
+The default example is a home node + field node, but any fixed-base + mobile-field setup is valid.
+
+Home Auto Session (HAS) is the supporting workflow for automatically capturing repeated runs from the home/base side.
+
 ## Current coverage features
 
 Coverage in the app supports two visualizations from the same `CoverageBin` data:

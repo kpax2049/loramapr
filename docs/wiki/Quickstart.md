@@ -1,5 +1,12 @@
 # Quickstart
 
+This quickstart sets up LoRaMapr for Meshtastic coverage mapping.
+
+Default testing model:
+
+- fixed base receiver + mobile field node
+- most commonly a home node plus a field node
+
 ## Prerequisites
 
 - Docker
@@ -53,6 +60,17 @@ make up
 - Health: `http://localhost:3000/health`
 - Healthz: `http://localhost:3000/healthz`
 - Readiness: `http://localhost:3000/readyz`
+
+### 6) Optional: enable Home Auto Session (HAS)
+
+Use HAS when you are running repeated fixed-base + mobile-field coverage tests and want less manual start/stop handling.
+
+- In the UI, open **Device** tab -> **Home Auto Session (HAS)**.
+- Configure `homeLat`, `homeLon`, `radiusMeters`, and outside/inside thresholds.
+- Enable the workflow and save.
+- Run the Home Auto Session (HAS) agent so runs can open/close automatically from base-side activity.
+
+See [[Hands-Free-Sessions|Home Auto Session (HAS)]] for behavior details and setup expectations.
 
 ## Health endpoints
 

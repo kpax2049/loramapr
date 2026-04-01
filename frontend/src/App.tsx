@@ -2447,7 +2447,7 @@ function App() {
       return;
     }
     setSelectedSessionId(null);
-    setSessionSelectionNotice('Selected session was archived or deleted, selection was cleared.');
+    setSessionSelectionNotice('Selected coverage run was archived or deleted, selection was cleared.');
   }, [
     deviceId,
     selectedSessionId,
@@ -2472,7 +2472,9 @@ function App() {
     }
     setPlaybackSessionId(null);
     setPlaybackIsPlaying(false);
-    setSessionSelectionNotice('Playback session was archived or deleted, selection was cleared.');
+    setSessionSelectionNotice(
+      'Playback coverage run was archived or deleted, selection was cleared.'
+    );
   }, [
     deviceId,
     playbackSessionId,
@@ -2928,6 +2930,17 @@ function App() {
       </button>
       {tourMenuOpen ? (
         <div className="layout__tour-menu" role="menu" aria-label="Help menu">
+          <div className="layout__tour-menu-about" aria-label="About LoRaMapr">
+            <div className="layout__tour-menu-about-title">Coverage mapping for Meshtastic</div>
+            <div className="layout__tour-menu-about-body">
+              LoRaMapr helps you measure real-world coverage from a fixed base location. Leave one
+              node at home, at a relay, or at another base point, carry another through the field,
+              and review where packets were actually received. Use sessions, playback, and coverage
+              views to compare routes, antennas, placement, and terrain. For repeated base-driven
+              testing, Home Auto Session (HAS) can automatically open and close coverage runs from
+              home geofence activity.
+            </div>
+          </div>
           <button type="button" className="layout__tour-menu-item" role="menuitem" onClick={handleTourStart}>
             Start tour
           </button>
@@ -3120,7 +3133,7 @@ function App() {
         />
         {!zenMode && viewMode === 'playback' && !playbackSessionId && (
           <div className="playback-blocker" role="alert">
-            <div className="playback-blocker__message">Select a session</div>
+            <div className="playback-blocker__message">Select a coverage run</div>
           </div>
         )}
         {import.meta.env.DEV && !zenMode && (

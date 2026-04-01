@@ -1,4 +1,4 @@
-# LoraMapr Wiki
+# LoRaMapr Wiki
 
 - [[Home]]
 - [[Quickstart]]
@@ -6,7 +6,7 @@
 - [[Data-Model|Data Model]]
 - [[Ingestion]]
 - [[Pi-Forwarder|Pi Forwarder]]
-- [[Hands-Free-Sessions|Hands-Free Sessions]]
+- [[Hands-Free-Sessions|Home Auto Session (HAS)]]
 - [[Playback-and-Time|Playback and Time]]
 - [[Coverage-and-Heatmaps|Coverage and Heatmaps]]
 - [[API-Keys-and-Scopes|API Keys and Scopes]]

@@ -346,13 +346,17 @@ export default function PlaybackPanel({
   }, [windowChartData, playbackCursorMs]);
 
   return (
-    <section className="playback-panel" aria-label="Playback controls" data-tour="playback-controls">
+    <section
+      className="playback-panel"
+      aria-label="Coverage run playback controls"
+      data-tour="playback-controls"
+    >
       <div className="playback-panel__header">
-        <h3>Playback</h3>
+        <h3>Run playback</h3>
       </div>
 
       <div className="playback-panel__group">
-        <label htmlFor="playback-session">Session</label>
+        <label htmlFor="playback-session">Coverage run</label>
         <select
           id="playback-session"
           value={sessionId ?? ''}
@@ -362,10 +366,10 @@ export default function PlaybackPanel({
           <option value="">
             {deviceId
               ? sessionsQuery.isLoading
-                ? 'Loading sessions...'
+                ? 'Loading coverage runs...'
                 : sessions.length === 0
-                  ? 'No sessions'
-                  : 'Select a session'
+                  ? 'No coverage runs'
+                  : 'Select a coverage run'
               : 'Select a device'}
           </option>
           {sessions.map((session) => (
@@ -397,7 +401,7 @@ export default function PlaybackPanel({
             Timeline unavailable
           </div>
         ) : null}
-        {noPoints ? <div className="playback-panel__status">No points in session</div> : null}
+        {noPoints ? <div className="playback-panel__status">No points in this coverage run</div> : null}
         {windowLabel ? <div className="playback-panel__window">{windowLabel}</div> : null}
         {sampleNote ? <div className="playback-panel__status">{sampleNote}</div> : null}
         {emptyNote ? <div className="playback-panel__status">{emptyNote}</div> : null}

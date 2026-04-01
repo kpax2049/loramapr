@@ -8,7 +8,7 @@
 - Webhook worker (`LorawanService`): background processor for queued `WebhookEvent` rows (`source` in `tts|meshtastic`) into canonical measurements.
 - Coverage worker (`CoverageService`): background aggregation of measurements into `CoverageBin`.
 - Pi Forwarder (`apps/pi-forwarder`): edge process forwarding Meshtastic JSON events to backend.
-- Home Session Agent (`scripts/home-session-agent.ts`): polling automation for geofence-driven start/stop session actions.
+- Home Auto Session (HAS) agent (`scripts/home-session-agent.ts`): polling automation for geofence-driven start/stop coverage runs.
 
 ## Ingestion Flow
 
@@ -35,9 +35,9 @@
 - Start: `POST /api/sessions/start`
 - Stop: `POST /api/sessions/stop`
 
-### Auto session control (agent)
+### Home Auto Session (HAS) control (agent)
 
-Home session agent loop:
+HAS agent loop:
 
 1. Read config: `GET /api/agent/devices/:deviceUid/auto-session`
 2. Read latest position: `GET /api/agent/devices/:deviceUid/latest-position`
@@ -78,7 +78,7 @@ flowchart TD
   UI[Frontend UI] --> MSTART["POST /api/sessions/start"]
   UI --> MSTOP["POST /api/sessions/stop"]
 
-  AGENT[Home Session Agent] --> CFG["GET /api/agent/devices/:deviceUid/auto-session"]
+  AGENT[Home Auto Session (HAS) Agent] --> CFG["GET /api/agent/devices/:deviceUid/auto-session"]
   AGENT --> POS["GET /api/agent/devices/:deviceUid/latest-position"]
   CFG --> DECIDE{Inside/Outside\nThreshold met?}
   POS --> DECIDE

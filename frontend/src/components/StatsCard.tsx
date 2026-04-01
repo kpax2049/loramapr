@@ -26,7 +26,7 @@ export default function StatsCard({ stats, isLoading, error }: StatsCardProps) {
       {isLoading && <p className="stats-card__status">Loading…</p>}
       {error && <p className="stats-card__error">Failed to load stats.</p>}
       {!isLoading && !error && !stats && (
-        <p className="stats-card__status">No data yet.</p>
+        <p className="stats-card__status">No coverage data yet.</p>
       )}
       {!isLoading && !error && stats && (
         <dl className="stats-card__grid">

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Pi-side forwarder that posts Meshtastic/CLI JSON events to the LoraMapr backend.",
+  "description": "Pi-side Meshtastic forwarder for LoRaMapr coverage mapping.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node src/index.ts",

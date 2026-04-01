@@ -1,8 +1,8 @@
-# Home Session Agent on Raspberry Pi (systemd)
+# Home Auto Session (HAS) Agent on Raspberry Pi (systemd)
 
-This guide shows how to run `scripts/home-session-agent.ts` as an always-on service on your home Raspberry Pi.
+This guide shows how to run the Home Auto Session (HAS) agent (`scripts/home-session-agent.ts`) as an always-on service on your home Raspberry Pi.
 
-The agent is a separate process from the backend. It polls backend APIs with an `INGEST` key, evaluates home geofence transitions per device, starts/stops sessions, and writes decision audit events.
+The agent is a separate process from the backend. It powers Home Auto Session (HAS) by polling backend APIs with an `INGEST` key, evaluating home geofence transitions per device, starting/stopping sessions, and writing decision audit events.
 
 ## Deployment modes
 
@@ -90,7 +90,7 @@ Create `/etc/systemd/system/loramapr-home-session-agent.service`:
 
 ```ini
 [Unit]
-Description=LoraMapr Home Session Agent
+Description=LoRaMapr Home Session Agent
 After=network-online.target
 Wants=network-online.target
 

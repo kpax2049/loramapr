@@ -139,11 +139,11 @@ For releases with dedicated notes files, those files are linked directly.
 
 ## v0.9.1 (2026-02-11)
 
-- Hands-free sessions release iteration: agent completion and decision audit trail hardening.
+- Home Auto Session (HAS) release iteration: agent completion and decision audit trail hardening.
 
 ## v0.9.0 (2026-02-10)
 
-- Hands-free field session capture release (home-driven geofence start/stop via agent endpoints).
+- Home Auto Session (HAS) release (home-driven geofence start/stop via agent endpoints).
 
 ## v0.8.6 (2026-02-08)
 

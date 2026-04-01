@@ -12,16 +12,23 @@
 > LoRaMapr has reached **v1.1.0** and is ready for self-hosted use.  
 > Development continues for new features and refinements, with changes tracked through normal release/version notes.
 
-## LoRaMapr v1.1.0 is live
+LoRaMapr is a self-hosted coverage-mapping tool for Meshtastic.
 
-LoRaMapr has officially reached **v1.1.0**.  
-This release marks the first stable version of a fully self-hosted workflow for **recording, replaying, and analyzing real-world radio coverage** from GPS-tagged telemetry.
+Leave one node at a fixed base location, carry another through the field, and record real packet data during walks or drives. LoRaMapr turns those runs into replayable coverage maps so you can see where your setup actually works.
+
+Use LoRaMapr to compare antennas, placement, routes, terrain, and settings using real measurements instead of guesswork.
+
+### Who it is for
+
+- Meshtastic users testing coverage from a home, base, or relay location
+- People comparing antenna placement or node setup
+- Users who want real measured coverage, not just node positions on a map
 
 ## What's in v1.1.0
 
-- Stable ingest pipelines for **LoRaWAN** (TTS webhooks) and **Meshtastic** (Pi Forwarder).
-- Session-first workflow for manual and hands-free capture, plus playback and map-based analysis.
-- Coverage workflow now includes **Bins + Heatmap** visualization with **Device vs Session** scope switching.
+- Meshtastic-first ingest path via **Pi Forwarder**, plus supported **LoRaWAN** ingest via TTS webhooks.
+- Session-first workflow for manual capture and **Home Auto Session (HAS)** support for hands-free Meshtastic coverage runs.
+- Coverage workflow with **Bins + Heatmap** visualization and **Device vs Session** scope switching.
 - Production-ready self-hosting baseline with Docker Compose, reverse proxy, health/readiness checks, and startup migration flow.
 - Built-in operational tooling for API keys, database backup/restore, and retention safety defaults.
 - Expanded project documentation in the GitHub Wiki for quickstart, deployment, ingestion, troubleshooting, and operations.
@@ -34,13 +41,52 @@ This release marks the first stable version of a fully self-hosted workflow for 
   <img alt="LoRaMapr coverage mode view" src="docs/assets/ui-coverage-map.png" width="980">
 </p>
 
-## What LoRaMapr is for
+## How coverage mapping works
 
-LoRaMapr is a self-hosted web app for **recording, replaying, and analyzing real-world radio coverage** using GPS-tagged telemetry. You collect measurements while walking/driving with a device, LoRaMapr groups them into **sessions**, and the UI lets you **visualize tracks, compare reception, and export data** (e.g., GeoJSON).
+Best fit: fixed base + mobile field testing.
 
-The key idea: LoRaMapr does not require your devices to talk to the web app directly. Instead, it ingests data through the system that already receives your radio packets.
+Most commonly, that means a home node and a field node:
 
-## How data gets into LoRaMapr (two common ingestion methods)
+1. Leave one node at home, at a relay site, or at another fixed base location.
+2. Carry another node through the field on a walk or drive.
+3. Let your receiver path send packets into LoRaMapr.
+4. Review sessions, playback, coverage views, and exports to see where packets were actually received.
+
+Run capture can be manual, or automated with Home Auto Session (HAS) for base-driven workflows.
+
+`Home node + field node` is the default pattern, but not the only valid setup.
+
+## How data gets into LoRaMapr (supported ingest paths)
+
+### 1) Meshtastic (Forwarder -> HTTP) — primary coverage-mapping workflow
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_light.png">
+    <img alt="LoRaMapr Meshtastic ingestion flow" src="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_light.png" width="980">
+  </picture>
+</p>
+
+**Real-world setup (typical)**
+
+- **You own**: one or more Meshtastic field nodes you carry while walking/driving
+- **You own**: a fixed receiver node (often at home) plus a small computer (often a Raspberry Pi)
+- Field node(s) and base node commonly run on a private channel for repeatable testing
+- **LoRaMapr**: your self-hosted backend + UI
+
+**How ingestion works**
+
+1. Field node(s) transmit packets into the mesh.
+2. Your fixed base node hears them.
+3. The **Pi Forwarder** listens to Meshtastic packets locally and **POSTs them to LoRaMapr** over HTTP/HTTPS.
+4. LoRaMapr stores the events and normalizes GPS/radio fields into measurements attached to sessions.
+
+Home Auto Session (HAS) supports a home-driven coverage workflow: leave one node at your base location, carry another through the field, and let the base-side workflow automatically open and close coverage runs around real activity. This reduces manual session handling and makes repeated walks or drives easier to capture consistently.
+
+Important: Meshtastic is **not limited to a home node**. The forwarder can run on any machine that can read Meshtastic packets (Pi, laptop over USB, etc.).
+
+### 2) LoRaWAN (The Things Stack webhook) — supported secondary path
 
 <p align="center">
   <picture>
@@ -49,8 +95,6 @@ The key idea: LoRaMapr does not require your devices to talk to the web app dire
     <img alt="LoRaMapr LoRaWAN ingestion flow" src="docs/assets/readme/LoRaMapr_LoRaWAN_ingest_diagram_light.png" width="980">
   </picture>
 </p>
-
-### 1) LoRaWAN (The Things Stack webhook) — most common if you already use TTS/TTN
 
 **Real-world setup**
 
@@ -67,39 +111,14 @@ The key idea: LoRaMapr does not require your devices to talk to the web app dire
 4. The Things Stack automatically **POSTs each uplink event** to LoRaMapr.
 5. LoRaMapr stores the event, extracts GPS + radio metadata (RSSI/SNR, gateway IDs when available), and attaches the data to your sessions for visualization.
 
-### 2) Meshtastic (Forwarder -> HTTP) — most common for local mesh + home node setups
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_light.png">
-    <img alt="LoRaMapr Meshtastic ingestion flow" src="docs/assets/readme/LoRaMapr_Meshtastic_ingest_diagram_light.png" width="980">
-  </picture>
-</p>
-
-**Real-world setup (typical)**
-
-- **You own**: one or more Meshtastic field nodes you carry while walking/driving
-- **You own**: a receiver node at home (often configured with a standard preset like **LongFast**) plus a small computer (often a Raspberry Pi)
-- Field nodes and the home node commonly communicate on a **private channel** (so your test traffic stays scoped to your own devices)
-- **LoRaMapr**: your backend + UI
-
-**How ingestion works**
-
-1. Field node(s) transmit packets into the mesh.
-2. Your home node hears them.
-3. A small forwarder process (the **Pi Forwarder**) listens to Meshtastic packets locally and **POSTs them to LoRaMapr** over HTTP/HTTPS.
-4. LoRaMapr stores the events and normalizes GPS (and any available telemetry) into measurements attached to sessions.
-
-Important: Meshtastic is **not limited to a home node**. The forwarder can run on any machine that can read Meshtastic packets (Pi, laptop over USB, etc.). A home node is just the most convenient always-on receiver.
-
 ## What users typically do with it
 
-- Record a "walk" or "drive" session and replay it later.
-- Compare coverage between antennas, device placement, or firmware settings by repeating the same route.
+- Record a walk/drive coverage run and replay it later.
+- Compare antennas, node placement, terrain, routes, and settings by repeating the same route over time.
+- Use Coverage **Bins** and **Heatmap** views to see where packets were actually received.
+- Use **Home Auto Session (HAS)** to capture repeated field runs with less manual session management.
 - Inspect reception details (especially strong with LoRaWAN where gateways report RSSI/SNR).
 - Export session tracks/points (GeoJSON) for external tools like QGIS.
-- **Planned:** aggregate sessions into an area **coverage heat map** (fast, reusable coverage summaries across routes and date ranges).
 
 ## Tech stack
 

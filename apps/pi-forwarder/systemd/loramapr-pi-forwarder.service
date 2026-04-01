@@ -1,5 +1,5 @@
 [Unit]
-Description=LoraMapr Pi Forwarder
+Description=LoRaMapr Pi Forwarder
 After=network-online.target
 Wants=network-online.target
 

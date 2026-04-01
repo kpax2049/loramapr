@@ -68,7 +68,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="sidebar-tabs"]',
     title: 'Sidebar tabs',
     content:
-      'Switch between Device, Sessions, Playback, Coverage, and Debug views here.',
+      'Switch between Device, Sessions (coverage runs), Playback, Coverage, and Debug views here.',
     side: 'right',
     align: 'start'
   },
@@ -122,7 +122,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'device',
     title: 'Device details',
     content:
-      'Review metadata, status, timestamps, and latest location for the selected device.',
+      'Review metadata, status, timestamps, latest location, and Home Auto Session (HAS) config for the selected device.',
     side: 'right',
     align: 'start'
   },
@@ -155,9 +155,9 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-picker"]',
     tab: 'sessions',
-    title: 'Sessions panel',
+    title: 'Coverage runs panel',
     content:
-      'Manage recording sessions for the selected device.',
+      'Manage recorded coverage runs for the selected device.',
     side: 'right',
     align: 'start'
   },
@@ -166,9 +166,9 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-start-stop"]',
     tab: 'sessions',
-    title: 'Start and stop session',
+    title: 'Start and stop run',
     content:
-      'Start a session before a run and stop it when finished.',
+      'Record runs manually here. For repeated home-node testing, you can use Home Auto Session (HAS) from the Device tab.',
     side: 'right',
     align: 'start'
   },
@@ -177,9 +177,9 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-list"]',
     tab: 'sessions',
-    title: 'Session list',
+    title: 'Run list',
     content:
-      'Select past sessions for analysis and export.',
+      'Select past coverage runs for analysis and export.',
     side: 'right',
     align: 'start'
   },
@@ -188,9 +188,9 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-actions"]',
     tab: 'sessions',
-    title: 'Session actions',
+    title: 'Run actions',
     content:
-      'Rename, archive, unarchive, or safely delete sessions when QUERY access is available.',
+      'Rename, archive, unarchive, or safely delete runs when QUERY access is available.',
     side: 'right',
     align: 'start',
     condition: () => Boolean(document.querySelector('[data-tour="session-actions"]'))
@@ -204,7 +204,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'playback',
     title: 'Playback controls',
     content:
-      'Replay a selected session timeline with play/pause, speed, and window controls.',
+      'Replay a selected coverage run timeline with play/pause, speed, and window controls.',
     side: 'left',
     align: 'start'
   },
@@ -215,7 +215,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'playback',
     title: 'Playback scrubber',
     content:
-      'Drag the scrubber to inspect any timestamp in the selected session.',
+      'Drag the scrubber to inspect any timestamp in the selected run.',
     side: 'left',
     align: 'start'
   },
@@ -239,7 +239,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'coverage',
     title: 'Coverage toggle',
     content:
-      'Toggle between raw points and aggregated coverage.',
+      'Toggle between raw run points and aggregated coverage views.',
     side: 'left',
     align: 'start'
   },
@@ -319,7 +319,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'debug',
     title: 'Debug events',
     content:
-      'Inspect recent ingest events and processing errors for troubleshooting.',
+      'Inspect recent receiver ingest events and processing errors for troubleshooting.',
     side: 'left',
     align: 'start',
     condition: () => Boolean(document.querySelector('[data-tour="debug-events"]'))

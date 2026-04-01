@@ -637,7 +637,9 @@ export default function Controls({
         icon: <IconAntennaBars5 size={14} stroke={1.8} />,
         text: autoSessionForm.enabled ? 'On' : 'Off',
         tone: autoSessionForm.enabled ? 'success' : 'muted',
-        title: autoSessionForm.enabled ? 'Auto session enabled' : 'Auto session disabled'
+        title: autoSessionForm.enabled
+          ? 'Home Auto Session (HAS) enabled'
+          : 'Home Auto Session (HAS) disabled'
       },
       {
         key: 'home',
@@ -1283,7 +1285,7 @@ export default function Controls({
             aria-controls="auto-session-panel-body"
           >
             <span className="panel-toggle__content">
-              <span className="panel-toggle__title">Auto Session (Home Geofence)</span>
+              <span className="panel-toggle__title">Home Auto Session (HAS)</span>
               {!autoSessionExpanded ? (
                 <CollapsedSummaryChips items={autoSessionCollapsedSummaryItems} />
               ) : null}
@@ -1292,6 +1294,10 @@ export default function Controls({
           </button>
           {autoSessionExpanded ? (
             <div id="auto-session-panel-body" className="auto-session-panel__body">
+              <div className="controls__status">
+                Home Auto Session (HAS) can automatically open and close coverage runs from
+                home-geofence activity while you test with a field node.
+              </div>
               <label className="controls__toggle">
                 <input
                   type="checkbox"
@@ -1373,7 +1379,7 @@ export default function Controls({
               </label>
               {autoSessionAuthError ? (
                 <div className="controls__gateway-error">
-                  Auto session requires QUERY key
+                  Home Auto Session (HAS) requires QUERY key
                 </div>
               ) : null}
               {autoSessionError ? (
@@ -1428,7 +1434,7 @@ export default function Controls({
                 checked={filterMode === 'session'}
                 onChange={() => onFilterModeChange('session')}
               />
-              Session
+              Run
             </label>
           </div>
         </div>
@@ -1537,12 +1543,12 @@ export default function Controls({
                   );
                 }}
               />
-              Session
+              Run
             </label>
           </div>
           {coverageScope === 'session' ? (
             <>
-              <label htmlFor="coverage-session-select">Session</label>
+              <label htmlFor="coverage-session-select">Coverage run</label>
               <select
                 id="coverage-session-select"
                 value={effectiveCoverageSessionId ?? ''}
@@ -1554,7 +1560,7 @@ export default function Controls({
                 disabled={coverageSessionOptions.length === 0}
               >
                 {coverageSessionOptions.length === 0 ? (
-                  <option value="">No sessions available</option>
+                  <option value="">No coverage runs available</option>
                 ) : null}
                 {coverageSessionOptions.map((session) => (
                   <option key={`coverage-session-${session.id}`} value={session.id}>
@@ -1570,7 +1576,7 @@ export default function Controls({
                   onSelectedCoverageSessionIdChange(null);
                 }}
               >
-                Back to all sessions
+                Back to all runs
               </button>
             </>
           ) : null}
@@ -1618,7 +1624,7 @@ export default function Controls({
       {showSessionsTab && isPlaybackMode ? (
         <div className="controls__group">
           <span className="controls__label">
-            Playback mode is active. Use Playback tab controls for replay.
+            Playback mode is active. Use Playback tab controls for run replay.
           </span>
           {playbackSessionId ? (
             <SessionDetailsPanel
@@ -1689,7 +1695,7 @@ export default function Controls({
             <>
               {filterMode === 'session' && !selectedSessionId ? (
                 <div className="controls__session-empty-state" role="status" aria-live="polite">
-                  Select a session
+                  Select a coverage run
                 </div>
               ) : null}
               {selectedSessionId ? (
@@ -1715,16 +1721,6 @@ export default function Controls({
         <div className="controls__group">
           <span className="controls__label">Receiver source</span>
           <div className="controls__segmented" role="radiogroup" aria-label="Receiver source">
-            <label className={`controls__segment ${receiverSource === 'lorawan' ? 'is-active' : ''}`}>
-              <input
-                type="radio"
-                name="receiver-source"
-                value="lorawan"
-                checked={receiverSource === 'lorawan'}
-                onChange={() => onReceiverSourceChange('lorawan')}
-              />
-              LoRaWAN
-            </label>
             <label
               className={`controls__segment ${receiverSource === 'meshtastic' ? 'is-active' : ''}`}
             >
@@ -1736,6 +1732,16 @@ export default function Controls({
                 onChange={() => onReceiverSourceChange('meshtastic')}
               />
               Meshtastic
+            </label>
+            <label className={`controls__segment ${receiverSource === 'lorawan' ? 'is-active' : ''}`}>
+              <input
+                type="radio"
+                name="receiver-source"
+                value="lorawan"
+                checked={receiverSource === 'lorawan'}
+                onChange={() => onReceiverSourceChange('lorawan')}
+              />
+              LoRaWAN
             </label>
           </div>
         </div>
@@ -2057,7 +2063,7 @@ export default function Controls({
               )}
               {autoSessionConfig && (
                 <div className="controls__status-row">
-                  <span>Auto session:</span>
+                  <span>Home Auto Session (HAS):</span>
                   <strong>{autoSessionConfig.enabled ? 'enabled' : 'disabled'}</strong>
                 </div>
               )}
@@ -2139,7 +2145,7 @@ function sanitizeIconPickerValue(
 
 function formatCoverageSessionOption(session: Session): string {
   const name = session.name?.trim();
-  const label = name && name.length > 0 ? name : `Session ${session.id.slice(0, 8)}`;
+  const label = name && name.length > 0 ? name : `Run ${session.id.slice(0, 8)}`;
   const startedAt = new Date(session.startedAt);
   const startedLabel = Number.isNaN(startedAt.getTime())
     ? session.startedAt

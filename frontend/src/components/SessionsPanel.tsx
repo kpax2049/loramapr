@@ -47,11 +47,11 @@ function formatTimestamp(value?: string | null): string {
 }
 
 function sessionLabel(session: Session): string {
-  return session.name?.trim() || `Session ${session.id.slice(0, 8)}`;
+  return session.name?.trim() || `Run ${session.id.slice(0, 8)}`;
 }
 
 function activeSessionLabel(session: Session): string {
-  return session.name?.trim() || 'Active session';
+  return session.name?.trim() || 'Active run';
 }
 
 function getErrorStatus(error: unknown): number | null {
@@ -189,8 +189,8 @@ export default function SessionsPanel({
           const status = getErrorStatus(mutationError);
           setRenameError(
             status === 401 || status === 403
-              ? 'Renaming sessions requires QUERY key'
-              : 'Could not rename session'
+              ? 'Renaming runs requires QUERY key'
+              : 'Could not rename run'
           );
         }
       }
@@ -224,8 +224,8 @@ export default function SessionsPanel({
           const status = getErrorStatus(mutationError);
           setSessionActionError(
             status === 401 || status === 403
-              ? 'Session actions require QUERY key'
-              : 'Could not update session archive state'
+              ? 'Run actions require QUERY key'
+              : 'Could not update run archive state'
           );
         }
       }
@@ -270,8 +270,8 @@ export default function SessionsPanel({
           const status = getErrorStatus(mutationError);
           setSessionActionError(
             status === 401 || status === 403
-              ? 'Session actions require QUERY key'
-              : 'Could not delete session'
+              ? 'Run actions require QUERY key'
+              : 'Could not delete run'
           );
         }
       }
@@ -309,8 +309,8 @@ export default function SessionsPanel({
           const status = getErrorStatus(mutationError);
           setSessionActionError(
             status === 401 || status === 403
-              ? 'Session actions require QUERY key'
-              : 'Could not archive session'
+              ? 'Run actions require QUERY key'
+              : 'Could not archive run'
           );
         }
       }
@@ -376,7 +376,7 @@ export default function SessionsPanel({
                   cancelRename();
                 }
               }}
-              aria-label="Edit session name"
+              aria-label="Edit coverage run name"
               disabled={updateSessionMutation.isPending}
               autoFocus
             />
@@ -395,7 +395,7 @@ export default function SessionsPanel({
                     className="sessions-panel__icon-button"
                     onClick={() => saveRename(session)}
                     disabled={disableRowActions}
-                    aria-label="Save session name"
+                    aria-label="Save run name"
                   >
                     <IconCheck size={14} aria-hidden="true" />
                   </button>
@@ -415,7 +415,7 @@ export default function SessionsPanel({
                   className="sessions-panel__icon-button"
                   onClick={() => beginRename(session)}
                   aria-label={`Rename ${title}`}
-                  title="Rename session"
+                  title="Rename run"
                   disabled={disableRowActions}
                 >
                   <IconPencil size={14} aria-hidden="true" />
@@ -481,9 +481,9 @@ export default function SessionsPanel({
   };
 
   return (
-    <section className="sessions-panel" aria-label="Sessions" data-tour="session-picker">
+    <section className="sessions-panel" aria-label="Coverage runs" data-tour="session-picker">
       <div className="sessions-panel__header">
-        <h3>Sessions</h3>
+        <h3>Coverage runs</h3>
         <div className="sessions-panel__header-meta">
           {deviceId ? (
             <span className="sessions-panel__device">Device selected</span>
@@ -504,7 +504,7 @@ export default function SessionsPanel({
       <div className="sessions-panel__actions" data-tour="session-start-stop">
         <input
           type="text"
-          placeholder="Session name (optional)"
+          placeholder="Coverage run name (optional)"
           value={sessionName}
           onChange={(event) => setSessionName(event.target.value)}
           disabled={!deviceId || startMutation.isPending}
@@ -516,7 +516,7 @@ export default function SessionsPanel({
             disabled={!deviceId || startMutation.isPending}
             data-tour="start-session"
           >
-            {startMutation.isPending ? 'Starting…' : 'Start session'}
+            {startMutation.isPending ? 'Recording…' : 'Record run'}
           </button>
         </div>
       </div>
@@ -530,17 +530,21 @@ export default function SessionsPanel({
             onClick={handleStop}
             disabled={stopMutation.isPending}
           >
-            {stopMutation.isPending ? 'Stopping…' : 'Stop'}
+            {stopMutation.isPending ? 'Stopping…' : 'Stop run'}
           </button>
         </div>
       )}
 
-      {error && <div className="sessions-panel__error">Failed to load sessions.</div>}
+      {error && <div className="sessions-panel__error">Failed to load coverage runs.</div>}
 
       <div className="sessions-panel__list" aria-live="polite" data-tour="session-list">
-        {isLoading && <div className="sessions-panel__loading">Loading sessions…</div>}
+        {isLoading && <div className="sessions-panel__loading">Loading coverage runs…</div>}
         {!isLoading && sessions.length === 0 && (
-          <div className="sessions-panel__empty">No sessions yet.</div>
+          <div className="sessions-panel__empty">
+            No coverage runs yet. Start by connecting a base receiver and taking a field node on a
+            walk or drive. Record runs manually here, or use Home Auto Session (HAS) in the Device
+            tab for home-driven automation.
+          </div>
         )}
         {pastSessions.map((session) => renderSessionRow(session))}
       </div>
@@ -565,9 +569,9 @@ export default function SessionsPanel({
             aria-labelledby="sessions-delete-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h4 id="sessions-delete-title">Delete session?</h4>
+            <h4 id="sessions-delete-title">Delete coverage run?</h4>
             <div className="sessions-panel__modal-session-name">
-              {deleteTargetSession.name?.trim() || `Session ${deleteTargetSession.id.slice(0, 8)}`}
+              {deleteTargetSession.name?.trim() || `Run ${deleteTargetSession.id.slice(0, 8)}`}
             </div>
             <div className="sessions-panel__modal-meta">
               Measurements:{' '}
@@ -579,8 +583,8 @@ export default function SessionsPanel({
               Choose how to proceed:
             </p>
             <ul className="sessions-panel__modal-list">
-              <li>Archive hides session but keeps attachments.</li>
-              <li>Delete removes session and DETACHES measurements (keeps data).</li>
+              <li>Archive hides this run but keeps attachments.</li>
+              <li>Delete removes this run and DETACHES measurements (keeps data).</li>
             </ul>
             <label className="sessions-panel__modal-confirm">
               <span>Type DELETE to enable delete</span>
@@ -589,7 +593,7 @@ export default function SessionsPanel({
                 value={deleteConfirmText}
                 onChange={(event) => setDeleteConfirmText(event.target.value)}
                 placeholder="DELETE"
-                aria-label="Type DELETE to confirm deleting session"
+                aria-label="Type DELETE to confirm deleting run"
                 disabled={deleteSessionMutation.isPending}
               />
             </label>
@@ -619,7 +623,7 @@ export default function SessionsPanel({
                   ? 'Already archived'
                   : updateSessionMutation.isPending
                     ? 'Archiving…'
-                    : 'Archive session'}
+                    : 'Archive run'}
               </button>
               <button
                 type="button"
@@ -629,7 +633,7 @@ export default function SessionsPanel({
               >
                 {deleteSessionMutation.isPending
                   ? 'Deleting…'
-                  : 'Delete session (detach measurements)'}
+                  : 'Delete run (detach measurements)'}
               </button>
             </div>
           </div>

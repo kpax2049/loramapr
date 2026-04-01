@@ -1,6 +1,6 @@
 # Pi Forwarder
 
-`apps/pi-forwarder` forwards Meshtastic packet JSON into backend ingest (`POST /api/meshtastic/event`).
+`apps/pi-forwarder` forwards Meshtastic packet JSON from your fixed base receiver into backend ingest (`POST /api/meshtastic/event`).
 
 This document reflects the exact recovery path used in production on the Pi:
 

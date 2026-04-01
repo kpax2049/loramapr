@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily LoraMapr PostgreSQL backup timer
+Description=Daily LoRaMapr PostgreSQL backup timer
 
 [Timer]
 OnCalendar=*-*-* 03:15:00

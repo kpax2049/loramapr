@@ -1,6 +1,6 @@
-# LoraMapr Pi Forwarder
+# LoRaMapr Pi Forwarder
 
-`apps/pi-forwarder` forwards Meshtastic packet JSON to backend ingest:
+`apps/pi-forwarder` forwards Meshtastic packet JSON from your fixed base receiver to backend ingest:
 
 - endpoint: `POST /api/meshtastic/event`
 - auth: `X-API-Key` (`INGEST` scope)

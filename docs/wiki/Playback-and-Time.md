@@ -2,10 +2,10 @@
 
 ## What playback is for
 
-Playback lets you replay a single session over time so you can inspect movement and radio conditions in chronological order.
+Playback lets you replay a single coverage run over time so you can inspect movement and radio conditions in chronological order.
 It is optimized for:
 
-- verifying route progression within one recorded session
+- verifying route progression within one recorded run
 - correlating signal changes with location over time
 - scrubbing to a specific timestamp and inspecting nearby points
 

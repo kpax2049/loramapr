@@ -1,6 +1,6 @@
 # Pi Forwarder
 
-`apps/pi-forwarder` sends Meshtastic packet JSON to backend ingest (`POST /api/meshtastic/event`).
+`apps/pi-forwarder` sends Meshtastic packet JSON from your fixed base receiver to backend ingest (`POST /api/meshtastic/event`).
 
 ## What it does
 
