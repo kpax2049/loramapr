@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   forwardRef,
   type MutableRefObject,
@@ -709,6 +710,22 @@ type PointPalette = Record<RssiBucket, string> & {
   cursor: string;
 };
 
+const SESSION_POINT_STYLE = {
+  radius: 5.2,
+  hoveredRadius: 5.4,
+  selectedRadius: 5.6,
+  strokeWidth: 2.9,
+  hoveredStrokeWidth: 3.2,
+  selectedStrokeWidth: 3.45,
+  hitRadius: 12.6,
+  hoveredHitRadius: 13.2,
+  selectedHitRadius: 14.2,
+  emphasisDotRadius: 1.45,
+  selectedDotRadius: 1.8,
+  furthestRingOffset: 2.5,
+  furthestRingWeight: 1.05
+} as const;
+
 type HomeGeofencePalette = {
   stroke: string;
   fill: string;
@@ -801,6 +818,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 ref
 ) {
   const [currentZoom, setCurrentZoom] = useState(zoom);
+  const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const palette = useMemo(() => readPalette(), []);
   const mapRef = useRef<L.Map | null>(null);
   const markerIconCacheRef = useRef<Map<string, L.DivIcon>>(new Map());
@@ -944,6 +962,36 @@ ref
 
     return positions;
   }, [overviewTrack, currentZoom, shouldRenderTracks]);
+
+  const furthestPointIdFromHome = useMemo(() => {
+    if (
+      !homeGeofenceOverlay ||
+      !Number.isFinite(homeGeofenceOverlay.lat) ||
+      !Number.isFinite(homeGeofenceOverlay.lon)
+    ) {
+      return null;
+    }
+
+    const home = L.latLng(homeGeofenceOverlay.lat, homeGeofenceOverlay.lon);
+    let furthestId: string | null = null;
+    let furthestDistanceMeters = Number.NEGATIVE_INFINITY;
+
+    for (const measurement of measurements) {
+      if (!Number.isFinite(measurement.lat) || !Number.isFinite(measurement.lon)) {
+        continue;
+      }
+      const distanceMeters = home.distanceTo(L.latLng(measurement.lat, measurement.lon));
+      if (!Number.isFinite(distanceMeters)) {
+        continue;
+      }
+      if (distanceMeters > furthestDistanceMeters) {
+        furthestDistanceMeters = distanceMeters;
+        furthestId = measurement.id;
+      }
+    }
+
+    return furthestId;
+  }, [homeGeofenceOverlay, measurements]);
 
   const arrowSuppressionPositions = useMemo(() => {
     const suppressionPoints: [number, number][] = [];
@@ -1323,38 +1371,114 @@ ref
           const bucket = getRssiBucket(measurement.rssi);
           const color = palette[bucket] || palette.default;
           const isSelected = measurement.id === selectedPointId;
-          const className = ['map-point', `map-point--${bucket}`, isSelected ? 'is-selected' : '']
+          const isHovered = measurement.id === hoveredPointId;
+          const isFurthest = measurement.id === furthestPointIdFromHome;
+          const className = [
+            'map-point',
+            'map-point--hollow',
+            `map-point--${bucket}`,
+            isSelected ? 'is-selected' : '',
+            isHovered ? 'is-hovered' : '',
+            isFurthest ? 'is-furthest' : ''
+          ]
             .filter(Boolean)
             .join(' ');
+          const visibleRadius = isSelected
+            ? SESSION_POINT_STYLE.selectedRadius
+            : isHovered
+              ? SESSION_POINT_STYLE.hoveredRadius
+              : SESSION_POINT_STYLE.radius;
+          const visibleWeight = isSelected
+            ? SESSION_POINT_STYLE.selectedStrokeWidth
+            : isHovered
+              ? SESSION_POINT_STYLE.hoveredStrokeWidth
+              : SESSION_POINT_STYLE.strokeWidth;
+          const hitRadius = isSelected
+            ? SESSION_POINT_STYLE.selectedHitRadius
+            : isHovered
+              ? SESSION_POINT_STYLE.hoveredHitRadius
+              : SESSION_POINT_STYLE.hitRadius;
 
           return (
-            <CircleMarker
-              key={measurement.id}
-              center={[measurement.lat, measurement.lon]}
-              radius={isSelected ? 8 : 6}
-              pathOptions={{
-                color,
-                weight: isSelected ? 3 : 2,
-                fillColor: color,
-                fillOpacity: 0.85,
-                className
-              }}
-              eventHandlers={{
-                click: () => onSelectPoint?.(measurement.id)
-              }}
-            >
-              <Tooltip direction="top" offset={[0, -6]} opacity={0.9}>
-                <div>
-                  <div>{formatTimestamp(measurement.capturedAt)}</div>
-                  {measurement.rssi !== null && measurement.rssi !== undefined && (
-                    <div>RSSI: {measurement.rssi}</div>
-                  )}
-                  {measurement.snr !== null && measurement.snr !== undefined && (
-                    <div>SNR: {measurement.snr}</div>
-                  )}
-                </div>
-              </Tooltip>
-            </CircleMarker>
+            <Fragment key={measurement.id}>
+              <CircleMarker
+                center={[measurement.lat, measurement.lon]}
+                radius={hitRadius}
+                pathOptions={{
+                  className: 'map-point-hit-target',
+                  color: 'transparent',
+                  weight: 1,
+                  opacity: 0,
+                  fillColor: 'transparent',
+                  fillOpacity: 0
+                }}
+                eventHandlers={{
+                  click: () => onSelectPoint?.(measurement.id),
+                  mouseover: () => setHoveredPointId(measurement.id),
+                  mouseout: () =>
+                    setHoveredPointId((current) =>
+                      current === measurement.id ? null : current
+                    )
+                }}
+              >
+                <Tooltip direction="top" offset={[0, -6]} opacity={0.9}>
+                  <div>
+                    <div>{formatTimestamp(measurement.capturedAt)}</div>
+                    {measurement.rssi !== null && measurement.rssi !== undefined && (
+                      <div>RSSI: {measurement.rssi}</div>
+                    )}
+                    {measurement.snr !== null && measurement.snr !== undefined && (
+                      <div>SNR: {measurement.snr}</div>
+                    )}
+                  </div>
+                </Tooltip>
+              </CircleMarker>
+              {isFurthest && (
+                <CircleMarker
+                  center={[measurement.lat, measurement.lon]}
+                  radius={visibleRadius + SESSION_POINT_STYLE.furthestRingOffset}
+                  pathOptions={{
+                    className: 'map-point map-point--furthest-accent',
+                    color,
+                    weight: SESSION_POINT_STYLE.furthestRingWeight,
+                    opacity: 0.68,
+                    fill: false,
+                    fillOpacity: 0
+                  }}
+                  interactive={false}
+                />
+              )}
+              {(isSelected || isHovered) && (
+                <CircleMarker
+                  center={[measurement.lat, measurement.lon]}
+                  radius={
+                    isSelected
+                      ? SESSION_POINT_STYLE.selectedDotRadius
+                      : SESSION_POINT_STYLE.emphasisDotRadius
+                  }
+                  pathOptions={{
+                    className: 'map-point map-point--emphasis-dot',
+                    color,
+                    weight: 0,
+                    fillColor: color,
+                    fillOpacity: isSelected ? 0.9 : 0.72
+                  }}
+                  interactive={false}
+                />
+              )}
+              <CircleMarker
+                center={[measurement.lat, measurement.lon]}
+                radius={visibleRadius}
+                pathOptions={{
+                  color,
+                  weight: visibleWeight,
+                  fillColor: color,
+                  fillOpacity: 0,
+                  className
+                }}
+                interactive={false}
+              />
+            </Fragment>
           );
         })}
       {mapLayerMode === 'points' && playbackCursorPosition && (
