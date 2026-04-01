@@ -614,7 +614,7 @@ export default function DevicesManager({
                   onOpenAutoSession();
                 }}
               >
-                Go to Home Auto Session (HAS) config
+                Go to auto-session config
               </button>
             ) : null}
             <div className="devices-manager__modal-actions">

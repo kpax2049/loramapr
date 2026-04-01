@@ -82,7 +82,7 @@ export default function StatusStrip({
       ) : null}
       {activeSessionId ? (
         <span className="status-strip__item">
-          <span className="status-strip__label">Run</span>
+          <span className="status-strip__label">Session</span>
           <span className="status-strip__value">{shortenId(activeSessionId)}</span>
         </span>
       ) : null}

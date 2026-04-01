@@ -390,29 +390,6 @@
   outline-offset: 1px;
 }
 
-.layout__tour-menu-about {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.2rem 0.1rem 0.28rem;
-  border-bottom: 1px solid var(--divider);
-}
-
-.layout__tour-menu-about-title {
-  color: var(--panel-text);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.layout__tour-menu-about-body {
-  color: var(--panel-muted);
-  font-size: 0.56rem;
-  line-height: 1.35;
-  letter-spacing: 0.01em;
-  font-family: var(--font-mono);
-}
-
 .layout__tour-menu-shortcuts {
   display: grid;
   gap: 0.22rem;

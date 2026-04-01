@@ -118,7 +118,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
     return endMs - startMs;
   }, [stats?.minCapturedAt, stats?.maxCapturedAt, session?.startedAt, session?.endedAt, session?.id]);
 
-  const sessionLabel = session?.name?.trim() || `Run ${sessionId.slice(0, 8)}`;
+  const sessionLabel = session?.name?.trim() || `Session ${sessionId.slice(0, 8)}`;
 
   const handleSaveMetadata = () => {
     if (!session || !hasQueryApiKey || updateSessionMutation.isPending || !metadataDirty) {
@@ -139,8 +139,8 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
           const status = getErrorStatus(error);
           setMetadataError(
             status === 401 || status === 403
-              ? 'Editing run details requires QUERY key'
-              : 'Could not save run details'
+              ? 'Editing session details requires QUERY key'
+              : 'Could not save session details'
           );
         }
       }
@@ -163,7 +163,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
           const status = getErrorStatus(error);
           setActionError(
             status === 401 || status === 403
-              ? 'Run actions require QUERY key'
+              ? 'Session actions require QUERY key'
               : 'Could not update archive state'
           );
         }
@@ -187,8 +187,8 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
           const status = getErrorStatus(error);
           setActionError(
             status === 401 || status === 403
-              ? 'Run actions require QUERY key'
-              : 'Could not delete run'
+              ? 'Session actions require QUERY key'
+              : 'Could not delete session'
           );
         }
       }
@@ -220,8 +220,8 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
           const status = getErrorStatus(error);
           setActionError(
             status === 401 || status === 403
-              ? 'Run actions require QUERY key'
-              : 'Could not archive run'
+              ? 'Session actions require QUERY key'
+              : 'Could not archive session'
           );
         }
       }
@@ -264,11 +264,11 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
   return (
     <section
       className={`session-details-panel ${isExpanded ? 'is-expanded' : 'is-collapsed'}`}
-      aria-label="Coverage run details"
+      aria-label="Session details"
     >
       <div className="session-details-panel__header">
         <div className="session-details-panel__header-main">
-          <h4>Coverage run details</h4>
+          <h4>Session details</h4>
           {session ? (
             <span className="session-details-panel__header-session" title={sessionLabel}>
               {sessionLabel}
@@ -294,10 +294,10 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
       </div>
 
       {sessionQuery.isLoading ? (
-        <div className="session-details-panel__empty">Loading run details...</div>
+        <div className="session-details-panel__empty">Loading session details...</div>
       ) : null}
       {sessionQuery.error ? (
-        <div className="session-details-panel__error">Run details unavailable.</div>
+        <div className="session-details-panel__error">Session details unavailable.</div>
       ) : null}
 
       {session && !isExpanded ? (
@@ -329,7 +329,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
               onClick={() => void onFitMapToSession(session.id, stats?.bbox ?? null)}
               disabled={sessionQuery.isLoading || statsQuery.isLoading}
             >
-              Fit map to run
+              Fit map to session
             </button>
             <button
               type="button"
@@ -341,7 +341,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
             </button>
           </div>
           {statsQuery.error ? (
-            <div className="session-details-panel__error">Run stats unavailable.</div>
+            <div className="session-details-panel__error">Session stats unavailable.</div>
           ) : null}
           {exportError ? (
             <div className="session-details-panel__error" role="status">
@@ -363,7 +363,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
                     value={nameDraft}
                     onChange={(event) => setNameDraft(event.target.value)}
                     disabled={updateSessionMutation.isPending}
-                    aria-label="Coverage run name"
+                    aria-label="Session name"
                   />
                 ) : (
                   <strong>{sessionLabel}</strong>
@@ -377,7 +377,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
                     onChange={(event) => setNotesDraft(event.target.value)}
                     rows={3}
                     disabled={updateSessionMutation.isPending}
-                    aria-label="Coverage run notes"
+                    aria-label="Session notes"
                   />
                 ) : (
                   <strong>{session.notes?.trim() || '—'}</strong>
@@ -484,7 +484,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
               onClick={() => void onFitMapToSession(session.id, stats?.bbox ?? null)}
               disabled={sessionQuery.isLoading || statsQuery.isLoading}
             >
-              Fit map to run
+              Fit map to session
             </button>
             <button
               type="button"
@@ -519,7 +519,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
             ) : null}
           </div>
           {statsQuery.error ? (
-            <div className="session-details-panel__error">Run stats unavailable.</div>
+            <div className="session-details-panel__error">Session stats unavailable.</div>
           ) : null}
           {metadataError ? (
             <div className="session-details-panel__error" role="status">
@@ -555,15 +555,15 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
             aria-labelledby="session-details-delete-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h4 id="session-details-delete-title">Delete coverage run?</h4>
+            <h4 id="session-details-delete-title">Delete session?</h4>
             <div className="sessions-panel__modal-session-name">{sessionLabel}</div>
             <div className="sessions-panel__modal-meta">
               Measurements: {measurementCount ?? '—'}
             </div>
             <p>Choose how to proceed:</p>
             <ul className="sessions-panel__modal-list">
-              <li>Archive hides this run but keeps attachments.</li>
-              <li>Delete removes this run and DETACHES measurements (keeps data).</li>
+              <li>Archive hides session but keeps attachments.</li>
+              <li>Delete removes session and DETACHES measurements (keeps data).</li>
             </ul>
             <label className="sessions-panel__modal-confirm">
               <span>Type DELETE to enable delete</span>
@@ -572,7 +572,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
                 value={deleteConfirmText}
                 onChange={(event) => setDeleteConfirmText(event.target.value)}
                 placeholder="DELETE"
-                aria-label="Type DELETE to confirm deleting run"
+                aria-label="Type DELETE to confirm deleting session"
                 disabled={deleteSessionMutation.isPending}
               />
             </label>
@@ -602,7 +602,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
                   ? 'Already archived'
                   : updateSessionMutation.isPending
                     ? 'Archiving…'
-                    : 'Archive run'}
+                    : 'Archive session'}
               </button>
               <button
                 type="button"
@@ -612,7 +612,7 @@ export default function SessionDetailsPanel({ sessionId, onFitMapToSession }: Se
               >
                 {deleteSessionMutation.isPending
                   ? 'Deleting…'
-                  : 'Delete run (detach measurements)'}
+                  : 'Delete session (detach measurements)'}
               </button>
             </div>
           </div>
@@ -690,7 +690,7 @@ function SignalSeriesChart({ items, metric }: SignalSeriesChartProps) {
       className="session-signal-chart"
       data={points}
       getValue={(point) => point.v}
-      ariaLabel={`Run ${metric.toUpperCase()} over time`}
+      ariaLabel={`Session ${metric.toUpperCase()} over time`}
       tooltipFormatter={(point) => (
         <>
           <span>{formatTimestamp(point.t)}</span>
@@ -880,7 +880,7 @@ function SignalHistogramChart({ bins, metric }: SignalHistogramChartProps) {
         ref={canvasRef}
         className="session-signal-histogram__canvas"
         role="img"
-        aria-label={`Run ${metric.toUpperCase()} distribution`}
+        aria-label={`Session ${metric.toUpperCase()} distribution`}
         onMouseMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const paddingX = HISTOGRAM_CHART_PADDING_X;

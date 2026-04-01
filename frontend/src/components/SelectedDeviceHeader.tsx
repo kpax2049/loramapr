@@ -145,11 +145,11 @@ export default function SelectedDeviceHeader({
               className={`selected-device-header__badge selected-device-header__badge--session selected-device-header__badge--session-${sessionStatus}`}
               aria-live="polite"
             >
-              {sessionStatus === 'active' ? 'Run active' : 'Run idle'}
+              {sessionStatus === 'active' ? 'Session active' : 'Session idle'}
             </span>
           ) : null}
           {showAutoSessionBadge ? (
-            <span className="selected-device-header__badge">Home Auto Session (HAS) enabled</span>
+            <span className="selected-device-header__badge">Auto-session enabled</span>
           ) : null}
           </div>
         </div>

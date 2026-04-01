@@ -57,7 +57,7 @@ export default function SidebarLayoutTest() {
 
                 <div className="controls__group auto-session-panel">
                   <button type="button" className="auto-session-panel__toggle">
-                    <span>Home Auto Session (HAS)</span>
+                    <span>Auto Session (Home Geofence)</span>
                     <span className="auto-session-panel__toggle-meta">-</span>
                   </button>
                   <div className="auto-session-panel__body">
