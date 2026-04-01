@@ -14,6 +14,7 @@ import {
   CircleMarker,
   MapContainer,
   Marker,
+  Pane,
   Popup,
   Polyline,
   Rectangle,
@@ -61,6 +62,12 @@ import {
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
+const MAP_LAYER_PANES = {
+  sessionPointsRegular: 'session-points-regular',
+  sessionTrack: 'session-track',
+  sessionPointsActive: 'session-points-active',
+  sessionPointHits: 'session-point-hits'
+} as const;
 const FIORD_STYLE_URL = 'https://tiles.openfreemap.org/styles/fiord';
 const FIORD_ATTRIBUTION =
   '&copy; <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> ' +
@@ -394,6 +401,7 @@ type TrackDirectionArrowsProps = {
   positions: [number, number][];
   zoom: number;
   className: string;
+  pane?: string;
   suppressNearPoints?: [number, number][];
 };
 
@@ -429,6 +437,7 @@ function TrackDirectionArrows({
   positions,
   zoom,
   className,
+  pane,
   suppressNearPoints = []
 }: TrackDirectionArrowsProps) {
   const map = useMap();
@@ -649,6 +658,7 @@ function TrackDirectionArrows({
         positions={arrowRenderData.primary}
         pathOptions={{
           className,
+          pane,
           lineCap: 'round',
           lineJoin: 'round'
         }}
@@ -660,6 +670,7 @@ function TrackDirectionArrows({
           positions={arrowRenderData.debugPrevious}
           pathOptions={{
             className: 'map-track-arrow-debug map-track-arrow-debug--previous',
+            pane,
             lineCap: 'round',
             lineJoin: 'round'
           }}
@@ -672,6 +683,7 @@ function TrackDirectionArrows({
           positions={arrowRenderData.debugCurrent}
           pathOptions={{
             className: 'map-track-arrow-debug map-track-arrow-debug--current',
+            pane,
             lineCap: 'round',
             lineJoin: 'round'
           }}
@@ -730,6 +742,38 @@ type HomeGeofencePalette = {
   stroke: string;
   fill: string;
 };
+
+function buildTrackPositionsFromMeasurements(points: readonly MapPoint[]): [number, number][] {
+  const valid = points.flatMap((point, index) => {
+    if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) {
+      return [];
+    }
+    const timeMs = point.capturedAt ? new Date(point.capturedAt).getTime() : Number.NaN;
+    return [
+      {
+        lat: point.lat,
+        lon: point.lon,
+        timeMs,
+        index
+      }
+    ];
+  });
+  if (valid.length === 0) {
+    return [];
+  }
+
+  const hasStrictTimestamps = valid.every((point) => Number.isFinite(point.timeMs));
+  if (hasStrictTimestamps) {
+    valid.sort((a, b) => {
+      if (a.timeMs !== b.timeMs) {
+        return a.timeMs - b.timeMs;
+      }
+      return a.index - b.index;
+    });
+  }
+
+  return valid.map((point) => [point.lat, point.lon] as [number, number]);
+}
 
 function readPalette(): PointPalette {
   if (typeof window === 'undefined') {
@@ -892,6 +936,14 @@ ref
   const shouldRenderTracks = mapLayerMode === 'coverage' ? showCoverageTracks : showTrack;
 
   const trackPositions = useMemo(() => {
+    const shouldUseMeasurementTrack =
+      mapLayerMode === 'points' && showPoints && measurements.length >= 2;
+    if (shouldUseMeasurementTrack) {
+      // In points mode, render the line from the same raw measurements shown as markers
+      // so the visual path intersects those exact sample locations.
+      return buildTrackPositionsFromMeasurements(measurements);
+    }
+
     if (!shouldRenderTracks || track.length === 0) {
       return [];
     }
@@ -919,7 +971,7 @@ ref
     }
 
     return positions;
-  }, [track, currentZoom, shouldRenderTracks]);
+  }, [currentZoom, mapLayerMode, measurements, shouldRenderTracks, showPoints, track]);
 
   const overviewTrackPoints = useMemo(
     () =>
@@ -1263,6 +1315,10 @@ ref
           subdomains={['a', 'b', 'c']}
         />
       )}
+      <Pane name={MAP_LAYER_PANES.sessionPointsRegular} style={{ zIndex: 390 }} />
+      <Pane name={MAP_LAYER_PANES.sessionTrack} style={{ zIndex: 410 }} />
+      <Pane name={MAP_LAYER_PANES.sessionPointsActive} style={{ zIndex: 430 }} />
+      <Pane name={MAP_LAYER_PANES.sessionPointHits} style={{ zIndex: 440 }} />
       {mapLayerMode === 'coverage' && coverageVisualizationMode === 'heatmap' && (
         <CoverageHeatmapLayer
           bins={coverageBins}
@@ -1275,7 +1331,10 @@ ref
       {shouldRenderTracks && overviewTrackPositions.length > 0 && (
         <Polyline
           positions={overviewTrackPositions}
-          pathOptions={{ className: 'map-track map-track--overview' }}
+          pathOptions={{
+            className: 'map-track map-track--overview',
+            pane: MAP_LAYER_PANES.sessionTrack
+          }}
           eventHandlers={
             onOverviewSelectTime && overviewTrackPoints.length > 0
               ? {
@@ -1307,12 +1366,17 @@ ref
         <>
           <Polyline
             positions={trackPositions}
-            pathOptions={{ className: 'map-track map-track--window' }}
+            pathOptions={{
+              className: 'map-track map-track--window',
+              pane: MAP_LAYER_PANES.sessionTrack
+            }}
+            interactive={false}
           />
           <TrackDirectionArrows
             positions={trackPositions}
             zoom={currentZoom}
             className="map-track-arrow map-track-arrow--window"
+            pane={MAP_LAYER_PANES.sessionTrack}
             suppressNearPoints={arrowSuppressionPositions}
           />
         </>
@@ -1355,6 +1419,7 @@ ref
             radius={5}
             pathOptions={{
               className: 'map-point map-point--compare',
+              pane: MAP_LAYER_PANES.sessionPointsRegular,
               weight: 2,
               fillOpacity: 0.6
             }}
@@ -1373,6 +1438,10 @@ ref
           const isSelected = measurement.id === selectedPointId;
           const isHovered = measurement.id === hoveredPointId;
           const isFurthest = measurement.id === furthestPointIdFromHome;
+          const isActive = isSelected || isHovered;
+          const visualPane = isActive
+            ? MAP_LAYER_PANES.sessionPointsActive
+            : MAP_LAYER_PANES.sessionPointsRegular;
           const className = [
             'map-point',
             'map-point--hollow',
@@ -1406,6 +1475,7 @@ ref
                 radius={hitRadius}
                 pathOptions={{
                   className: 'map-point-hit-target',
+                  pane: MAP_LAYER_PANES.sessionPointHits,
                   color: 'transparent',
                   weight: 1,
                   opacity: 0,
@@ -1439,6 +1509,7 @@ ref
                   radius={visibleRadius + SESSION_POINT_STYLE.furthestRingOffset}
                   pathOptions={{
                     className: 'map-point map-point--furthest-accent',
+                    pane: visualPane,
                     color,
                     weight: SESSION_POINT_STYLE.furthestRingWeight,
                     opacity: 0.68,
@@ -1458,6 +1529,7 @@ ref
                   }
                   pathOptions={{
                     className: 'map-point map-point--emphasis-dot',
+                    pane: MAP_LAYER_PANES.sessionPointsActive,
                     color,
                     weight: 0,
                     fillColor: color,
@@ -1470,6 +1542,7 @@ ref
                 center={[measurement.lat, measurement.lon]}
                 radius={visibleRadius}
                 pathOptions={{
+                  pane: visualPane,
                   color,
                   weight: visibleWeight,
                   fillColor: color,
@@ -1487,6 +1560,7 @@ ref
           radius={9}
           pathOptions={{
             color: palette.cursor || palette.default,
+            pane: MAP_LAYER_PANES.sessionPointsActive,
             weight: 3,
             fillColor: palette.cursor || palette.default,
             fillOpacity: 0.9,
