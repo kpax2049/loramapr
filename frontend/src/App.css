@@ -5726,6 +5726,31 @@
   stroke-width: 2px;
 }
 
+.map-track-arrow {
+  stroke: #0f172a;
+  fill: none;
+  pointer-events: none;
+}
+
+.map-track-arrow--window {
+  stroke-opacity: 0.34;
+  stroke-width: 1.2px;
+}
+
+.map-track-arrow-debug {
+  pointer-events: none;
+  stroke-width: 1.7px;
+  stroke-opacity: 0.9;
+}
+
+.map-track-arrow-debug--previous {
+  stroke: #f97316;
+}
+
+.map-track-arrow-debug--current {
+  stroke: #22c55e;
+}
+
 .coverage-bin {
   stroke: var(--cov-none);
   fill: var(--cov-none);

@@ -46,6 +46,17 @@ import {
   type CoverageBucket
 } from '../coverage/coverageBuckets';
 import CoverageHeatmapLayer from './CoverageHeatmapLayer';
+import {
+  TRACK_DIRECTION_ARROW_CONFIG,
+  TRACK_DIRECTION_ARROW_GEOMETRY,
+  TRACK_DIRECTION_ARROW_PREVIOUS_GEOMETRY,
+  buildArrowHeadPolyline,
+  buildProjectedTrackSegments,
+  filterValidTrackCoordinates,
+  resolveArrowSizePx,
+  resolveArrowSpacingPx,
+  sampleArrowPlacementsAtDistance
+} from '../map/trackDirection';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
@@ -198,10 +209,6 @@ function toSafePoint(point: [number, number]): [number, number] | null {
     return null;
   }
   return [lat, lon];
-}
-
-function hasFiniteLatLon(point: { lat: number; lon: number }): boolean {
-  return Number.isFinite(point.lat) && Number.isFinite(point.lon);
 }
 
 function hasFiniteBinCoordinates(bin: Pick<CoverageBin, 'latBin' | 'lonBin'>): boolean {
@@ -380,6 +387,298 @@ function FiordStyleLayer({ styleUrl, attribution }: { styleUrl: string; attribut
   }, [map, styleUrl, attribution]);
 
   return null;
+}
+
+type TrackDirectionArrowsProps = {
+  positions: [number, number][];
+  zoom: number;
+  className: string;
+  suppressNearPoints?: [number, number][];
+};
+
+type ArrowPolylineRenderData = {
+  primary: [number, number][][];
+  debugPrevious: [number, number][][];
+  debugCurrent: [number, number][][];
+};
+
+function isArrowGeometryDebugEnabled(): boolean {
+  if (!import.meta.env.DEV || typeof window === 'undefined') {
+    return false;
+  }
+  const searchParams = new URLSearchParams(window.location.search);
+  if (
+    searchParams.get('arrowGeometryDebug') === '1' ||
+    searchParams.get('trackArrowDebug') === '1'
+  ) {
+    return true;
+  }
+  return window.localStorage.getItem('loramapr.trackArrowGeometryDebug') === '1';
+}
+
+function sampleArrowPlacementsForDebug<T>(placements: readonly T[], maxCount = 16): T[] {
+  if (placements.length <= maxCount) {
+    return [...placements];
+  }
+  const stride = Math.ceil(placements.length / maxCount);
+  return placements.filter((_, index) => index % stride === 0);
+}
+
+function TrackDirectionArrows({
+  positions,
+  zoom,
+  className,
+  suppressNearPoints = []
+}: TrackDirectionArrowsProps) {
+  const map = useMap();
+  const arrowGeometryDebugEnabled = useMemo(() => isArrowGeometryDebugEnabled(), []);
+  const {
+    minZoom,
+    arrowSizePx: baseArrowSizePx,
+    spacingPx: baseSpacingPx,
+    maxArrowCountPerTrack,
+    minTrackLengthPx,
+    endpointBufferPx,
+    markerSuppressionBufferPx,
+    maxSuppressionMarkers,
+    turnSuppressionAngleDeg,
+    turnSuppressionBufferPx,
+    minArrowSeparationPx,
+    minSegmentLengthPx
+  } = TRACK_DIRECTION_ARROW_CONFIG;
+  const configRenderKey = [
+    minZoom,
+    baseArrowSizePx,
+    baseSpacingPx,
+    maxArrowCountPerTrack,
+    minTrackLengthPx,
+    endpointBufferPx,
+    markerSuppressionBufferPx,
+    maxSuppressionMarkers,
+    turnSuppressionAngleDeg,
+    turnSuppressionBufferPx,
+    minArrowSeparationPx,
+    minSegmentLengthPx,
+    TRACK_DIRECTION_ARROW_GEOMETRY.depthFactor,
+    TRACK_DIRECTION_ARROW_GEOMETRY.wingFactor,
+    TRACK_DIRECTION_ARROW_GEOMETRY.minSizePx
+  ].join(':');
+
+  const arrowRenderData = useMemo<ArrowPolylineRenderData>(() => {
+    if (positions.length < 2 || zoom < minZoom) {
+      return {
+        primary: [],
+        debugPrevious: [],
+        debugCurrent: []
+      };
+    }
+
+    const projectedPoints = positions.flatMap(([lat, lon]) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return [];
+      }
+      const projected = map.project(L.latLng(lat, lon), zoom);
+      if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y)) {
+        return [];
+      }
+      return [{ x: projected.x, y: projected.y }];
+    });
+
+    if (projectedPoints.length < 2) {
+      return {
+        primary: [],
+        debugPrevious: [],
+        debugCurrent: []
+      };
+    }
+
+    const { segments, totalLengthPx } = buildProjectedTrackSegments(projectedPoints);
+    if (segments.length === 0 || totalLengthPx < minTrackLengthPx) {
+      return {
+        primary: [],
+        debugPrevious: [],
+        debugCurrent: []
+      };
+    }
+
+    const spacingPx = resolveArrowSpacingPx(zoom);
+    const arrowSizePx = resolveArrowSizePx(zoom);
+    if (spacingPx <= arrowSizePx * 3.2) {
+      return {
+        primary: [],
+        debugPrevious: [],
+        debugCurrent: []
+      };
+    }
+
+    const placements = sampleArrowPlacementsAtDistance(segments, spacingPx, {
+      startOffsetPx: spacingPx * 0.8,
+      maxArrowCount: maxArrowCountPerTrack,
+      minTotalLengthPx: minTrackLengthPx,
+      endpointBufferPx: Math.max(endpointBufferPx, spacingPx * 0.2),
+      turnSuppressionAngleDeg,
+      turnSuppressionBufferPx,
+      minDistanceBetweenArrowsPx: minArrowSeparationPx,
+      minSegmentLengthPx
+    });
+
+    let suppressionPointsProjected = suppressNearPoints.flatMap(([lat, lon]) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return [];
+      }
+      const projected = map.project(L.latLng(lat, lon), zoom);
+      if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y)) {
+        return [];
+      }
+      return [{ x: projected.x, y: projected.y }];
+    });
+    if (suppressionPointsProjected.length > maxSuppressionMarkers) {
+      const stride = Math.ceil(
+        suppressionPointsProjected.length / maxSuppressionMarkers
+      );
+      suppressionPointsProjected = suppressionPointsProjected.filter(
+        (_, index) => index % stride === 0
+      );
+    }
+
+    const markerBufferSq =
+      markerSuppressionBufferPx * markerSuppressionBufferPx;
+    const filteredPlacements =
+      suppressionPointsProjected.length === 0
+        ? placements
+        : placements.filter((placement) => {
+            for (const marker of suppressionPointsProjected) {
+              const deltaX = marker.x - placement.point.x;
+              const deltaY = marker.y - placement.point.y;
+              if (deltaX * deltaX + deltaY * deltaY <= markerBufferSq) {
+                return false;
+              }
+            }
+            return true;
+          });
+
+    const toLatLngPolyline = (shape: ReturnType<typeof buildArrowHeadPolyline>) => {
+      const latLngs = shape.map((point) => {
+        const latLng = map.unproject(L.point(point.x, point.y), zoom);
+        return [latLng.lat, latLng.lng] as [number, number];
+      });
+      if (latLngs.some(([lat, lon]) => !Number.isFinite(lat) || !Number.isFinite(lon))) {
+        return null;
+      }
+      return latLngs;
+    };
+
+    const primary = filteredPlacements.flatMap((placement) => {
+      const shape = buildArrowHeadPolyline(
+        placement.point,
+        placement.bearingDeg,
+        arrowSizePx
+      );
+      const latLngs = toLatLngPolyline(shape);
+      return latLngs ? [latLngs] : [];
+    });
+
+    if (!arrowGeometryDebugEnabled || primary.length === 0) {
+      return {
+        primary,
+        debugPrevious: [],
+        debugCurrent: []
+      };
+    }
+
+    const debugPlacements = sampleArrowPlacementsForDebug(filteredPlacements, 18);
+    const debugPrevious = debugPlacements.flatMap((placement) => {
+      const shape = buildArrowHeadPolyline(
+        placement.point,
+        placement.bearingDeg,
+        arrowSizePx,
+        {
+          ...TRACK_DIRECTION_ARROW_PREVIOUS_GEOMETRY,
+          normalOffsetPx: 2.6
+        }
+      );
+      const latLngs = toLatLngPolyline(shape);
+      return latLngs ? [latLngs] : [];
+    });
+    const debugCurrent = debugPlacements.flatMap((placement) => {
+      const shape = buildArrowHeadPolyline(
+        placement.point,
+        placement.bearingDeg,
+        arrowSizePx,
+        {
+          ...TRACK_DIRECTION_ARROW_GEOMETRY,
+          normalOffsetPx: -2.6
+        }
+      );
+      const latLngs = toLatLngPolyline(shape);
+      return latLngs ? [latLngs] : [];
+    });
+
+    return {
+      primary,
+      debugPrevious,
+      debugCurrent
+    };
+  }, [
+    arrowGeometryDebugEnabled,
+    endpointBufferPx,
+    map,
+    markerSuppressionBufferPx,
+    maxArrowCountPerTrack,
+    maxSuppressionMarkers,
+    minArrowSeparationPx,
+    minSegmentLengthPx,
+    minTrackLengthPx,
+    minZoom,
+    positions,
+    suppressNearPoints,
+    turnSuppressionAngleDeg,
+    turnSuppressionBufferPx,
+    zoom
+  ]);
+
+  if (arrowRenderData.primary.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <Polyline
+        key={`${configRenderKey}-primary`}
+        positions={arrowRenderData.primary}
+        pathOptions={{
+          className,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }}
+        interactive={false}
+      />
+      {arrowGeometryDebugEnabled && arrowRenderData.debugPrevious.length > 0 && (
+        <Polyline
+          key={`${configRenderKey}-debug-prev`}
+          positions={arrowRenderData.debugPrevious}
+          pathOptions={{
+            className: 'map-track-arrow-debug map-track-arrow-debug--previous',
+            lineCap: 'round',
+            lineJoin: 'round'
+          }}
+          interactive={false}
+        />
+      )}
+      {arrowGeometryDebugEnabled && arrowRenderData.debugCurrent.length > 0 && (
+        <Polyline
+          key={`${configRenderKey}-debug-current`}
+          positions={arrowRenderData.debugCurrent}
+          pathOptions={{
+            className: 'map-track-arrow-debug map-track-arrow-debug--current',
+            lineCap: 'round',
+            lineJoin: 'round'
+          }}
+          interactive={false}
+        />
+      )}
+    </>
+  );
 }
 
 function zoomToTolerance(zoom: number): number {
@@ -578,7 +877,7 @@ ref
     if (!shouldRenderTracks || track.length === 0) {
       return [];
     }
-    const validTrack = track.filter(hasFiniteLatLon);
+    const validTrack = filterValidTrackCoordinates(track);
     if (validTrack.length === 0) {
       return [];
     }
@@ -620,7 +919,7 @@ ref
     if (!shouldRenderTracks || overviewTrack.length === 0) {
       return [];
     }
-    const validOverview = overviewTrack.filter(hasFiniteLatLon);
+    const validOverview = filterValidTrackCoordinates(overviewTrack);
     if (validOverview.length === 0) {
       return [];
     }
@@ -645,6 +944,29 @@ ref
 
     return positions;
   }, [overviewTrack, currentZoom, shouldRenderTracks]);
+
+  const arrowSuppressionPositions = useMemo(() => {
+    const suppressionPoints: [number, number][] = [];
+    if (mapLayerMode === 'points' && showPoints) {
+      const measurementMarkers = filterValidTrackCoordinates(measurements);
+      for (const point of measurementMarkers) {
+        suppressionPoints.push([point.lat, point.lon]);
+      }
+      const compareMarkers = filterValidTrackCoordinates(compareMeasurements);
+      for (const point of compareMarkers) {
+        suppressionPoints.push([point.lat, point.lon]);
+      }
+    }
+
+    if (
+      playbackCursorPosition &&
+      Number.isFinite(playbackCursorPosition[0]) &&
+      Number.isFinite(playbackCursorPosition[1])
+    ) {
+      suppressionPoints.push(playbackCursorPosition);
+    }
+    return suppressionPoints;
+  }, [compareMeasurements, mapLayerMode, measurements, playbackCursorPosition, showPoints]);
 
   useEffect(() => {
     if (onZoomChange) {
@@ -934,10 +1256,18 @@ ref
         />
       )}
       {shouldRenderTracks && trackPositions.length > 0 && (
-        <Polyline
-          positions={trackPositions}
-          pathOptions={{ className: 'map-track map-track--window' }}
-        />
+        <>
+          <Polyline
+            positions={trackPositions}
+            pathOptions={{ className: 'map-track map-track--window' }}
+          />
+          <TrackDirectionArrows
+            positions={trackPositions}
+            zoom={currentZoom}
+            className="map-track-arrow map-track-arrow--window"
+            suppressNearPoints={arrowSuppressionPositions}
+          />
+        </>
       )}
       {mapLayerMode === 'coverage' &&
         coverageVisualizationMode === 'bins' &&
