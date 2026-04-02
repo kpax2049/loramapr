@@ -1,9 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQueryClient } from '@tanstack/react-query';
 import { IconChartBar, IconChevronRight, IconFileSearch } from '@tabler/icons-react';
 import {
   getMeasurements,
+  getSessionOverview,
+  getSessionStats,
   getSessionWindow,
   type CoverageQueryParams,
   type MeasurementQueryParams
@@ -11,6 +13,7 @@ import {
 import type {
   CoverageBin,
   Measurement,
+  Session,
   SessionWindowPoint,
   UnifiedEventListItem
 } from './api/types';
@@ -21,6 +24,7 @@ import MapView, { type MapViewHandle } from './components/MapView';
 import PlaybackPanel from './components/PlaybackPanel';
 import PointDetails from './components/PointDetails';
 import SelectedDeviceHeader from './components/SelectedDeviceHeader';
+import type { SessionComparisonItem } from './components/SessionComparisonPanel';
 import StatusStrip from './components/StatusStrip';
 import StatsCard from './components/StatsCard';
 import markDark from './assets/branding/loramapr-mark-dark.png';
@@ -41,6 +45,14 @@ import {
 } from './query/hooks';
 import { useLorawanEvents } from './query/lorawan';
 import { useSessionTimeline, useSessions, useSessionWindow } from './query/sessions';
+import {
+  MAX_COMPARED_SESSIONS,
+  areStringListsEqual,
+  buildSessionDurationMs,
+  formatSessionLabel,
+  getSessionComparisonStyle,
+  parseComparedSessionIds
+} from './sessionComparison';
 import { useAppTour } from './tour/AppTourProvider';
 import type { TourSidebarTabKey } from './tour/steps';
 import { applyEventsNavigationParams, type EventsNavigationInput } from './utils/eventsNavigation';
@@ -52,6 +64,7 @@ const LIMIT_ZOOM_THRESHOLD = 12;
 const BBOX_DEBOUNCE_MS = 300;
 const SAMPLE_ZOOM_LOW = 12;
 const SAMPLE_ZOOM_MEDIUM = 14;
+const COMPARISON_TRACK_SAMPLE = 1200;
 const LORAWAN_DIAG_WINDOW_MINUTES = 10;
 const SIDEBAR_TAB_KEY = 'sidebarTab';
 const ZEN_MODE_KEY = 'zenMode';
@@ -98,6 +111,7 @@ type InitialQueryState = {
   deviceId: string | null;
   filterMode: 'time' | 'session';
   sessionId: string | null;
+  compareSessionIds: string[];
   from: string;
   to: string;
   showPoints: boolean;
@@ -652,6 +666,7 @@ function readInitialQueryState(): InitialQueryState {
       deviceId: null,
       filterMode: 'time',
       sessionId: null,
+      compareSessionIds: [],
       from: '',
       to: '',
       showPoints: true,
@@ -682,6 +697,7 @@ function readInitialQueryState(): InitialQueryState {
     deviceId: params.get('deviceId'),
     filterMode,
     sessionId: params.get('sessionId'),
+    compareSessionIds: parseComparedSessionIds(params.get('compareSessionIds')),
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
     showPoints: parseBoolean(params.get('showPoints'), true),
@@ -734,6 +750,9 @@ function App() {
   const [deviceId, setDeviceId] = useState<string | null>(initial.deviceId);
   const [filterMode, setFilterMode] = useState<'time' | 'session'>(initial.filterMode);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(initial.sessionId);
+  const [compareSelectionIds, setCompareSelectionIds] = useState<string[]>(initial.compareSessionIds);
+  const [compareSessionIds, setCompareSessionIds] = useState<string[]>(initial.compareSessionIds);
+  const [hiddenComparisonSessionIds, setHiddenComparisonSessionIds] = useState<string[]>([]);
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [exploreRangePreset, setExploreRangePreset] = useState<ExploreRangePreset>(
@@ -866,6 +885,17 @@ function App() {
   useEffect(() => {
     setPresetAnchorMs(Date.now());
   }, [exploreRangePreset]);
+
+  useEffect(() => {
+    if (compareSessionIds.length < 2) {
+      return;
+    }
+    if (viewMode !== 'explore') {
+      setViewMode('explore');
+    }
+    setPlaybackIsPlaying(false);
+    setSelectedPointId(null);
+  }, [compareSessionIds, viewMode]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -1125,6 +1155,7 @@ function App() {
     setOptional('deviceId', deviceId);
     params.set('filterMode', filterMode);
     setOptional('sessionId', selectedSessionId);
+    setOptional('compareSessionIds', compareSessionIds.length > 0 ? compareSessionIds.join(',') : null);
     params.set('rangePreset', exploreRangePreset);
     if (useAdvancedRange) {
       params.set('rangeAdvanced', 'true');
@@ -1167,6 +1198,7 @@ function App() {
     deviceId,
     filterMode,
     selectedSessionId,
+    compareSessionIds,
     from,
     to,
     showPoints,
@@ -1225,6 +1257,53 @@ function App() {
     setSelectedSessionId(sessionId);
   };
 
+  const handleToggleCompareSelection = useCallback((sessionId: string) => {
+    setCompareSelectionIds((current) => {
+      if (current.includes(sessionId)) {
+        return current.filter((id) => id !== sessionId);
+      }
+      if (current.length >= MAX_COMPARED_SESSIONS) {
+        return current;
+      }
+      return [...current, sessionId];
+    });
+  }, []);
+
+  const handleStartComparison = useCallback(() => {
+    const nextIds = compareSelectionIds.slice(0, MAX_COMPARED_SESSIONS);
+    if (nextIds.length < 2) {
+      return;
+    }
+    setCompareSessionIds(nextIds);
+    setCompareSelectionIds(nextIds);
+    setHiddenComparisonSessionIds([]);
+    setSidebarTab('sessions');
+    setViewMode('explore');
+    setPlaybackIsPlaying(false);
+    setMapLayerMode('points');
+    setSelectedPointId(null);
+  }, [compareSelectionIds]);
+
+  const handleClearCompareSelection = useCallback(() => {
+    setCompareSelectionIds([]);
+    setCompareSessionIds([]);
+    setHiddenComparisonSessionIds([]);
+  }, []);
+
+  const handleExitComparison = useCallback(() => {
+    setCompareSessionIds([]);
+    setHiddenComparisonSessionIds([]);
+    setSelectedPointId(null);
+  }, []);
+
+  const handleToggleComparedSessionVisibility = useCallback((sessionId: string) => {
+    setHiddenComparisonSessionIds((current) =>
+      current.includes(sessionId)
+        ? current.filter((id) => id !== sessionId)
+        : [...current, sessionId]
+    );
+  }, []);
+
   const handleOpenEvents = useCallback((input: EventsNavigationInput) => {
     if (typeof window === 'undefined') {
       return;
@@ -1274,7 +1353,10 @@ function App() {
     [pointsBboxCommitted]
   );
 
+  const compareSessionIdsKey = compareSessionIds.join(',');
   const isSessionMode = filterMode === 'session';
+  const isCompareMode = compareSessionIds.length >= 2;
+  const comparisonSelectionDirty = !areStringListsEqual(compareSelectionIds, compareSessionIds);
   const isPlaybackMode = viewMode === 'playback';
   const focusedCoverageSessionId = isPlaybackMode
     ? playbackSessionId
@@ -1309,6 +1391,26 @@ function App() {
     () => new Set((sessionPickerQuery.data?.items ?? []).map((session) => session.id)),
     [sessionPickerQuery.data?.items]
   );
+  const comparedSessionLookup = useMemo(
+    () =>
+      new Map<string, Session>((sessionPickerQuery.data?.items ?? []).map((session) => [session.id, session])),
+    [sessionPickerQuery.data?.items]
+  );
+  const comparisonStatsQueries = useQueries({
+    queries: compareSessionIds.map((sessionId) => ({
+      queryKey: ['sessionStats', sessionId],
+      queryFn: ({ signal }) => getSessionStats(sessionId, { signal }),
+      enabled: isCompareMode
+    }))
+  });
+  const comparisonOverviewQueries = useQueries({
+    queries: compareSessionIds.map((sessionId) => ({
+      queryKey: ['sessionOverview', sessionId, COMPARISON_TRACK_SAMPLE],
+      queryFn: ({ signal }) =>
+        getSessionOverview(sessionId, { sample: COMPARISON_TRACK_SAMPLE }, { signal }),
+      enabled: isCompareMode
+    }))
+  });
   const playbackMinMs = useMemo(() => {
     if (!playbackTimelineQuery.data?.minCapturedAt) {
       return null;
@@ -1388,7 +1490,7 @@ function App() {
     [playbackSessionId, playbackSampling]
   );
 
-  const exploreEnabled = viewMode !== 'playback';
+  const exploreEnabled = viewMode !== 'playback' && !isCompareMode;
   const isCoverageExploreMode = exploreEnabled && mapLayerMode === 'coverage';
   const scopedExploreSessionId =
     isCoverageExploreMode
@@ -1411,7 +1513,7 @@ function App() {
   const exploreScopeEnabled = Boolean(scopedExploreSessionId || scopedExploreDeviceId);
   const exploreQueryFilterMode: 'time' | 'session' = scopedExploreSessionId ? 'session' : 'time';
   const sessionBoundOnlyForCoverageDevice = isCoverageExploreMode && coverageScope === 'device';
-  const playbackEnabled = isPlaybackMode && hasPlaybackSession;
+  const playbackEnabled = isPlaybackMode && hasPlaybackSession && !isCompareMode;
   const sessionPolling = exploreEnabled && Boolean(scopedExploreSessionId) ? 2000 : false;
   const exploreMeasurementsBboxPayload =
     mapLayerMode === 'points' ? pointsBboxPayload : bboxPayload;
@@ -1682,6 +1784,80 @@ function App() {
       .map((point) => normalizeLatLonItem(point))
       .filter((point): point is NonNullable<typeof point> => point !== null);
   }, [playbackOverviewTrack]);
+  const comparisonItems = useMemo<SessionComparisonItem[]>(
+    () =>
+      compareSessionIds.map((sessionId, index) => {
+        const session = comparedSessionLookup.get(sessionId) ?? null;
+        const stats = comparisonStatsQueries[index]?.data ?? null;
+        const itemError =
+          comparisonStatsQueries[index]?.error ?? comparisonOverviewQueries[index]?.error ?? null;
+
+        return {
+          id: sessionId,
+          label: session ? formatSessionLabel(session) : `Session ${sessionId.slice(0, 8)}`,
+          startedAt: session?.startedAt ?? null,
+          durationMs: buildSessionDurationMs(session, stats),
+          measurementCount: stats?.pointCount ?? null,
+          distanceMeters: stats?.distanceMeters ?? null,
+          avgRssi: stats?.rssi?.avg ?? null,
+          avgSnr: stats?.snr?.avg ?? null,
+          isVisible: !hiddenComparisonSessionIds.includes(sessionId),
+          isLoading:
+            comparisonStatsQueries[index]?.isLoading === true ||
+            comparisonOverviewQueries[index]?.isLoading === true,
+          error: itemError instanceof Error ? itemError.message : null,
+          style: getSessionComparisonStyle(index)
+        };
+      }),
+    [
+      compareSessionIds,
+      comparedSessionLookup,
+      comparisonOverviewQueries,
+      comparisonStatsQueries,
+      hiddenComparisonSessionIds
+    ]
+  );
+  const comparisonTracks = useMemo(
+    () =>
+      compareSessionIds.map((sessionId, index) => {
+        const overviewTrackItems = comparisonOverviewQueries[index]?.data?.items ?? [];
+        return {
+          id: sessionId,
+          label: comparisonItems[index]?.label ?? `Session ${sessionId.slice(0, 8)}`,
+          color: comparisonItems[index]?.style.color ?? getSessionComparisonStyle(index).color,
+          dashArray: comparisonItems[index]?.style.dashArray,
+          isVisible: !hiddenComparisonSessionIds.includes(sessionId),
+          track: overviewTrackItems
+            .map((point) => normalizeLatLonItem(point))
+            .filter((point): point is NonNullable<typeof point> => point !== null)
+        };
+      }),
+    [compareSessionIds, comparisonItems, comparisonOverviewQueries, hiddenComparisonSessionIds]
+  );
+  const comparisonFitPoints = useMemo<LatLonPoint[]>(() => {
+    const trackPoints = comparisonTracks
+      .filter((trackLayer) => trackLayer.isVisible !== false)
+      .flatMap((trackLayer) =>
+        trackLayer.track
+          .map((point) => toLatLonPoint(point.lat, point.lon))
+          .filter((point): point is LatLonPoint => point !== null)
+      );
+    if (trackPoints.length > 0) {
+      return trackPoints;
+    }
+
+    return comparisonItems
+      .filter((item) => item.isVisible)
+      .flatMap((item, index) => {
+        const bbox = comparisonStatsQueries[index]?.data?.bbox;
+        if (!bbox) {
+          return [];
+        }
+        const southWest = toLatLonPoint(bbox.minLat, bbox.minLon);
+        const northEast = toLatLonPoint(bbox.maxLat, bbox.maxLon);
+        return southWest && northEast ? [southWest, northEast] : [];
+      });
+  }, [comparisonItems, comparisonStatsQueries, comparisonTracks]);
   const handleSelectEventForMap = useCallback((event: UnifiedEventListItem) => {
     const candidates = mapMeasurements as Array<{
       id: string;
@@ -1784,11 +1960,20 @@ function App() {
     }
     return toLatLonPoint(playbackCursorPosition[0], playbackCursorPosition[1]);
   }, [playbackCursorPosition]);
+  const comparisonLoading =
+    isCompareMode &&
+    (comparisonStatsQueries.some((query) => query.isLoading) ||
+      comparisonOverviewQueries.some((query) => query.isLoading));
+  const comparisonError = isCompareMode
+    ? comparisonStatsQueries.find((query) => query.error)?.error ??
+      comparisonOverviewQueries.find((query) => query.error)?.error ??
+      null
+    : null;
   const activeMeasurementsQuery = isPlaybackMode
     ? playbackWindowQuery
     : exploreMeasurementsQuery;
   const activeTrackQuery = isPlaybackMode ? null : exploreTrackQuery;
-  const effectiveMapLayerMode = mapLayerMode;
+  const effectiveMapLayerMode = isCompareMode ? 'points' : mapLayerMode;
   const playbackWindowSummary = useMemo(() => {
     if (!isPlaybackMode || !playbackWindowQuery.data) {
       return null;
@@ -1926,6 +2111,7 @@ function App() {
     {
       enabled:
         mapLayerMode === 'coverage' &&
+        !isCompareMode &&
         (coverageVisualizationMode === 'heatmap' || Boolean(coverageBinsBboxCommitted)) &&
         (coverageScope === 'session'
           ? Boolean(effectiveCoverageSessionId)
@@ -1943,7 +2129,9 @@ function App() {
   );
   const renderedPointCount =
     effectiveMapLayerMode === 'points'
-      ? (showPoints ? mapMeasurements.length : 0) + mapCompareMeasurements.length
+      ? isCompareMode
+        ? comparisonTracks.reduce((sum, trackLayer) => sum + trackLayer.track.length, 0)
+        : (showPoints ? mapMeasurements.length : 0) + mapCompareMeasurements.length
       : 0;
   const renderedBinCount = effectiveMapLayerMode === 'coverage' ? coverageBins.length : 0;
 
@@ -2363,11 +2551,18 @@ function App() {
   }, [playbackSessionId]);
 
   useEffect(() => {
+    setHiddenComparisonSessionIds((current) => current.filter((id) => compareSessionIds.includes(id)));
+  }, [compareSessionIds]);
+
+  useEffect(() => {
     if (previousDeviceIdRef.current === deviceId) {
       return;
     }
     previousDeviceIdRef.current = deviceId;
     setSelectedSessionId(null);
+    setCompareSelectionIds([]);
+    setCompareSessionIds([]);
+    setHiddenComparisonSessionIds([]);
     setPlaybackSessionId(null);
     setPlaybackIsPlaying(false);
     if (viewMode === 'playback') {
@@ -2472,7 +2667,7 @@ function App() {
     }
     setPlaybackSessionId(null);
     setPlaybackIsPlaying(false);
-    setSessionSelectionNotice('Playback session was archived or deleted, selection was cleared.');
+      setSessionSelectionNotice('Playback session was archived or deleted, selection was cleared.');
   }, [
     deviceId,
     playbackSessionId,
@@ -2480,6 +2675,40 @@ function App() {
     sessionPickerQuery.isFetching,
     sessionPickerQuery.dataUpdatedAt,
     nonArchivedSessionIds
+  ]);
+
+  useEffect(() => {
+    if (!deviceId || !sessionPickerQuery.isFetched || sessionPickerQuery.isFetching) {
+      return;
+    }
+
+    const nextSelection = compareSelectionIds.filter((id) => nonArchivedSessionIds.has(id));
+    if (!areStringListsEqual(compareSelectionIds, nextSelection)) {
+      setCompareSelectionIds(nextSelection);
+    }
+
+    const nextCompareIds = compareSessionIds.filter((id) => nonArchivedSessionIds.has(id));
+    if (areStringListsEqual(compareSessionIds, nextCompareIds)) {
+      return;
+    }
+
+    setCompareSessionIds(nextCompareIds.length >= 2 ? nextCompareIds : []);
+    setHiddenComparisonSessionIds((current) => current.filter((id) => nextCompareIds.includes(id)));
+
+    if (compareSessionIds.length > 0) {
+      setSessionSelectionNotice(
+        nextCompareIds.length >= 2
+          ? 'Compared session was archived or deleted, comparison was updated.'
+          : 'Compared sessions changed, comparison was cleared.'
+      );
+    }
+  }, [
+    compareSelectionIds,
+    compareSessionIds,
+    deviceId,
+    nonArchivedSessionIds,
+    sessionPickerQuery.isFetched,
+    sessionPickerQuery.isFetching
   ]);
 
   useEffect(() => {
@@ -2491,7 +2720,7 @@ function App() {
     setPointsBboxCommitted(null);
     setCoverageBinsBboxCommitted(null);
     setDebouncedBbox(null);
-  }, [deviceId, selectedSessionId]);
+  }, [deviceId, selectedSessionId, compareSessionIdsKey]);
 
   useEffect(() => {
     if (mapLayerMode !== 'coverage') {
@@ -2517,6 +2746,9 @@ function App() {
   );
 
   useEffect(() => {
+    if (isCompareMode) {
+      return;
+    }
     if (!measurementBounds || !isValidLatLonBounds(measurementBounds)) {
       return;
     }
@@ -2535,9 +2767,47 @@ function App() {
       mapRef.current?.fitBounds(measurementBounds, { padding: [24, 24], maxZoom: 17 });
     }
     hasAutoFitRef.current = true;
-  }, [measurementBounds, userInteractedWithMap, activeMeasurementsQuery.isFetching]);
+  }, [isCompareMode, measurementBounds, userInteractedWithMap, activeMeasurementsQuery.isFetching]);
+
+  useEffect(() => {
+    if (!isCompareMode) {
+      return;
+    }
+    if (comparisonLoading || userInteractedWithMap || hasAutoFitRef.current) {
+      return;
+    }
+    const bounds = buildBoundsFromPoints(comparisonFitPoints);
+    if (!bounds || !isValidLatLonBounds(bounds)) {
+      return;
+    }
+
+    if (comparisonFitPoints.length < 2 || isDegenerateBounds(bounds)) {
+      mapRef.current?.focusPoint(comparisonFitPoints[0], 16);
+    } else {
+      mapRef.current?.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+    }
+    hasAutoFitRef.current = true;
+  }, [comparisonFitPoints, comparisonLoading, isCompareMode, userInteractedWithMap]);
 
   const handleFitToData = () => {
+    if (isCompareMode) {
+      const bounds = buildBoundsFromPoints(comparisonFitPoints);
+      if (comparisonFitPoints.length === 0 || !bounds) {
+        setFitFeedback('No data to fit');
+        return;
+      }
+
+      setFitFeedback(null);
+      if (comparisonFitPoints.length < 2 || isDegenerateBounds(bounds)) {
+        mapRef.current?.focusPoint(comparisonFitPoints[0], 16);
+      } else {
+        mapRef.current?.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+      }
+      setUserInteractedWithMap(true);
+      hasAutoFitRef.current = true;
+      return;
+    }
+
     const playbackPoints: LatLonPoint[] =
       viewMode === 'playback'
         ? playbackWindowPoints
@@ -2768,8 +3038,12 @@ function App() {
     queryClient
   ]);
 
-  const isLoading = activeMeasurementsQuery.isLoading || Boolean(activeTrackQuery?.isLoading);
-  const error = activeMeasurementsQuery.error ?? activeTrackQuery?.error;
+  const isLoading = isCompareMode
+    ? comparisonLoading
+    : activeMeasurementsQuery.isLoading || Boolean(activeTrackQuery?.isLoading);
+  const error = isCompareMode
+    ? comparisonError
+    : activeMeasurementsQuery.error ?? activeTrackQuery?.error;
 
   const latestEvent = lorawanEventsQuery.data?.items?.[0];
   const hasRecentLorawanEvent = (() => {
@@ -3063,6 +3337,16 @@ function App() {
       playbackControls={playbackControls}
       fitFeedback={fitFeedback}
       sessionSelectionNotice={sessionSelectionNotice}
+      comparisonActive={isCompareMode}
+      comparisonSelectionIds={compareSelectionIds}
+      comparisonSelectionDirty={comparisonSelectionDirty}
+      comparisonItems={comparisonItems}
+      onToggleCompareSelection={handleToggleCompareSelection}
+      onStartComparison={handleStartComparison}
+      onClearCompareSelection={handleClearCompareSelection}
+      onExitComparison={handleExitComparison}
+      onToggleComparedSessionVisibility={handleToggleComparedSessionVisibility}
+      onFitComparedSessions={handleFitToData}
       eventsNavigationNonce={eventsNavigationNonce}
       eventsNavigationRequest={eventsNavigationRequest}
       onOpenEvents={handleOpenEvents}
@@ -3095,9 +3379,10 @@ function App() {
           coverageScope={coverageScope}
           coverageVisualizationMode={coverageVisualizationMode}
           coverageMetric={coverageMetric}
-          measurements={mapMeasurements}
-          compareMeasurements={mapCompareMeasurements}
-          track={mapTrackPoints}
+          measurements={isCompareMode ? [] : mapMeasurements}
+          compareMeasurements={isCompareMode ? [] : mapCompareMeasurements}
+          comparisonTracks={isCompareMode ? comparisonTracks : []}
+          track={isCompareMode ? [] : mapTrackPoints}
           overviewTrack={isPlaybackMode ? mapOverviewTrack : []}
           coverageBins={coverageBins}
           coverageBinSize={coverageQuery.data?.binSizeDeg ?? null}
@@ -3118,6 +3403,31 @@ function App() {
           selectedPointId={selectedPointId}
           onUserInteraction={() => setUserInteractedWithMap(true)}
         />
+        {isCompareMode && comparisonItems.length > 0 ? (
+          <div className="comparison-legend" role="region" aria-label="Compared sessions legend">
+            <div className="comparison-legend__header">
+              <span>Session comparison</span>
+              <strong>{comparisonItems.filter((item) => item.isVisible).length} visible</strong>
+            </div>
+            <div className="comparison-legend__list">
+              {comparisonItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`comparison-legend__item${item.isVisible ? '' : ' is-muted'}`}
+                >
+                  <span
+                    className="comparison-legend__swatch"
+                    style={{ backgroundColor: item.style.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="comparison-legend__label" title={item.label}>
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {!zenMode && viewMode === 'playback' && !playbackSessionId && (
           <div className="playback-blocker" role="alert">
             <div className="playback-blocker__message">Select a session</div>
@@ -3131,11 +3441,12 @@ function App() {
           </div>
         )}
         {!zenMode &&
+          !isCompareMode &&
           activeMeasurementsQuery.data &&
           activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit && (
             <div className="limit-banner">Result limited; zoom in or narrow filters</div>
           )}
-        {!zenMode && shouldShowLorawanBanner && (
+        {!zenMode && !isCompareMode && shouldShowLorawanBanner && (
           <div className="diagnostic-banner">
             LoRaWAN uplinks received, but decoded payload has no lat/lon. Configure payload formatter
             to output GPS.{' '}

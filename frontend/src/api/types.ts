@@ -229,6 +229,11 @@ export type SessionWindowResponse = {
   items: SessionWindowPoint[];
 };
 
+export type SessionOverviewResponse = {
+  sessionId: string;
+  items: TrackPoint[];
+};
+
 export type TrackPoint = {
   capturedAt: string;
   lat: number;

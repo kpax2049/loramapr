@@ -36,6 +36,7 @@ import GatewayStatsPanel from './GatewayStatsPanel';
 import LorawanEventsPanel from './LorawanEventsPanel';
 import MeshtasticEventsPanel from './MeshtasticEventsPanel';
 import ReceiverStatsPanel from './ReceiverStatsPanel';
+import SessionComparisonPanel, { type SessionComparisonItem } from './SessionComparisonPanel';
 import SessionsPanel from './SessionsPanel';
 import SessionDetailsPanel from './SessionDetailsPanel';
 import EventsExplorerPanel from './EventsExplorerPanel';
@@ -123,6 +124,16 @@ type ControlsProps = {
   playbackControls?: ReactNode;
   fitFeedback?: string | null;
   sessionSelectionNotice?: string | null;
+  comparisonActive: boolean;
+  comparisonSelectionIds: string[];
+  comparisonSelectionDirty: boolean;
+  comparisonItems: SessionComparisonItem[];
+  onToggleCompareSelection: (sessionId: string) => void;
+  onStartComparison: () => void;
+  onClearCompareSelection: () => void;
+  onExitComparison: () => void;
+  onToggleComparedSessionVisibility: (sessionId: string) => void;
+  onFitComparedSessions: () => void;
   eventsNavigationNonce: number;
   eventsNavigationRequest: EventsNavigationInput | null;
   onOpenEvents: (input: EventsNavigationInput) => void;
@@ -190,6 +201,16 @@ export default function Controls({
   playbackControls,
   fitFeedback,
   sessionSelectionNotice,
+  comparisonActive,
+  comparisonSelectionIds,
+  comparisonSelectionDirty,
+  comparisonItems,
+  onToggleCompareSelection,
+  onStartComparison,
+  onClearCompareSelection,
+  onExitComparison,
+  onToggleComparedSessionVisibility,
+  onFitComparedSessions,
   eventsNavigationNonce,
   eventsNavigationRequest,
   onOpenEvents,
@@ -1687,12 +1708,19 @@ export default function Controls({
         <div className="controls__group">
           {deviceId ? (
             <>
-              {filterMode === 'session' && !selectedSessionId ? (
+              {!comparisonActive && filterMode === 'session' && !selectedSessionId ? (
                 <div className="controls__session-empty-state" role="status" aria-live="polite">
                   Select a session
                 </div>
               ) : null}
-              {selectedSessionId ? (
+              {comparisonActive ? (
+                <SessionComparisonPanel
+                  items={comparisonItems}
+                  onToggleVisibility={onToggleComparedSessionVisibility}
+                  onClearComparison={onExitComparison}
+                  onFitAll={onFitComparedSessions}
+                />
+              ) : selectedSessionId ? (
                 <SessionDetailsPanel
                   sessionId={selectedSessionId}
                   onFitMapToSession={onFitMapToSession}
@@ -1701,8 +1729,14 @@ export default function Controls({
               <SessionsPanel
                 deviceId={deviceId}
                 selectedSessionId={selectedSessionId}
+                compareSelectionIds={comparisonSelectionIds}
+                comparisonActive={comparisonActive}
+                comparisonSelectionDirty={comparisonSelectionDirty}
                 onSelectSessionId={onSelectSessionId}
                 onStartSession={onStartSession}
+                onToggleCompareSelection={onToggleCompareSelection}
+                onStartComparison={onStartComparison}
+                onClearCompareSelection={onClearCompareSelection}
               />
             </>
           ) : (

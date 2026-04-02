@@ -158,6 +158,26 @@ describe('Sessions e2e', () => {
     expect(response.body.items[0].capturedAt).toBe(cursor);
   });
 
+  it('overview returns a sampled full-session track', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/sessions/${sessionId}/overview?sample=2`)
+      .expect(200);
+
+    expect(response.body.sessionId).toBe(sessionId);
+    expect(response.body.items).toEqual([
+      {
+        capturedAt: timestamps.t0.toISOString(),
+        lat: 37.77,
+        lon: -122.43
+      },
+      {
+        capturedAt: timestamps.t2.toISOString(),
+        lat: 37.771,
+        lon: -122.431
+      }
+    ]);
+  });
+
   it('stats returns aggregate session metrics', async () => {
     const response = await request(app.getHttpServer())
       .get(`/api/sessions/${sessionId}/stats`)

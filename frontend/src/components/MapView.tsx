@@ -90,6 +90,7 @@ type MapViewProps = {
   coverageMetric?: 'count' | 'rssiAvg' | 'snrAvg';
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
+  comparisonTracks?: ComparisonTrack[];
   track?: TrackPoint[];
   overviewTrack?: TrackPoint[];
   coverageBins?: CoverageBin[];
@@ -125,6 +126,15 @@ type TrackPoint = {
   lat: number;
   lon: number;
   capturedAt: string;
+};
+
+type ComparisonTrack = {
+  id: string;
+  label: string;
+  color: string;
+  dashArray?: string;
+  isVisible?: boolean;
+  track: TrackPoint[];
 };
 
 type LatestLocationMarker = {
@@ -775,6 +785,39 @@ function buildTrackPositionsFromMeasurements(points: readonly MapPoint[]): [numb
   return valid.map((point) => [point.lat, point.lon] as [number, number]);
 }
 
+function buildSimplifiedTrackPositions(
+  points: readonly Pick<TrackPoint, 'lat' | 'lon'>[],
+  zoom: number
+): [number, number][] {
+  const validTrack = filterValidTrackCoordinates(points);
+  if (validTrack.length === 0) {
+    return [];
+  }
+  if (validTrack.length <= 2) {
+    return validTrack.map((point) => [point.lat, point.lon] as [number, number]);
+  }
+
+  const tolerance = zoomToTolerance(zoom);
+  const simplified = simplify(
+    validTrack.map((point) => ({ x: point.lon, y: point.lat })),
+    tolerance,
+    true
+  );
+  const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
+  const first = [validTrack[0].lat, validTrack[0].lon] as [number, number];
+  const last = [validTrack[validTrack.length - 1].lat, validTrack[validTrack.length - 1].lon] as [
+    number,
+    number
+  ];
+
+  if (positions.length > 0) {
+    positions[0] = first;
+    positions[positions.length - 1] = last;
+  }
+
+  return positions;
+}
+
 function readPalette(): PointPalette {
   if (typeof window === 'undefined') {
     return {
@@ -838,6 +881,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   coverageMetric = 'count',
   measurements = [],
   compareMeasurements = [],
+  comparisonTracks = [],
   track = [],
   overviewTrack = [],
   coverageBins = [],
@@ -947,30 +991,7 @@ ref
     if (!shouldRenderTracks || track.length === 0) {
       return [];
     }
-    const validTrack = filterValidTrackCoordinates(track);
-    if (validTrack.length === 0) {
-      return [];
-    }
-    if (validTrack.length <= 2) {
-      return validTrack.map((point) => [point.lat, point.lon] as [number, number]);
-    }
-
-    const tolerance = zoomToTolerance(currentZoom);
-    const points = validTrack.map((point) => ({ x: point.lon, y: point.lat }));
-    const simplified = simplify(points, tolerance, true);
-    const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
-
-    const first = [validTrack[0].lat, validTrack[0].lon] as [number, number];
-    const last = [
-      validTrack[validTrack.length - 1].lat,
-      validTrack[validTrack.length - 1].lon
-    ] as [number, number];
-    if (positions.length > 0) {
-      positions[0] = first;
-      positions[positions.length - 1] = last;
-    }
-
-    return positions;
+    return buildSimplifiedTrackPositions(track, currentZoom);
   }, [currentZoom, mapLayerMode, measurements, shouldRenderTracks, showPoints, track]);
 
   const overviewTrackPoints = useMemo(
@@ -989,31 +1010,19 @@ ref
     if (!shouldRenderTracks || overviewTrack.length === 0) {
       return [];
     }
-    const validOverview = filterValidTrackCoordinates(overviewTrack);
-    if (validOverview.length === 0) {
-      return [];
-    }
-    if (validOverview.length <= 2) {
-      return validOverview.map((point) => [point.lat, point.lon] as [number, number]);
-    }
-
-    const tolerance = zoomToTolerance(currentZoom);
-    const points = validOverview.map((point) => ({ x: point.lon, y: point.lat }));
-    const simplified = simplify(points, tolerance, true);
-    const positions = simplified.map((point) => [point.y, point.x] as [number, number]);
-
-    const first = [validOverview[0].lat, validOverview[0].lon] as [number, number];
-    const last = [
-      validOverview[validOverview.length - 1].lat,
-      validOverview[validOverview.length - 1].lon
-    ] as [number, number];
-    if (positions.length > 0) {
-      positions[0] = first;
-      positions[positions.length - 1] = last;
-    }
-
-    return positions;
+    return buildSimplifiedTrackPositions(overviewTrack, currentZoom);
   }, [overviewTrack, currentZoom, shouldRenderTracks]);
+  const comparisonTrackEntries = useMemo(
+    () =>
+      comparisonTracks
+        .filter((trackLayer) => trackLayer.isVisible !== false)
+        .map((trackLayer) => ({
+          ...trackLayer,
+          positions: buildSimplifiedTrackPositions(trackLayer.track, currentZoom)
+        }))
+        .filter((trackLayer) => trackLayer.positions.length > 0),
+    [comparisonTracks, currentZoom]
+  );
 
   const furthestPointIdFromHome = useMemo(() => {
     if (
@@ -1381,6 +1390,22 @@ ref
           />
         </>
       )}
+      {comparisonTrackEntries.map((trackLayer) => (
+        <Polyline
+          key={`comparison-track-${trackLayer.id}`}
+          positions={trackLayer.positions}
+          pathOptions={{
+            pane: MAP_LAYER_PANES.sessionTrack,
+            color: trackLayer.color,
+            opacity: 0.88,
+            weight: 3,
+            dashArray: trackLayer.dashArray,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }}
+          interactive={false}
+        />
+      ))}
       {mapLayerMode === 'coverage' &&
         coverageVisualizationMode === 'bins' &&
         coverageData.bins.map((bin) => {

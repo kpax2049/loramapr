@@ -17,12 +17,22 @@ import {
   useUpdateSession
 } from '../query/sessions';
 import type { Session } from '../api/types';
+import {
+  MAX_COMPARED_SESSIONS,
+  formatSessionLabel as formatComparisonLabel
+} from '../sessionComparison';
 
 type SessionsPanelProps = {
   deviceId: string | null;
   selectedSessionId: string | null;
+  compareSelectionIds: string[];
+  comparisonActive: boolean;
+  comparisonSelectionDirty: boolean;
   onSelectSessionId: (sessionId: string | null) => void;
   onStartSession: (sessionId: string) => void;
+  onToggleCompareSelection: (sessionId: string) => void;
+  onStartComparison: () => void;
+  onClearCompareSelection: () => void;
 };
 
 const SHOW_ARCHIVED_KEY = 'sessionsShowArchived';
@@ -47,7 +57,7 @@ function formatTimestamp(value?: string | null): string {
 }
 
 function sessionLabel(session: Session): string {
-  return session.name?.trim() || `Session ${session.id.slice(0, 8)}`;
+  return formatComparisonLabel(session);
 }
 
 function activeSessionLabel(session: Session): string {
@@ -66,14 +76,20 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
     return false;
   }
-  return Boolean(target.closest('button, input, textarea, select, a, [role="menuitem"]'));
+  return Boolean(target.closest('button, input, label, textarea, select, a, [role="menuitem"]'));
 }
 
 export default function SessionsPanel({
   deviceId,
   selectedSessionId,
+  compareSelectionIds,
+  comparisonActive,
+  comparisonSelectionDirty,
   onSelectSessionId,
-  onStartSession
+  onStartSession,
+  onToggleCompareSelection,
+  onStartComparison,
+  onClearCompareSelection
 }: SessionsPanelProps) {
   const [sessionName, setSessionName] = useState('');
   const [showArchived, setShowArchived] = useState<boolean>(() => readStoredShowArchived());
@@ -101,10 +117,18 @@ export default function SessionsPanel({
     () => sessions.find((session) => !session.endedAt) ?? null,
     [sessions]
   );
+  const comparedSelectionSet = useMemo(() => new Set(compareSelectionIds), [compareSelectionIds]);
   const pastSessions = useMemo(
     () => sessions.filter((session) => Boolean(session.endedAt)),
     [sessions]
   );
+  const compareButtonDisabled =
+    compareSelectionIds.length < 2 || (comparisonActive && !comparisonSelectionDirty);
+  const compareButtonLabel = comparisonActive
+    ? comparisonSelectionDirty
+      ? 'Update compare'
+      : 'Comparing'
+    : 'Compare selected';
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -319,6 +343,7 @@ export default function SessionsPanel({
 
   const renderSessionRow = (session: Session, isActive = false) => {
     const isSelected = selectedSessionId === session.id;
+    const isCompared = comparedSelectionSet.has(session.id);
     const isEditing = editingSessionId === session.id;
     const isMenuOpen = openMenuSessionId === session.id;
     const isRowUpdating =
@@ -326,6 +351,9 @@ export default function SessionsPanel({
     const isRowDeleting =
       deleteSessionMutation.isPending && deleteSessionMutation.variables?.id === session.id;
     const disableRowActions = isRowUpdating || isRowDeleting;
+    const compareSelectionFull =
+      comparedSelectionSet.size >= MAX_COMPARED_SESSIONS && !isCompared;
+    const compareToggleDisabled = disableRowActions || session.isArchived || compareSelectionFull;
     const title = isActive ? activeSessionLabel(session) : sessionLabel(session);
     const canSelectRow = !isEditing;
 
@@ -334,7 +362,7 @@ export default function SessionsPanel({
         key={session.id}
         className={`sessions-panel__item ${isSelected ? 'is-selected' : ''} ${
           isEditing ? 'is-editing' : ''
-        }`}
+        } ${isCompared ? 'is-compared' : ''}`}
         role={canSelectRow ? 'button' : undefined}
         tabIndex={canSelectRow ? 0 : undefined}
         aria-label={canSelectRow ? `Select ${title}` : undefined}
@@ -386,6 +414,25 @@ export default function SessionsPanel({
             </span>
           )}
           <div className="sessions-panel__item-actions" data-tour="session-actions">
+            <label
+              className={`sessions-panel__compare-toggle${isCompared ? ' is-active' : ''}`}
+              title={
+                session.isArchived
+                  ? 'Archived sessions are not available for comparison'
+                  : compareSelectionFull
+                    ? `Compare up to ${MAX_COMPARED_SESSIONS} sessions`
+                    : undefined
+              }
+            >
+              <input
+                type="checkbox"
+                checked={isCompared}
+                onChange={() => onToggleCompareSelection(session.id)}
+                disabled={compareToggleDisabled}
+                aria-label={`${isCompared ? 'Remove' : 'Add'} ${title} ${isCompared ? 'from' : 'to'} comparison`}
+              />
+              <span>Compare</span>
+            </label>
             {session.isArchived ? <span className="sessions-panel__badge">Archived</span> : null}
             {hasQueryApiKey ? (
               isEditing ? (
@@ -534,6 +581,42 @@ export default function SessionsPanel({
           </button>
         </div>
       )}
+
+      <div className="sessions-panel__compare-bar" aria-label="Session comparison selection">
+        <div className="sessions-panel__compare-copy">
+          <span className="sessions-panel__compare-eyebrow">Session comparison</span>
+          <strong>
+            {compareSelectionIds.length === 0
+              ? `Select 2-${MAX_COMPARED_SESSIONS} sessions`
+              : `${compareSelectionIds.length} selected`}
+          </strong>
+          <span>
+            {comparisonActive
+              ? comparisonSelectionDirty
+                ? 'Update compare to apply the current selection.'
+                : 'The compare view uses the current selected set.'
+              : `Overlay up to ${MAX_COMPARED_SESSIONS} sessions on the map.`}
+          </span>
+        </div>
+        <div className="sessions-panel__compare-actions">
+          <button
+            type="button"
+            onClick={onStartComparison}
+            disabled={compareButtonDisabled}
+          >
+            {compareButtonLabel}
+          </button>
+          {compareSelectionIds.length > 0 ? (
+            <button
+              type="button"
+              className="sessions-panel__compare-clear"
+              onClick={onClearCompareSelection}
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      </div>
 
       {error && <div className="sessions-panel__error">Failed to load sessions.</div>}
 
