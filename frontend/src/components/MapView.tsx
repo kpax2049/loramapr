@@ -59,12 +59,14 @@ import {
   resolveArrowSpacingPx,
   sampleArrowPlacementsAtDistance
 } from '../map/trackDirection';
+import { formatDistanceMeters, formatSignalMetric } from '../sessionComparison';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
 const MAP_LAYER_PANES = {
   sessionPointsRegular: 'session-points-regular',
   sessionTrack: 'session-track',
+  comparisonHighlights: 'comparison-highlights',
   sessionPointsActive: 'session-points-active',
   sessionPointHits: 'session-point-hits'
 } as const;
@@ -91,6 +93,7 @@ type MapViewProps = {
   measurements?: MapPoint[];
   compareMeasurements?: MapPoint[];
   comparisonTracks?: ComparisonTrack[];
+  comparisonHighlights?: ComparisonHighlight[];
   track?: TrackPoint[];
   overviewTrack?: TrackPoint[];
   coverageBins?: CoverageBin[];
@@ -135,6 +138,19 @@ type ComparisonTrack = {
   dashArray?: string;
   isVisible?: boolean;
   track: TrackPoint[];
+};
+
+type ComparisonHighlight = {
+  id: string;
+  label: string;
+  color: string;
+  dashArray?: string;
+  isVisible?: boolean;
+  lat: number;
+  lon: number;
+  distanceMeters: number;
+  rssi: number | null;
+  snr: number | null;
 };
 
 type LatestLocationMarker = {
@@ -882,6 +898,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   measurements = [],
   compareMeasurements = [],
   comparisonTracks = [],
+  comparisonHighlights = [],
   track = [],
   overviewTrack = [],
   coverageBins = [],
@@ -1326,6 +1343,7 @@ ref
       )}
       <Pane name={MAP_LAYER_PANES.sessionPointsRegular} style={{ zIndex: 390 }} />
       <Pane name={MAP_LAYER_PANES.sessionTrack} style={{ zIndex: 410 }} />
+      <Pane name={MAP_LAYER_PANES.comparisonHighlights} style={{ zIndex: 420 }} />
       <Pane name={MAP_LAYER_PANES.sessionPointsActive} style={{ zIndex: 430 }} />
       <Pane name={MAP_LAYER_PANES.sessionPointHits} style={{ zIndex: 440 }} />
       {mapLayerMode === 'coverage' && coverageVisualizationMode === 'heatmap' && (
@@ -1406,6 +1424,50 @@ ref
           interactive={false}
         />
       ))}
+      {comparisonHighlights
+        .filter((highlight) => highlight.isVisible !== false)
+        .map((highlight) =>
+          Number.isFinite(highlight.lat) && Number.isFinite(highlight.lon) ? (
+            <Fragment key={`comparison-highlight-${highlight.id}`}>
+              <CircleMarker
+                center={[highlight.lat, highlight.lon]}
+                radius={13}
+                pathOptions={{
+                  pane: MAP_LAYER_PANES.comparisonHighlights,
+                  color: highlight.color,
+                  weight: 3.5,
+                  opacity: 0.96,
+                  fillColor: highlight.color,
+                  fillOpacity: 0.12,
+                  className: 'comparison-highlight comparison-highlight--ring'
+                }}
+                interactive={false}
+              />
+              <CircleMarker
+                center={[highlight.lat, highlight.lon]}
+                radius={6.5}
+                pathOptions={{
+                  pane: MAP_LAYER_PANES.comparisonHighlights,
+                  color: '#ffffff',
+                  weight: 1.5,
+                  opacity: 0.94,
+                  fillColor: highlight.color,
+                  fillOpacity: 0.96,
+                  className: 'comparison-highlight comparison-highlight--core'
+                }}
+              >
+                <Tooltip direction="top" offset={[0, -10]} opacity={0.96}>
+                  <div>
+                    <strong>{highlight.label}</strong>
+                    <div>Max range: {formatDistanceMeters(highlight.distanceMeters)}</div>
+                    <div>Edge RSSI: {formatSignalMetric(highlight.rssi, 'rssi')}</div>
+                    <div>Edge SNR: {formatSignalMetric(highlight.snr, 'snr')}</div>
+                  </div>
+                </Tooltip>
+              </CircleMarker>
+            </Fragment>
+          ) : null
+        )}
       {mapLayerMode === 'coverage' &&
         coverageVisualizationMode === 'bins' &&
         coverageData.bins.map((bin) => {

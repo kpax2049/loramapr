@@ -100,6 +100,7 @@ export default function SessionsPanel({
   const [deleteTargetSession, setDeleteTargetSession] = useState<Session | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [sessionActionError, setSessionActionError] = useState<string | null>(null);
+  const [sessionListExpanded, setSessionListExpanded] = useState(true);
 
   const { data: sessionsResponse, isLoading, error } = useSessions(deviceId ?? undefined, {
     includeArchived: showArchived
@@ -129,6 +130,13 @@ export default function SessionsPanel({
       ? 'Update compare'
       : 'Comparing'
     : 'Compare selected';
+  const compareBarState = comparisonActive
+    ? 'is-active'
+    : compareSelectionIds.length >= 2
+      ? 'is-ready'
+      : compareSelectionIds.length > 0
+        ? 'is-armed'
+        : '';
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -145,7 +153,12 @@ export default function SessionsPanel({
     setDeleteTargetSession(null);
     setDeleteConfirmText('');
     setSessionActionError(null);
+    setSessionListExpanded(true);
   }, [deviceId]);
+
+  useEffect(() => {
+    setSessionListExpanded(!comparisonActive);
+  }, [comparisonActive]);
 
   const handleStart = () => {
     if (!deviceId || startMutation.isPending) {
@@ -582,20 +595,33 @@ export default function SessionsPanel({
         </div>
       )}
 
-      <div className="sessions-panel__compare-bar" aria-label="Session comparison selection">
+      <div
+        className={`sessions-panel__compare-bar ${compareBarState}`.trim()}
+        aria-label="Session comparison selection"
+      >
         <div className="sessions-panel__compare-copy">
-          <span className="sessions-panel__compare-eyebrow">Session comparison</span>
+          <span className="sessions-panel__compare-eyebrow">
+            {comparisonActive ? 'Compare mode' : 'Session comparison'}
+          </span>
           <strong>
-            {compareSelectionIds.length === 0
-              ? `Select 2-${MAX_COMPARED_SESSIONS} sessions`
-              : `${compareSelectionIds.length} selected`}
+            {comparisonActive
+              ? comparisonSelectionDirty
+                ? `${compareSelectionIds.length} sessions selected for update`
+                : `Comparing ${compareSelectionIds.length} sessions`
+              : compareSelectionIds.length >= 2
+                ? `${compareSelectionIds.length} sessions ready to compare`
+                : compareSelectionIds.length === 1
+                  ? 'Select one more session to compare'
+                  : `Select 2-${MAX_COMPARED_SESSIONS} sessions`}
           </strong>
           <span>
             {comparisonActive
               ? comparisonSelectionDirty
-                ? 'Update compare to apply the current selection.'
-                : 'The compare view uses the current selected set.'
-              : `Overlay up to ${MAX_COMPARED_SESSIONS} sessions on the map.`}
+                ? 'Update compare to replace the active compare set.'
+                : 'Review max range, edge signal, and farthest-point markers together.'
+              : compareSelectionIds.length >= 2
+                ? 'Open a dedicated compare workspace for the selected runs.'
+                : `Choose up to ${MAX_COMPARED_SESSIONS} sessions from the list below.`}
           </span>
         </div>
         <div className="sessions-panel__compare-actions">
@@ -620,12 +646,31 @@ export default function SessionsPanel({
 
       {error && <div className="sessions-panel__error">Failed to load sessions.</div>}
 
-      <div className="sessions-panel__list" aria-live="polite" data-tour="session-list">
-        {isLoading && <div className="sessions-panel__loading">Loading sessions…</div>}
-        {!isLoading && sessions.length === 0 && (
-          <div className="sessions-panel__empty">No sessions yet.</div>
+      <div className={`sessions-panel__list-shell${comparisonActive ? ' is-compare-mode' : ''}`}>
+        {comparisonActive ? (
+          <button
+            type="button"
+            className="sessions-panel__list-toggle"
+            onClick={() => setSessionListExpanded((current) => !current)}
+            aria-expanded={sessionListExpanded}
+          >
+            <span>Change compared sessions</span>
+            <strong>{sessionListExpanded ? 'Hide list' : 'Show list'}</strong>
+          </button>
+        ) : null}
+        {sessionListExpanded ? (
+          <div className="sessions-panel__list" aria-live="polite" data-tour="session-list">
+            {isLoading && <div className="sessions-panel__loading">Loading sessions…</div>}
+            {!isLoading && sessions.length === 0 && (
+              <div className="sessions-panel__empty">No sessions yet.</div>
+            )}
+            {pastSessions.map((session) => renderSessionRow(session))}
+          </div>
+        ) : (
+          <div className="sessions-panel__list-collapsed">
+            Session list collapsed while compare mode is active.
+          </div>
         )}
-        {pastSessions.map((session) => renderSessionRow(session))}
       </div>
       {sessionActionError ? (
         <div className="sessions-panel__error" role="status">

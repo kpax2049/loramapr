@@ -158,16 +158,40 @@ export type SessionStats = {
     maxLat: number;
     maxLon: number;
   } | null;
+  home: {
+    lat: number;
+    lon: number;
+    radiusMeters: number;
+  } | null;
+  farthestPoint: {
+    capturedAt: string;
+    lat: number;
+    lon: number;
+    distanceMeters: number;
+    rssi: number | null;
+    snr: number | null;
+  } | null;
+  lastRangePoint: {
+    capturedAt: string;
+    lat: number;
+    lon: number;
+    distanceMeters: number;
+    rssi: number | null;
+    snr: number | null;
+  } | null;
   rssi: {
     min: number | null;
     max: number | null;
     avg: number | null;
+    median: number | null;
   } | null;
   snr: {
     min: number | null;
     max: number | null;
     avg: number | null;
+    median: number | null;
   } | null;
+  signalSourceUsed: 'meshtastic' | 'lorawan' | 'measurement' | null;
   receiversCount: number | null;
 };
 

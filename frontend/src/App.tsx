@@ -49,6 +49,7 @@ import {
   MAX_COMPARED_SESSIONS,
   areStringListsEqual,
   buildSessionDurationMs,
+  formatDistanceMeters,
   formatSessionLabel,
   getSessionComparisonStyle,
   parseComparedSessionIds
@@ -1795,12 +1796,14 @@ function App() {
         return {
           id: sessionId,
           label: session ? formatSessionLabel(session) : `Session ${sessionId.slice(0, 8)}`,
-          startedAt: session?.startedAt ?? null,
+          startedAt: session?.startedAt ?? stats?.startedAt ?? null,
           durationMs: buildSessionDurationMs(session, stats),
           measurementCount: stats?.pointCount ?? null,
           distanceMeters: stats?.distanceMeters ?? null,
-          avgRssi: stats?.rssi?.avg ?? null,
-          avgSnr: stats?.snr?.avg ?? null,
+          medianRssi: stats?.rssi?.median ?? null,
+          medianSnr: stats?.snr?.median ?? null,
+          farthestPoint: stats?.farthestPoint ?? null,
+          lastRangePoint: stats?.lastRangePoint ?? null,
           isVisible: !hiddenComparisonSessionIds.includes(sessionId),
           isLoading:
             comparisonStatsQueries[index]?.isLoading === true ||
@@ -1834,7 +1837,36 @@ function App() {
       }),
     [compareSessionIds, comparisonItems, comparisonOverviewQueries, hiddenComparisonSessionIds]
   );
+  const comparisonHighlights = useMemo(
+    () =>
+      compareSessionIds
+        .map((sessionId, index) => {
+          const farthestPoint = comparisonStatsQueries[index]?.data?.farthestPoint ?? null;
+          if (!farthestPoint) {
+            return null;
+          }
+
+          return {
+            id: sessionId,
+            label: comparisonItems[index]?.label ?? `Session ${sessionId.slice(0, 8)}`,
+            color: comparisonItems[index]?.style.color ?? getSessionComparisonStyle(index).color,
+            dashArray: comparisonItems[index]?.style.dashArray,
+            isVisible: !hiddenComparisonSessionIds.includes(sessionId),
+            lat: farthestPoint.lat,
+            lon: farthestPoint.lon,
+            distanceMeters: farthestPoint.distanceMeters,
+            rssi: farthestPoint.rssi,
+            snr: farthestPoint.snr
+          };
+        })
+        .filter((highlight): highlight is NonNullable<typeof highlight> => highlight !== null),
+    [compareSessionIds, comparisonItems, comparisonStatsQueries, hiddenComparisonSessionIds]
+  );
   const comparisonFitPoints = useMemo<LatLonPoint[]>(() => {
+    const highlightPoints = comparisonHighlights
+      .filter((highlight) => highlight.isVisible !== false)
+      .map((highlight) => toLatLonPoint(highlight.lat, highlight.lon))
+      .filter((point): point is LatLonPoint => point !== null);
     const trackPoints = comparisonTracks
       .filter((trackLayer) => trackLayer.isVisible !== false)
       .flatMap((trackLayer) =>
@@ -1843,7 +1875,11 @@ function App() {
           .filter((point): point is LatLonPoint => point !== null)
       );
     if (trackPoints.length > 0) {
-      return trackPoints;
+      return [...trackPoints, ...highlightPoints];
+    }
+
+    if (highlightPoints.length > 0) {
+      return highlightPoints;
     }
 
     return comparisonItems
@@ -1857,7 +1893,7 @@ function App() {
         const northEast = toLatLonPoint(bbox.maxLat, bbox.maxLon);
         return southWest && northEast ? [southWest, northEast] : [];
       });
-  }, [comparisonItems, comparisonStatsQueries, comparisonTracks]);
+  }, [comparisonHighlights, comparisonItems, comparisonStatsQueries, comparisonTracks]);
   const handleSelectEventForMap = useCallback((event: UnifiedEventListItem) => {
     const candidates = mapMeasurements as Array<{
       id: string;
@@ -3382,6 +3418,7 @@ function App() {
           measurements={isCompareMode ? [] : mapMeasurements}
           compareMeasurements={isCompareMode ? [] : mapCompareMeasurements}
           comparisonTracks={isCompareMode ? comparisonTracks : []}
+          comparisonHighlights={isCompareMode ? comparisonHighlights : []}
           track={isCompareMode ? [] : mapTrackPoints}
           overviewTrack={isPlaybackMode ? mapOverviewTrack : []}
           coverageBins={coverageBins}
@@ -3420,9 +3457,14 @@ function App() {
                     style={{ backgroundColor: item.style.color }}
                     aria-hidden="true"
                   />
-                  <span className="comparison-legend__label" title={item.label}>
-                    {item.label}
-                  </span>
+                  <div className="comparison-legend__copy">
+                    <span className="comparison-legend__label" title={item.label}>
+                      {item.label}
+                    </span>
+                    <span className="comparison-legend__meta">
+                      Max range {formatDistanceMeters(item.farthestPoint?.distanceMeters ?? null)}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
