@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Pi-side Meshtastic forwarder for LoRaMapr coverage mapping.",
+  "description": "Pi-side receiver forwarder for LoRaMapr, a Meshtastic app for mapping real-world coverage.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node src/index.ts",

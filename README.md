@@ -12,11 +12,11 @@
 > LoRaMapr has reached **v1.1.0** and is ready for self-hosted use.  
 > Development continues for new features and refinements, with changes tracked through normal release/version notes.
 
-LoRaMapr is a self-hosted coverage-mapping tool for Meshtastic.
+LoRaMapr is a Meshtastic app for mapping real-world coverage.
 
-Leave one node at a fixed base location, carry another through the field, and record real packet data during walks or drives. LoRaMapr turns those runs into replayable coverage maps so you can see where your setup actually works.
+Position one node at that location, use a second field node to explore the surrounding area, and build coverage maps from real packet data.
 
-Use LoRaMapr to compare antennas, placement, routes, terrain, and settings using real measurements instead of guesswork.
+By recording the same route multiple times, you can compare antennas, placement, and other setup changes under real-world conditions.
 
 ### Who it is for
 
@@ -56,6 +56,44 @@ Run capture can be manual, or automated with Home Auto Session (HAS) for base-dr
 
 `Home node + field node` is the default pattern, but not the only valid setup.
 
+## Prerequisites (standard Meshtastic coverage workflow)
+
+For the standard fixed-base + mobile-field workflow, LoRaMapr requires:
+
+- one node at a fixed location such as home/base/relay
+- one field node used while walking or driving
+- a Linux machine or Raspberry Pi at the fixed location to run the Receiver service (`Pi Forwarder`)
+- network access from that Receiver host to your LoRaMapr Cloud endpoint (or self-hosted LoRaMapr API endpoint)
+
+The Receiver service ingests Meshtastic data from the fixed-location node and forwards it to LoRaMapr Cloud, where sessions, playback, and coverage maps are generated.
+
+### Receiver host baseline
+
+Minimum:
+
+- CPU: `1 vCPU`
+- RAM: `512 MB`
+- Free disk: `2 GB`
+- Network: stable LAN/internet path to your cloud endpoint
+- USB: one reliable USB data connection for the Meshtastic node (if using direct USB)
+
+Recommended:
+
+- CPU: `2 vCPU`
+- RAM: `1 GB`
+- Free disk: `4 GB` or more
+- stable power, networking, and storage for long-running receiver use
+
+Raspberry Pi baseline:
+
+- Minimum proven: Raspberry Pi Zero 2 W with `512 MB` RAM
+- Recommended: Raspberry Pi 3 or 4 class system with a quality power supply and SD card
+
+Practical note:
+
+- A minimal Linux VM can run the Receiver service in roughly the same class as a Pi Zero 2 W.
+- For better stability and upgrade/log/retry headroom, `1 GB RAM` and `2 vCPU` is the better baseline when available.
+
 ## How data gets into LoRaMapr (supported ingest paths)
 
 ### 1) Meshtastic (Forwarder -> HTTP) — primary coverage-mapping workflow
@@ -79,12 +117,12 @@ Run capture can be manual, or automated with Home Auto Session (HAS) for base-dr
 
 1. Field node(s) transmit packets into the mesh.
 2. Your fixed base node hears them.
-3. The **Pi Forwarder** listens to Meshtastic packets locally and **POSTs them to LoRaMapr** over HTTP/HTTPS.
+3. The **Receiver service** (**Pi Forwarder**) listens to Meshtastic packets locally and **POSTs them to LoRaMapr** over HTTP/HTTPS.
 4. LoRaMapr stores the events and normalizes GPS/radio fields into measurements attached to sessions.
 
 Home Auto Session (HAS) supports a home-driven coverage workflow: leave one node at your base location, carry another through the field, and let the base-side workflow automatically open and close coverage runs around real activity. This reduces manual session handling and makes repeated walks or drives easier to capture consistently.
 
-Important: Meshtastic is **not limited to a home node**. The forwarder can run on any machine that can read Meshtastic packets (Pi, laptop over USB, etc.).
+Important: Meshtastic is **not limited to a home node**. The Receiver service can run on any Linux host that can read Meshtastic packets (Pi, mini PC, Linux laptop over USB, etc.).
 
 ### 2) LoRaWAN (The Things Stack webhook) — supported secondary path
 

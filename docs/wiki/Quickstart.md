@@ -1,11 +1,30 @@
 # Quickstart
 
-This quickstart sets up LoRaMapr for Meshtastic coverage mapping.
+LoRaMapr is a Meshtastic app for mapping real-world coverage around a fixed location such as your home. It uses one node at the base location and a second field node to build coverage maps from real packet data.
+
+This quickstart sets up that workflow.
 
 Default testing model:
 
 - fixed base receiver + mobile field node
 - most commonly a home node plus a field node
+
+## Receiver host requirements (standard Meshtastic workflow)
+
+For the standard home/base + field-node workflow, you need:
+
+- one node left at a fixed location (home/base/relay)
+- one field node for walks or drives
+- a Linux machine or Raspberry Pi at the fixed location running the Receiver service (`Pi Forwarder`)
+- network access from that Receiver host to your LoRaMapr Cloud endpoint (or self-hosted API endpoint)
+
+The Receiver service ingests Meshtastic packets from your fixed-location node and forwards them to LoRaMapr Cloud for sessions, playback, and coverage maps.
+
+Receiver host baseline:
+
+- Minimum: `1 vCPU`, `512 MB RAM`, `2 GB` free disk, stable network path, and reliable USB data connection (if direct USB node)
+- Recommended: `2 vCPU`, `1 GB RAM`, `4 GB+` free disk, plus stable power/network/storage for long-running receiver use
+- Raspberry Pi: minimum proven is Pi Zero 2 W (`512 MB`); recommended is Pi 3/4 class with quality power and SD card
 
 ## Prerequisites
 

@@ -2,6 +2,22 @@
 
 `apps/pi-forwarder` forwards Meshtastic packet JSON from your fixed base receiver into backend ingest (`POST /api/meshtastic/event`).
 
+## Receiver host requirements (standard workflow)
+
+For standard fixed-base + field-node coverage mapping, run this service on a Linux host at your fixed location (often a Raspberry Pi).
+
+- Fixed-location node: receives packets from your field node
+- Receiver host: runs the Receiver service (`Pi Forwarder`)
+- Network: receiver host must reach your LoRaMapr Cloud endpoint (or self-hosted API endpoint)
+
+The Receiver service ingests Meshtastic data from your fixed-location node and forwards it to LoRaMapr Cloud, where sessions, playback, and coverage maps are generated.
+
+Baseline:
+
+- Minimum: `1 vCPU`, `512 MB RAM`, `2 GB` free disk, stable network path, reliable USB data link (if direct USB node)
+- Recommended: `2 vCPU`, `1 GB RAM`, `4 GB+` free disk, stable power/network/storage for long-running receiver use
+- Raspberry Pi: minimum proven is Pi Zero 2 W (`512 MB`); recommended is Pi 3/4 class with quality power and SD card
+
 This document reflects the exact recovery path used in production on the Pi:
 
 - serial lock conflicts

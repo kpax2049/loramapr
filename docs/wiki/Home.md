@@ -1,8 +1,10 @@
 # LoRaMapr Wiki
 
-LoRaMapr is a self-hosted coverage-mapping tool for Meshtastic.
+LoRaMapr is a Meshtastic app for mapping real-world coverage around a fixed location such as your home.
 
-Leave one node at a fixed base location, carry another through the field, and turn real packet data into replayable coverage maps.
+Position one node at that location, use a second field node to explore the surrounding area, and build coverage maps from real packet data.
+
+By recording the same route multiple times, you can compare antennas, placement, and other setup changes under real-world conditions.
 
 Best fit: fixed base + mobile field testing (most commonly a home node + field node).
 

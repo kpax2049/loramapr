@@ -7,6 +7,22 @@
 - idempotency: `X-Idempotency-Key`
 - payload: full packet object + `_forwarder` metadata
 
+## Receiver host requirement (standard workflow)
+
+For standard fixed-base + field-node coverage mapping, run this service on a Linux host at your fixed location (often a Raspberry Pi).
+
+- fixed-location node hears field-node traffic
+- receiver host runs this Receiver service (`Pi Forwarder`)
+- receiver host needs network access to your LoRaMapr Cloud endpoint (or self-hosted API endpoint)
+
+The Receiver service ingests Meshtastic data from the fixed-location node and forwards it to LoRaMapr Cloud, where sessions, playback, and coverage maps are generated.
+
+Baseline:
+
+- Minimum: `1 vCPU`, `512 MB RAM`, `2 GB` free disk
+- Recommended: `2 vCPU`, `1 GB RAM`, `4 GB+` free disk
+- Raspberry Pi: minimum proven is Pi Zero 2 W (`512 MB`); Pi 3/4 class is recommended
+
 ## Install / build
 
 ```bash
