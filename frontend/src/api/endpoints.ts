@@ -25,6 +25,7 @@ import type {
   SessionSignalSeries,
   SessionSignalHistogram,
   Session,
+  SessionOverviewResponse,
   TrackPoint,
   SystemStatus,
   UnifiedEventDetail,
@@ -601,6 +602,22 @@ export async function getSessionWindow(
   const query = searchParams.toString();
   const path = `/api/sessions/${params.sessionId}/window${query ? `?${query}` : ''}`;
   return getJson<SessionWindowResponse>(path, options);
+}
+
+export async function getSessionOverview(
+  sessionId: string,
+  params?: { sample?: number },
+  options?: RequestOptions
+): Promise<SessionOverviewResponse> {
+  const searchParams = new URLSearchParams();
+  if (typeof params?.sample === 'number') {
+    searchParams.set('sample', String(params.sample));
+  }
+  const suffix = searchParams.toString();
+  const path = suffix
+    ? `/api/sessions/${sessionId}/overview?${suffix}`
+    : `/api/sessions/${sessionId}/overview`;
+  return getJson<SessionOverviewResponse>(path, options);
 }
 
 export async function getMeasurements(

@@ -8,6 +8,13 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v1.2.0 (2026-04-03)
+
+- Session Comparison release: added a dedicated compare workflow from Sessions for selecting and comparing `2-4` runs together.
+- Decision-oriented compare UX release: compare cards now prioritize max range, edge RSSI/SNR, last successful distance, and median signal summaries.
+- Compare map release: added farthest-point markers, improved compare-mode visual hierarchy, and fixed legend layering/readability.
+- Release notes: `docs/release-v1.2.0.md`.
+
 ## v1.1.0 (2026-03-01)
 
 - Coverage heatmap release: added Heatmap visualization alongside existing Bins rendering for at-a-glance hotspot analysis.

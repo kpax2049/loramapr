@@ -9,6 +9,7 @@ type SignalSummary = {
   min: number | null;
   max: number | null;
   avg: number | null;
+  median: number | null;
 };
 
 type SignalSeriesMetric = 'rssi' | 'snr';
@@ -17,6 +18,28 @@ type SignalSeriesResolvedSource = Exclude<SignalSeriesSource, 'auto'>;
 type SignalSeriesItem = { t: string; v: number };
 type RawSignalRow = { t: Date; v: number | Prisma.Decimal | null };
 type SignalHistogramBin = { lo: number; hi: number; count: number };
+type SignalSummarySource = SignalSeriesResolvedSource | null;
+type SessionSignalPoint = {
+  measurementId: string;
+  capturedAt: Date;
+  lat: number;
+  lon: number;
+  rssi: number | null;
+  snr: number | null;
+};
+type SessionRangePointSummary = {
+  capturedAt: string;
+  lat: number;
+  lon: number;
+  distanceMeters: number;
+  rssi: number | null;
+  snr: number | null;
+};
+type SessionHomeSummary = {
+  lat: number;
+  lon: number;
+  radiusMeters: number;
+};
 
 @Injectable()
 export class SessionsService {
@@ -359,9 +382,9 @@ export class SessionsService {
           }
         : null;
 
-    const [distanceMeters, signalSummary] = await Promise.all([
+    const [distanceMeters, comparisonSummary] = await Promise.all([
       this.computeDistanceMeters(id, pointCount),
-      this.computeSignalSummary(id)
+      this.computeComparisonSummary(id, session.deviceId)
     ]);
 
     return {
@@ -374,9 +397,13 @@ export class SessionsService {
       pointCount,
       distanceMeters,
       bbox,
-      rssi: signalSummary.rssi,
-      snr: signalSummary.snr,
-      receiversCount: signalSummary.receiversCount
+      home: comparisonSummary.home,
+      farthestPoint: comparisonSummary.farthestPoint,
+      lastRangePoint: comparisonSummary.lastRangePoint,
+      rssi: comparisonSummary.rssi,
+      snr: comparisonSummary.snr,
+      signalSourceUsed: comparisonSummary.sourceUsed,
+      receiversCount: comparisonSummary.receiversCount
     };
   }
 
@@ -566,126 +593,196 @@ export class SessionsService {
     return Number.isFinite(total) ? total : null;
   }
 
-  private async computeSignalSummary(sessionId: string): Promise<{
+  private async computeComparisonSummary(sessionId: string, deviceId: string): Promise<{
+    home: SessionHomeSummary | null;
+    farthestPoint: SessionRangePointSummary | null;
+    lastRangePoint: SessionRangePointSummary | null;
     rssi: SignalSummary | null;
     snr: SignalSummary | null;
+    sourceUsed: SignalSummarySource;
     receiversCount: number | null;
   }> {
-    const meshtasticAggregate = await this.prisma.meshtasticRx.aggregate({
-      where: {
-        measurement: { sessionId }
-      },
-      _count: { _all: true },
-      _min: {
-        rxRssi: true,
-        rxSnr: true
-      },
-      _max: {
-        rxRssi: true,
-        rxSnr: true
-      },
-      _avg: {
-        rxRssi: true,
-        rxSnr: true
+    const [home, sourceUsed] = await Promise.all([
+      this.readSessionHomeSummary(deviceId),
+      this.resolveSignalSummarySource(sessionId)
+    ]);
+    const signalPoints = await this.readSessionSignalPoints(sessionId, sourceUsed);
+    const rssiValues = signalPoints
+      .map((point) => point.rssi)
+      .filter((value): value is number => value !== null && Number.isFinite(value));
+    const snrValues = signalPoints
+      .map((point) => point.snr)
+      .filter((value): value is number => value !== null && Number.isFinite(value));
+    const [receiversCount, farthestPoint, lastRangePoint] = await Promise.all([
+      this.readReceiversCount(sessionId, sourceUsed),
+      Promise.resolve(buildSessionRangeSummaryPoint(signalPoints, home, 'farthest')),
+      Promise.resolve(buildSessionRangeSummaryPoint(signalPoints, home, 'last'))
+    ]);
+
+    return {
+      home,
+      farthestPoint,
+      lastRangePoint,
+      rssi: buildSignalSummary(rssiValues),
+      snr: buildSignalSummary(snrValues),
+      sourceUsed,
+      receiversCount
+    };
+  }
+
+  private async readSessionHomeSummary(deviceId: string): Promise<SessionHomeSummary | null> {
+    const config = await this.prisma.deviceAutoSessionConfig.findUnique({
+      where: { deviceId },
+      select: {
+        homeLat: true,
+        homeLon: true,
+        radiusMeters: true
       }
     });
 
-    if (meshtasticAggregate._count._all > 0) {
-      const receivers = await this.prisma.measurement.groupBy({
-        by: ['gatewayId'],
-        where: {
-          sessionId,
-          gatewayId: { not: null }
-        }
-      });
-
-      return {
-        rssi: toSignalSummary(
-          meshtasticAggregate._min.rxRssi,
-          meshtasticAggregate._max.rxRssi,
-          meshtasticAggregate._avg.rxRssi
-        ),
-        snr: toSignalSummary(
-          meshtasticAggregate._min.rxSnr,
-          meshtasticAggregate._max.rxSnr,
-          meshtasticAggregate._avg.rxSnr
-        ),
-        receiversCount: receivers.length > 0 ? receivers.length : null
-      };
+    if (
+      !config ||
+      typeof config.homeLat !== 'number' ||
+      !Number.isFinite(config.homeLat) ||
+      typeof config.homeLon !== 'number' ||
+      !Number.isFinite(config.homeLon) ||
+      typeof config.radiusMeters !== 'number' ||
+      !Number.isFinite(config.radiusMeters) ||
+      config.radiusMeters <= 0
+    ) {
+      return null;
     }
 
-    const lorawanAggregate = await this.prisma.rxMetadata.aggregate({
-      where: {
-        measurement: { sessionId }
-      },
-      _count: { _all: true },
-      _min: {
-        rssi: true,
-        snr: true
-      },
-      _max: {
-        rssi: true,
-        snr: true
-      },
-      _avg: {
+    return {
+      lat: config.homeLat,
+      lon: config.homeLon,
+      radiusMeters: config.radiusMeters
+    };
+  }
+
+  private async resolveSignalSummarySource(sessionId: string): Promise<SignalSummarySource> {
+    const [meshtasticCount, lorawanCount, measurementCount] = await Promise.all([
+      this.prisma.meshtasticRx.count({
+        where: {
+          measurement: { sessionId }
+        }
+      }),
+      this.prisma.rxMetadata.count({
+        where: {
+          measurement: { sessionId }
+        }
+      }),
+      this.prisma.measurement.count({
+        where: {
+          sessionId,
+          OR: [{ rssi: { not: null } }, { snr: { not: null } }]
+        }
+      })
+    ]);
+
+    if (meshtasticCount > 0) {
+      return 'meshtastic';
+    }
+    if (lorawanCount > 0) {
+      return 'lorawan';
+    }
+    if (measurementCount > 0) {
+      return 'measurement';
+    }
+    return null;
+  }
+
+  private async readSessionSignalPoints(
+    sessionId: string,
+    source: SignalSummarySource
+  ): Promise<SessionSignalPoint[]> {
+    if (source === 'meshtastic') {
+      return this.prisma.$queryRaw<SessionSignalPoint[]>(
+        Prisma.sql`
+          SELECT
+            m."id" AS "measurementId",
+            m."capturedAt",
+            m."lat",
+            m."lon",
+            mx."rxRssi" AS "rssi",
+            mx."rxSnr" AS "snr"
+          FROM "Measurement" m
+          LEFT JOIN "MeshtasticRx" mx ON mx."measurementId" = m."id"
+          WHERE m."sessionId" = ${sessionId}::uuid
+          ORDER BY m."capturedAt" ASC, m."id" ASC
+        `
+      );
+    }
+
+    if (source === 'lorawan') {
+      return this.prisma.$queryRaw<SessionSignalPoint[]>(
+        Prisma.sql`
+          WITH ranked AS (
+            SELECT
+              m."id" AS "measurementId",
+              m."capturedAt",
+              m."lat",
+              m."lon",
+              rx."rssi",
+              rx."snr",
+              row_number() OVER (
+                PARTITION BY m."id"
+                ORDER BY rx."snr" DESC NULLS LAST, rx."rssi" DESC NULLS LAST, rx."gatewayId" ASC
+              ) AS rn
+            FROM "Measurement" m
+            LEFT JOIN "RxMetadata" rx ON rx."measurementId" = m."id"
+            WHERE m."sessionId" = ${sessionId}::uuid
+          )
+          SELECT
+            "measurementId",
+            "capturedAt",
+            "lat",
+            "lon",
+            "rssi",
+            "snr"
+          FROM ranked
+          WHERE rn = 1
+          ORDER BY "capturedAt" ASC, "measurementId" ASC
+        `
+      );
+    }
+
+    return this.prisma.measurement.findMany({
+      where: { sessionId },
+      orderBy: [{ capturedAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        capturedAt: true,
+        lat: true,
+        lon: true,
         rssi: true,
         snr: true
       }
-    });
+    }).then((rows) =>
+      rows.map((row) => ({
+        measurementId: row.id,
+        capturedAt: row.capturedAt,
+        lat: row.lat,
+        lon: row.lon,
+        rssi: row.rssi,
+        snr: row.snr
+      }))
+    );
+  }
 
-    if (lorawanAggregate._count._all > 0) {
+  private async readReceiversCount(
+    sessionId: string,
+    source: SignalSummarySource
+  ): Promise<number | null> {
+    if (source === 'lorawan') {
       const receivers = await this.prisma.rxMetadata.groupBy({
         by: ['gatewayId'],
         where: {
           measurement: { sessionId }
         }
       });
-
-      return {
-        rssi: toSignalSummary(
-          lorawanAggregate._min.rssi,
-          lorawanAggregate._max.rssi,
-          lorawanAggregate._avg.rssi
-        ),
-        snr: toSignalSummary(
-          lorawanAggregate._min.snr,
-          lorawanAggregate._max.snr,
-          lorawanAggregate._avg.snr
-        ),
-        receiversCount: receivers.length > 0 ? receivers.length : null
-      };
+      return receivers.length > 0 ? receivers.length : null;
     }
-
-    const fallbackSignalCount = await this.prisma.measurement.count({
-      where: {
-        sessionId,
-        OR: [{ rssi: { not: null } }, { snr: { not: null } }]
-      }
-    });
-
-    if (fallbackSignalCount === 0) {
-      return {
-        rssi: null,
-        snr: null,
-        receiversCount: null
-      };
-    }
-
-    const fallbackAggregate = await this.prisma.measurement.aggregate({
-      where: { sessionId },
-      _min: {
-        rssi: true,
-        snr: true
-      },
-      _max: {
-        rssi: true,
-        snr: true
-      },
-      _avg: {
-        rssi: true,
-        snr: true
-      }
-    });
 
     const receivers = await this.prisma.measurement.groupBy({
       by: ['gatewayId'],
@@ -694,20 +791,7 @@ export class SessionsService {
         gatewayId: { not: null }
       }
     });
-
-    return {
-      rssi: toSignalSummary(
-        fallbackAggregate._min.rssi,
-        fallbackAggregate._max.rssi,
-        fallbackAggregate._avg.rssi
-      ),
-      snr: toSignalSummary(
-        fallbackAggregate._min.snr,
-        fallbackAggregate._max.snr,
-        fallbackAggregate._avg.snr
-      ),
-      receiversCount: receivers.length > 0 ? receivers.length : null
-    };
+    return receivers.length > 0 ? receivers.length : null;
   }
 
   private async resolveSignalSeriesSource(
@@ -973,22 +1057,122 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
   return earthRadiusMeters * c;
 }
 
-function toSignalSummary(
-  min: number | Prisma.Decimal | null | undefined,
-  max: number | Prisma.Decimal | null | undefined,
-  avg: number | Prisma.Decimal | null | undefined
-): SignalSummary | null {
-  const minValue = toNumeric(min);
-  const maxValue = toNumeric(max);
-  const avgValue = toNumeric(avg);
-  if (minValue === null && maxValue === null && avgValue === null) {
+function buildSessionRangeSummaryPoint(
+  points: SessionSignalPoint[],
+  home: SessionHomeSummary | null,
+  mode: 'farthest' | 'last'
+): SessionRangePointSummary | null {
+  if (!home || points.length === 0) {
     return null;
   }
+
+  let selected:
+    | {
+        point: SessionSignalPoint;
+        distanceMeters: number;
+      }
+    | null = null;
+
+  for (const point of points) {
+    if (
+      !Number.isFinite(point.lat) ||
+      !Number.isFinite(point.lon)
+    ) {
+      continue;
+    }
+
+    const distanceMeters = haversineMeters(home.lat, home.lon, point.lat, point.lon);
+    if (!Number.isFinite(distanceMeters)) {
+      continue;
+    }
+
+    if (mode === 'last') {
+      selected = {
+        point,
+        distanceMeters
+      };
+      continue;
+    }
+
+    if (!selected || distanceMeters > selected.distanceMeters) {
+      selected = {
+        point,
+        distanceMeters
+      };
+      continue;
+    }
+
+    if (distanceMeters === selected.distanceMeters) {
+      const selectedTime = selected.point.capturedAt.getTime();
+      const candidateTime = point.capturedAt.getTime();
+      if (candidateTime >= selectedTime) {
+        selected = {
+          point,
+          distanceMeters
+        };
+      }
+    }
+  }
+
+  if (!selected) {
+    return null;
+  }
+
   return {
-    min: minValue,
-    max: maxValue,
-    avg: avgValue
+    capturedAt: selected.point.capturedAt.toISOString(),
+    lat: selected.point.lat,
+    lon: selected.point.lon,
+    distanceMeters: selected.distanceMeters,
+    rssi:
+      typeof selected.point.rssi === 'number' && Number.isFinite(selected.point.rssi)
+        ? selected.point.rssi
+        : null,
+    snr:
+      typeof selected.point.snr === 'number' && Number.isFinite(selected.point.snr)
+        ? selected.point.snr
+        : null
   };
+}
+
+function buildSignalSummary(values: number[]): SignalSummary | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  let min = values[0];
+  let max = values[0];
+  let sum = 0;
+
+  for (const value of values) {
+    if (value < min) {
+      min = value;
+    }
+    if (value > max) {
+      max = value;
+    }
+    sum += value;
+  }
+
+  return {
+    min,
+    max,
+    avg: sum / values.length,
+    median: computeMedian(values)
+  };
+}
+
+function computeMedian(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const middleIndex = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[middleIndex];
+  }
+
+  return (sorted[middleIndex - 1] + sorted[middleIndex]) / 2;
 }
 
 function toNumeric(value: number | Prisma.Decimal | null | undefined): number | null {

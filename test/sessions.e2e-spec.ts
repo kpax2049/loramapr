@@ -33,6 +33,18 @@ describe('Sessions e2e', () => {
     });
     deviceId = device.id;
 
+    await prisma.deviceAutoSessionConfig.create({
+      data: {
+        deviceId,
+        enabled: true,
+        homeLat: 37.7695,
+        homeLon: -122.4295,
+        radiusMeters: 50,
+        minOutsideSeconds: 30,
+        minInsideSeconds: 120
+      }
+    });
+
     const session = await prisma.session.create({
       data: {
         deviceId,
@@ -124,10 +136,19 @@ describe('Sessions e2e', () => {
   });
 
   afterAll(async () => {
-    await prisma.measurement.deleteMany({ where: { sessionId: { in: [sessionId, signalSessionId] } } });
-    await prisma.session.deleteMany({ where: { id: { in: [sessionId, signalSessionId] } } });
-    await prisma.device.deleteMany({ where: { id: deviceId } });
-    await app.close();
+    if (prisma && deviceId) {
+      await prisma.deviceAutoSessionConfig.deleteMany({ where: { deviceId } });
+    }
+    if (prisma && (sessionId || signalSessionId)) {
+      await prisma.measurement.deleteMany({ where: { sessionId: { in: [sessionId, signalSessionId] } } });
+      await prisma.session.deleteMany({ where: { id: { in: [sessionId, signalSessionId] } } });
+    }
+    if (prisma && deviceId) {
+      await prisma.device.deleteMany({ where: { id: deviceId } });
+    }
+    if (app) {
+      await app.close();
+    }
   });
 
   it('timeline returns min/max/count for a session', async () => {
@@ -158,6 +179,26 @@ describe('Sessions e2e', () => {
     expect(response.body.items[0].capturedAt).toBe(cursor);
   });
 
+  it('overview returns a sampled full-session track', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/sessions/${sessionId}/overview?sample=2`)
+      .expect(200);
+
+    expect(response.body.sessionId).toBe(sessionId);
+    expect(response.body.items).toEqual([
+      {
+        capturedAt: timestamps.t0.toISOString(),
+        lat: 37.77,
+        lon: -122.43
+      },
+      {
+        capturedAt: timestamps.t2.toISOString(),
+        lat: 37.771,
+        lon: -122.431
+      }
+    ]);
+  });
+
   it('stats returns aggregate session metrics', async () => {
     const response = await request(app.getHttpServer())
       .get(`/api/sessions/${sessionId}/stats`)
@@ -178,8 +219,65 @@ describe('Sessions e2e', () => {
       maxLat: 37.771,
       maxLon: -122.43
     });
+    expect(response.body.home).toEqual({
+      lat: 37.7695,
+      lon: -122.4295,
+      radiusMeters: 50
+    });
+    expect(response.body.farthestPoint).toMatchObject({
+      capturedAt: timestamps.t2.toISOString(),
+      lat: 37.771,
+      lon: -122.431,
+      rssi: null,
+      snr: null
+    });
+    expect(response.body.farthestPoint.distanceMeters).toEqual(expect.any(Number));
+    expect(response.body.farthestPoint.distanceMeters).toBeGreaterThan(0);
+    expect(response.body.lastRangePoint).toMatchObject({
+      capturedAt: timestamps.t2.toISOString(),
+      lat: 37.771,
+      lon: -122.431,
+      rssi: null,
+      snr: null
+    });
     expect(response.body.rssi).toBeNull();
     expect(response.body.snr).toBeNull();
+    expect(response.body.signalSourceUsed).toBeNull();
+    expect(response.body.receiversCount).toBeNull();
+  });
+
+  it('stats returns range and edge signal summaries for signal sessions', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/sessions/${signalSessionId}/stats`)
+      .expect(200);
+
+    expect(response.body.sessionId).toBe(signalSessionId);
+    expect(response.body.pointCount).toBe(3);
+    expect(response.body.farthestPoint).toMatchObject({
+      capturedAt: signalTimestamps.t2.toISOString(),
+      lat: 37.7713,
+      lon: -122.4313,
+      rssi: -100,
+      snr: 0
+    });
+    expect(response.body.lastRangePoint).toMatchObject({
+      capturedAt: signalTimestamps.t2.toISOString(),
+      lat: 37.7713,
+      lon: -122.4313,
+      rssi: -100,
+      snr: 0
+    });
+    expect(response.body.rssi).toEqual({
+      min: -120,
+      max: -100,
+      avg: -110,
+      median: -110
+    });
+    expect(response.body.snr.min).toBe(-5);
+    expect(response.body.snr.max).toBe(0);
+    expect(response.body.snr.avg).toBeCloseTo(-8 / 3, 6);
+    expect(response.body.snr.median).toBe(-3);
+    expect(response.body.signalSourceUsed).toBe('measurement');
     expect(response.body.receiversCount).toBeNull();
   });
 
