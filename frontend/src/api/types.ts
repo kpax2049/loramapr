@@ -440,3 +440,39 @@ export type UnifiedEventDetail = {
   error: string | null;
   payloadJson: unknown;
 };
+
+export type RecoverSessionFromEventsPreview = {
+  selectedEventCount: number;
+  eligibleEventCount: number;
+  eligibleMeasurementCount: number;
+  alreadyAssignedEventCount: number;
+  incompatibleEventCount: number;
+  warningCount: number;
+  warnings: string[];
+  blockingErrors: string[];
+  canCreate: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  durationMs: number | null;
+  inferredDeviceId: string | null;
+  inferredDeviceUid: string | null;
+  inferredDeviceName: string | null;
+  mixedRawDevices: boolean;
+  mixedMeasurementDevices: boolean;
+  hasLargeTimeGap: boolean;
+  maxGapMs: number | null;
+  defaultSessionName: string | null;
+};
+
+export type RecoverSessionFromEventsResult = {
+  sessionId: string;
+  deviceId: string;
+  deviceUid: string | null;
+  sessionName: string | null;
+  selectedEventCount: number;
+  attachedEventCount: number;
+  attachedMeasurementCount: number;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+};

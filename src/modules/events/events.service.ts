@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma, WebhookEventSource } from '@prisma/client';
+import { BIN_SIZE_DEG } from '../coverage/coverage.constants';
 
 export type EventsSource = 'meshtastic' | 'lorawan' | 'agent' | 'sim';
 
@@ -60,6 +61,52 @@ export type EventsListResponse = {
   returnedCount: number;
   totalFilteredCount?: number;
 };
+
+export type RecoverSessionPreview = {
+  selectedEventCount: number;
+  eligibleEventCount: number;
+  eligibleMeasurementCount: number;
+  alreadyAssignedEventCount: number;
+  incompatibleEventCount: number;
+  warningCount: number;
+  warnings: string[];
+  blockingErrors: string[];
+  canCreate: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  durationMs: number | null;
+  inferredDeviceId: string | null;
+  inferredDeviceUid: string | null;
+  inferredDeviceName: string | null;
+  mixedRawDevices: boolean;
+  mixedMeasurementDevices: boolean;
+  hasLargeTimeGap: boolean;
+  maxGapMs: number | null;
+  defaultSessionName: string | null;
+};
+
+export type RecoverSessionResult = {
+  sessionId: string;
+  deviceId: string;
+  deviceUid: string | null;
+  sessionName: string | null;
+  selectedEventCount: number;
+  attachedEventCount: number;
+  attachedMeasurementCount: number;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+};
+
+type RecoverSessionSummaryInternal = RecoverSessionPreview & {
+  startAt: Date | null;
+  endAt: Date | null;
+  eligibleMeasurementIds: string[];
+  affectedDays: Date[];
+};
+
+const LARGE_SELECTION_GAP_MS = 20 * 60 * 1000;
+const MAX_RECOVERY_EVENT_IDS = 500;
 
 @Injectable()
 export class EventsService {
@@ -246,6 +293,655 @@ export class EventsService {
       payloadJson: row.payloadJson
     };
   }
+
+  async previewRecoverSessionFromEvents(params: {
+    eventIds: string[];
+    ownerId?: string;
+  }): Promise<RecoverSessionPreview> {
+    return this.prisma.$transaction(async (tx) => {
+      const summary = await this.buildRecoverSessionSummary(tx, params);
+      return toRecoverSessionPreview(summary);
+    });
+  }
+
+  async createSessionFromSelectedEvents(params: {
+    eventIds: string[];
+    ownerId?: string;
+    name?: string;
+    notes?: string;
+  }): Promise<RecoverSessionResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const summary = await this.buildRecoverSessionSummary(tx, params);
+
+      if (!summary.canCreate) {
+        throw new BadRequestException(summary.blockingErrors.join(' '));
+      }
+      if (!summary.startAt || !summary.endAt || !summary.inferredDeviceId) {
+        throw new BadRequestException('Could not infer a valid session window and device');
+      }
+
+      const createdSession = await tx.session.create({
+        data: {
+          deviceId: summary.inferredDeviceId,
+          name: normalizeOptionalText(params.name) ?? summary.defaultSessionName ?? undefined,
+          notes: normalizeOptionalText(params.notes),
+          startedAt: summary.startAt,
+          endedAt: summary.endAt
+        },
+        select: {
+          id: true,
+          deviceId: true,
+          name: true
+        }
+      });
+
+      const updated = await tx.measurement.updateMany({
+        where: {
+          id: { in: summary.eligibleMeasurementIds },
+          sessionId: null
+        },
+        data: {
+          sessionId: createdSession.id
+        }
+      });
+
+      if (updated.count !== summary.eligibleMeasurementIds.length) {
+        throw new BadRequestException(
+          'Selected events changed while recovering. Refresh the selection and try again.'
+        );
+      }
+
+      await this.rebuildCoverageBinsForRecoveredSession(tx, {
+        deviceId: createdSession.deviceId,
+        newSessionId: createdSession.id,
+        affectedDays: summary.affectedDays
+      });
+
+      const attachedEventCount = summary.eligibleEventCount;
+      const attachedMeasurementCount = summary.eligibleMeasurementCount;
+      const durationMs = Math.max(0, summary.endAt.getTime() - summary.startAt.getTime());
+
+      return {
+        sessionId: createdSession.id,
+        deviceId: createdSession.deviceId,
+        deviceUid: summary.inferredDeviceUid,
+        sessionName: createdSession.name ?? null,
+        selectedEventCount: summary.selectedEventCount,
+        attachedEventCount,
+        attachedMeasurementCount,
+        startTime: summary.startAt.toISOString(),
+        endTime: summary.endAt.toISOString(),
+        durationMs
+      };
+    });
+  }
+
+  private async buildRecoverSessionSummary(
+    tx: Prisma.TransactionClient,
+    params: { eventIds: string[]; ownerId?: string }
+  ): Promise<RecoverSessionSummaryInternal> {
+    const eventIds = normalizeEventIdSelection(params.eventIds);
+
+    const events = await tx.webhookEvent.findMany({
+      where: {
+        id: { in: eventIds }
+      },
+      select: {
+        id: true,
+        receivedAt: true,
+        deviceUid: true
+      }
+    });
+
+    if (events.length !== eventIds.length) {
+      const foundIds = new Set(events.map((event) => event.id));
+      const missing = eventIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `Some selected events were not found: ${missing.slice(0, 5).join(', ')}`
+      );
+    }
+
+    const eventById = new Map(events.map((event) => [event.id, event]));
+    const orderedEvents = eventIds.map((id) => eventById.get(id)).filter(Boolean) as Array<{
+      id: string;
+      receivedAt: Date;
+      deviceUid: string | null;
+    }>;
+
+    const measurements = await tx.measurement.findMany({
+      where: {
+        sourceEventId: {
+          in: eventIds
+        }
+      },
+      select: {
+        id: true,
+        sourceEventId: true,
+        sessionId: true,
+        deviceId: true,
+        capturedAt: true,
+        lat: true,
+        lon: true,
+        gatewayId: true,
+        rssi: true,
+        snr: true,
+        device: {
+          select: {
+            id: true,
+            deviceUid: true,
+            name: true,
+            ownerId: true
+          }
+        }
+      }
+    });
+
+    const measurementsByEventId = new Map<string, typeof measurements>();
+    for (const measurement of measurements) {
+      const sourceEventId = measurement.sourceEventId;
+      if (!sourceEventId) {
+        continue;
+      }
+      const current = measurementsByEventId.get(sourceEventId);
+      if (current) {
+        current.push(measurement);
+      } else {
+        measurementsByEventId.set(sourceEventId, [measurement]);
+      }
+    }
+
+    await this.assertRecoverSelectionOwnerScope(tx, {
+      ownerId: params.ownerId,
+      selectedEvents: orderedEvents,
+      measurementsByEventId
+    });
+
+    let earliest: Date | null = null;
+    let latest: Date | null = null;
+    for (const event of orderedEvents) {
+      if (!earliest || event.receivedAt < earliest) {
+        earliest = event.receivedAt;
+      }
+      if (!latest || event.receivedAt > latest) {
+        latest = event.receivedAt;
+      }
+    }
+
+    const alreadyAssignedEventIds = new Set<string>();
+    const incompatibleEventIds = new Set<string>();
+    const eligibleMeasurements: typeof measurements = [];
+    const eligibleEventIds = new Set<string>();
+
+    for (const event of orderedEvents) {
+      const eventMeasurements = measurementsByEventId.get(event.id) ?? [];
+      if (eventMeasurements.length === 0) {
+        incompatibleEventIds.add(event.id);
+        continue;
+      }
+
+      let hasAssigned = false;
+      for (const measurement of eventMeasurements) {
+        if (measurement.sessionId) {
+          hasAssigned = true;
+        } else {
+          eligibleMeasurements.push(measurement);
+          eligibleEventIds.add(event.id);
+        }
+      }
+      if (hasAssigned) {
+        alreadyAssignedEventIds.add(event.id);
+      }
+    }
+
+    const eligibleMeasurementIds = eligibleMeasurements.map((measurement) => measurement.id);
+
+    const eligibleDeviceIds = new Set(eligibleMeasurements.map((measurement) => measurement.deviceId));
+    const mixedMeasurementDevices = eligibleDeviceIds.size > 1;
+    const inferredDevice =
+      eligibleMeasurements.length > 0 && eligibleDeviceIds.size === 1
+        ? eligibleMeasurements[0].device
+        : null;
+
+    const rawDeviceUids = new Set(
+      orderedEvents
+        .map((event) => normalizeOptionalText(event.deviceUid))
+        .filter((value): value is string => Boolean(value))
+    );
+    const mixedRawDevices = rawDeviceUids.size > 1;
+
+    const maxGapMs = computeMaxGapMs(orderedEvents);
+    const hasLargeTimeGap = maxGapMs !== null && maxGapMs >= LARGE_SELECTION_GAP_MS;
+
+    const warnings: string[] = [];
+    if (alreadyAssignedEventIds.size > 0) {
+      warnings.push(
+        `${alreadyAssignedEventIds.size} selected event${alreadyAssignedEventIds.size === 1 ? '' : 's'} already assigned to another session`
+      );
+    }
+    if (incompatibleEventIds.size > 0) {
+      warnings.push(
+        `${incompatibleEventIds.size} selected event${incompatibleEventIds.size === 1 ? '' : 's'} have no usable location measurement`
+      );
+    }
+    if (mixedRawDevices) {
+      warnings.push('Selection includes multiple raw device identifiers');
+    }
+    if (hasLargeTimeGap && maxGapMs !== null) {
+      warnings.push(`Selection includes a large internal time gap (${formatDuration(maxGapMs)})`);
+    }
+
+    const blockingErrors: string[] = [];
+    if (alreadyAssignedEventIds.size > 0) {
+      blockingErrors.push(
+        'Some selected events are already assigned to another session. Adjust selection and retry.'
+      );
+    }
+    if (eligibleMeasurements.length === 0) {
+      blockingErrors.push('No usable route/location events found in this selection.');
+    }
+    if (mixedMeasurementDevices) {
+      blockingErrors.push('Selected events resolve to multiple devices. Use a single-device range.');
+    }
+
+    const durationMs =
+      earliest && latest ? Math.max(0, latest.getTime() - earliest.getTime()) : null;
+    const affectedDays = Array.from(
+      new Set(
+        eligibleMeasurements
+          .map((measurement) => startOfUtcDay(measurement.capturedAt).toISOString())
+      )
+    ).map((isoValue) => new Date(isoValue));
+
+    const preview: RecoverSessionSummaryInternal = {
+      selectedEventCount: orderedEvents.length,
+      eligibleEventCount: eligibleEventIds.size,
+      eligibleMeasurementCount: eligibleMeasurements.length,
+      alreadyAssignedEventCount: alreadyAssignedEventIds.size,
+      incompatibleEventCount: incompatibleEventIds.size,
+      warningCount: warnings.length,
+      warnings,
+      blockingErrors,
+      canCreate: blockingErrors.length === 0,
+      startTime: earliest ? earliest.toISOString() : null,
+      endTime: latest ? latest.toISOString() : null,
+      durationMs,
+      inferredDeviceId: inferredDevice?.id ?? null,
+      inferredDeviceUid: inferredDevice?.deviceUid ?? null,
+      inferredDeviceName: inferredDevice?.name ?? null,
+      mixedRawDevices,
+      mixedMeasurementDevices,
+      hasLargeTimeGap,
+      maxGapMs,
+      defaultSessionName:
+        earliest && latest ? buildRecoverDefaultSessionName(earliest, latest) : null,
+      startAt: earliest,
+      endAt: latest,
+      eligibleMeasurementIds,
+      affectedDays
+    };
+
+    return preview;
+  }
+
+  private async assertRecoverSelectionOwnerScope(
+    tx: Prisma.TransactionClient,
+    params: {
+      ownerId?: string;
+      selectedEvents: Array<{
+        id: string;
+        receivedAt: Date;
+        deviceUid: string | null;
+      }>;
+      measurementsByEventId: Map<
+        string,
+        Array<{
+          id: string;
+          sourceEventId: string | null;
+          sessionId: string | null;
+          deviceId: string;
+          capturedAt: Date;
+          lat: number;
+          lon: number;
+          gatewayId: string | null;
+          rssi: number | null;
+          snr: number | null;
+          device: {
+            id: string;
+            deviceUid: string;
+            name: string | null;
+            ownerId: string | null;
+          };
+        }>
+      >;
+    }
+  ): Promise<void> {
+    if (!params.ownerId) {
+      return;
+    }
+
+    const eventDeviceUids = Array.from(
+      new Set(
+        params.selectedEvents
+          .map((event) => normalizeOptionalText(event.deviceUid))
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    const devices = eventDeviceUids.length
+      ? await tx.device.findMany({
+          where: {
+            deviceUid: { in: eventDeviceUids }
+          },
+          select: {
+            deviceUid: true,
+            ownerId: true
+          }
+        })
+      : [];
+    const ownerByDeviceUid = new Map(devices.map((device) => [device.deviceUid, device.ownerId]));
+
+    for (const event of params.selectedEvents) {
+      const ownerCandidates = new Set<string | null>();
+      const measurements = params.measurementsByEventId.get(event.id) ?? [];
+      for (const measurement of measurements) {
+        ownerCandidates.add(measurement.device.ownerId ?? null);
+      }
+
+      const eventDeviceUid = normalizeOptionalText(event.deviceUid);
+      if (eventDeviceUid) {
+        ownerCandidates.add(ownerByDeviceUid.get(eventDeviceUid) ?? null);
+      }
+
+      if (ownerCandidates.size === 0) {
+        throw new BadRequestException(
+          `Could not verify ownership for selected event ${event.id}`
+        );
+      }
+      if (
+        Array.from(ownerCandidates).some(
+          (ownerCandidate) => ownerCandidate !== params.ownerId
+        )
+      ) {
+        throw new BadRequestException(
+          'Selected events include data outside the current owner scope'
+        );
+      }
+    }
+  }
+
+  private async rebuildCoverageBinsForRecoveredSession(
+    tx: Prisma.TransactionClient,
+    params: {
+      deviceId: string;
+      newSessionId: string;
+      affectedDays: Date[];
+    }
+  ): Promise<void> {
+    if (params.affectedDays.length === 0) {
+      return;
+    }
+
+    for (const day of params.affectedDays) {
+      const dayStart = startOfUtcDay(day);
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+      await tx.coverageBin.deleteMany({
+        where: {
+          deviceId: params.deviceId,
+          day: dayStart,
+          OR: [{ sessionId: null }, { sessionId: params.newSessionId }]
+        }
+      });
+
+      const measurements = await tx.measurement.findMany({
+        where: {
+          deviceId: params.deviceId,
+          capturedAt: { gte: dayStart, lt: dayEnd },
+          OR: [{ sessionId: null }, { sessionId: params.newSessionId }]
+        },
+        select: {
+          sessionId: true,
+          gatewayId: true,
+          lat: true,
+          lon: true,
+          rssi: true,
+          snr: true
+        }
+      });
+
+      if (measurements.length === 0) {
+        continue;
+      }
+
+      const aggregates = new Map<
+        string,
+        {
+          sessionId: string | null;
+          gatewayId: string | null;
+          latBin: number;
+          lonBin: number;
+          count: number;
+          rssiSum: number;
+          rssiCount: number;
+          rssiMin: number | null;
+          rssiMax: number | null;
+          snrSum: number;
+          snrCount: number;
+          snrMin: number | null;
+          snrMax: number | null;
+        }
+      >();
+
+      for (const measurement of measurements) {
+        const latBin = Math.floor(measurement.lat / BIN_SIZE_DEG);
+        const lonBin = Math.floor(measurement.lon / BIN_SIZE_DEG);
+        const key = [
+          measurement.sessionId ?? 'null',
+          measurement.gatewayId ?? 'null',
+          latBin,
+          lonBin
+        ].join('|');
+        const existing = aggregates.get(key);
+        const aggregate =
+          existing ??
+          {
+            sessionId: measurement.sessionId,
+            gatewayId: measurement.gatewayId,
+            latBin,
+            lonBin,
+            count: 0,
+            rssiSum: 0,
+            rssiCount: 0,
+            rssiMin: null,
+            rssiMax: null,
+            snrSum: 0,
+            snrCount: 0,
+            snrMin: null,
+            snrMax: null
+          };
+
+        aggregate.count += 1;
+        if (typeof measurement.rssi === 'number' && Number.isFinite(measurement.rssi)) {
+          aggregate.rssiSum += measurement.rssi;
+          aggregate.rssiCount += 1;
+          aggregate.rssiMin =
+            aggregate.rssiMin === null
+              ? measurement.rssi
+              : Math.min(aggregate.rssiMin, measurement.rssi);
+          aggregate.rssiMax =
+            aggregate.rssiMax === null
+              ? measurement.rssi
+              : Math.max(aggregate.rssiMax, measurement.rssi);
+        }
+        if (typeof measurement.snr === 'number' && Number.isFinite(measurement.snr)) {
+          aggregate.snrSum += measurement.snr;
+          aggregate.snrCount += 1;
+          aggregate.snrMin =
+            aggregate.snrMin === null
+              ? measurement.snr
+              : Math.min(aggregate.snrMin, measurement.snr);
+          aggregate.snrMax =
+            aggregate.snrMax === null
+              ? measurement.snr
+              : Math.max(aggregate.snrMax, measurement.snr);
+        }
+
+        if (!existing) {
+          aggregates.set(key, aggregate);
+        }
+      }
+
+      const rows = Array.from(aggregates.values()).map((aggregate) => ({
+        deviceId: params.deviceId,
+        sessionId: aggregate.sessionId,
+        gatewayId: aggregate.gatewayId,
+        day: dayStart,
+        latBin: aggregate.latBin,
+        lonBin: aggregate.lonBin,
+        count: aggregate.count,
+        rssiAvg:
+          aggregate.rssiCount > 0 ? aggregate.rssiSum / aggregate.rssiCount : null,
+        snrAvg:
+          aggregate.snrCount > 0 ? aggregate.snrSum / aggregate.snrCount : null,
+        rssiMin: aggregate.rssiMin,
+        rssiMax: aggregate.rssiMax,
+        snrMin: aggregate.snrMin,
+        snrMax: aggregate.snrMax
+      }));
+
+      await tx.coverageBin.createMany({
+        data: rows
+      });
+    }
+  }
+}
+
+function toRecoverSessionPreview(
+  summary: RecoverSessionSummaryInternal
+): RecoverSessionPreview {
+  return {
+    selectedEventCount: summary.selectedEventCount,
+    eligibleEventCount: summary.eligibleEventCount,
+    eligibleMeasurementCount: summary.eligibleMeasurementCount,
+    alreadyAssignedEventCount: summary.alreadyAssignedEventCount,
+    incompatibleEventCount: summary.incompatibleEventCount,
+    warningCount: summary.warningCount,
+    warnings: summary.warnings,
+    blockingErrors: summary.blockingErrors,
+    canCreate: summary.canCreate,
+    startTime: summary.startTime,
+    endTime: summary.endTime,
+    durationMs: summary.durationMs,
+    inferredDeviceId: summary.inferredDeviceId,
+    inferredDeviceUid: summary.inferredDeviceUid,
+    inferredDeviceName: summary.inferredDeviceName,
+    mixedRawDevices: summary.mixedRawDevices,
+    mixedMeasurementDevices: summary.mixedMeasurementDevices,
+    hasLargeTimeGap: summary.hasLargeTimeGap,
+    maxGapMs: summary.maxGapMs,
+    defaultSessionName: summary.defaultSessionName
+  };
+}
+
+function normalizeEventIdSelection(eventIds: string[]): string[] {
+  if (!Array.isArray(eventIds) || eventIds.length === 0) {
+    throw new BadRequestException('eventIds must include at least one event id');
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const rawEventId of eventIds) {
+    if (typeof rawEventId !== 'string') {
+      continue;
+    }
+    const trimmed = rawEventId.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+
+  if (normalized.length === 0) {
+    throw new BadRequestException('eventIds must include at least one valid event id');
+  }
+  if (normalized.length > MAX_RECOVERY_EVENT_IDS) {
+    throw new BadRequestException(
+      `eventIds cannot exceed ${MAX_RECOVERY_EVENT_IDS} entries`
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeOptionalText(value: string | null | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function computeMaxGapMs(
+  events: Array<{
+    id: string;
+    receivedAt: Date;
+    deviceUid: string | null;
+  }>
+): number | null {
+  if (events.length < 2) {
+    return null;
+  }
+  const ordered = [...events].sort((left, right) => {
+    const leftMs = left.receivedAt.getTime();
+    const rightMs = right.receivedAt.getTime();
+    if (leftMs === rightMs) {
+      return left.id.localeCompare(right.id);
+    }
+    return leftMs - rightMs;
+  });
+
+  let maxGap = 0;
+  for (let index = 1; index < ordered.length; index += 1) {
+    const gap = ordered[index].receivedAt.getTime() - ordered[index - 1].receivedAt.getTime();
+    if (gap > maxGap) {
+      maxGap = gap;
+    }
+  }
+
+  return maxGap > 0 ? maxGap : null;
+}
+
+function formatDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+function buildRecoverDefaultSessionName(startAt: Date, endAt: Date): string {
+  const startIso = startAt.toISOString();
+  const endIso = endAt.toISOString();
+  const startDay = startIso.slice(0, 10);
+  const startClock = startIso.slice(11, 16);
+  const endDay = endIso.slice(0, 10);
+  const endClock = endIso.slice(11, 16);
+
+  if (startDay === endDay) {
+    return `Recovered ${startDay} ${startClock}-${endClock} UTC`;
+  }
+  return `Recovered ${startDay} ${startClock} to ${endDay} ${endClock} UTC`;
+}
+
+function startOfUtcDay(value: Date): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
 }
 
 function buildWhereClause(params: ListEventsParams): Prisma.WebhookEventWhereInput | undefined {

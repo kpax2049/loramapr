@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { List, type RowComponentProps } from 'react-window';
-import { getUnifiedEventById } from '../api/endpoints';
+import {
+  createSessionFromEventSelection,
+  getUnifiedEventById,
+  previewSessionRecoveryFromEvents
+} from '../api/endpoints';
 import { ApiError } from '../api/http';
 import { useDevices } from '../query/hooks';
 import { useUnifiedEvent, useUnifiedEvents } from '../query/events';
-import type { UnifiedEventDetail, UnifiedEventListItem, UnifiedEventSource } from '../api/types';
+import type {
+  RecoverSessionFromEventsPreview,
+  RecoverSessionFromEventsResult,
+  UnifiedEventDetail,
+  UnifiedEventListItem,
+  UnifiedEventSource
+} from '../api/types';
 import { applyEventsNavigationParams, readEventsNavigationParams } from '../utils/eventsNavigation';
 import type { EventsNavigationInput } from '../utils/eventsNavigation';
 
@@ -16,6 +26,7 @@ type EventsExplorerPanelProps = {
   navigationRequest: EventsNavigationInput | null;
   onSelectEventForMap?: (event: UnifiedEventListItem) => void;
   onDeviceFilterChange?: (deviceUid: string | null) => void;
+  onOpenRecoveredSession?: (result: RecoverSessionFromEventsResult) => void;
 };
 
 type TimePreset = 'last15m' | 'last1h' | 'last24h' | 'custom';
@@ -74,7 +85,16 @@ const TIME_PRESETS: Array<{ value: TimePreset; label: string }> = [
   { value: 'custom', label: 'Custom' }
 ];
 
-const EVENT_COLUMN_HEADERS = ['Time', 'Source', 'Device', 'Portnum', 'rxRssi', 'rxSnr', 'Summary'] as const;
+const EVENT_COLUMN_HEADERS = [
+  'Select',
+  'Time',
+  'Source',
+  'Device',
+  'Portnum',
+  'rxRssi',
+  'rxSnr',
+  'Summary'
+] as const;
 const EVENTS_FILTERS_STORAGE_KEY = 'eventsExplorer:lastFilters:v1';
 const EVENTS_SAVED_VIEWS_STORAGE_KEY = 'eventsExplorer:savedViews:v1';
 const QUICK_PORTNUM_CHIPS = ['POSITION_APP', 'TELEMETRY_APP', 'NODEINFO_APP'] as const;
@@ -260,6 +280,35 @@ function formatTimestamp(value: string | null | undefined): string {
   return parsed.toLocaleString();
 }
 
+function formatDurationLabel(durationMs: number | null | undefined): string {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
+    return '—';
+  }
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+function areSameStringArray(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function toDateTimeLocalValue(value: string | undefined): string {
   if (!value) {
     return '';
@@ -314,7 +363,9 @@ function buildRequestId(error: unknown): string | null {
 type EventVirtualRowProps = {
   events: UnifiedEventListItem[];
   selectedEventId: string | null;
-  onSelectEvent: (event: UnifiedEventListItem) => void;
+  selectedRecoveryEventIds: Set<string>;
+  onSelectEvent: (event: UnifiedEventListItem, options?: { shiftKey?: boolean }) => void;
+  onToggleRecoverySelection: (event: UnifiedEventListItem, options?: { shiftKey?: boolean }) => void;
   onPrefetchDetail: (eventId: string) => void;
 };
 
@@ -324,21 +375,24 @@ function EventsVirtualRow({
   style,
   events,
   selectedEventId,
+  selectedRecoveryEventIds,
   onSelectEvent,
+  onToggleRecoverySelection,
   onPrefetchDetail
 }: RowComponentProps<EventVirtualRowProps>) {
   const item = events[index];
   if (!item) {
     return null;
   }
+  const inRecoverySelection = selectedRecoveryEventIds.has(item.id);
   return (
     <div
       style={style}
       {...ariaAttributes}
       role="row"
       aria-selected={selectedEventId === item.id}
-      className={`events-explorer__virtual-row events-explorer__row ${selectedEventId === item.id ? 'is-selected' : ''}`}
-      onClick={() => onSelectEvent(item)}
+      className={`events-explorer__virtual-row events-explorer__row ${selectedEventId === item.id ? 'is-selected' : ''} ${inRecoverySelection ? 'is-range-selected' : ''}`}
+      onClick={(event) => onSelectEvent(item, { shiftKey: event.shiftKey })}
       onMouseEnter={() => onPrefetchDetail(item.id)}
       onFocus={() => onPrefetchDetail(item.id)}
       onKeyDown={(event) => {
@@ -349,6 +403,18 @@ function EventsVirtualRow({
       }}
       tabIndex={0}
     >
+      <div role="cell">
+        <input
+          type="checkbox"
+          checked={inRecoverySelection}
+          readOnly
+          aria-label={`Select event ${item.id} for recovered session`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleRecoverySelection(item, { shiftKey: event.shiftKey });
+          }}
+        />
+      </div>
       <div role="cell">{formatTimestamp(item.receivedAt)}</div>
       <div role="cell">{item.source}</div>
       <div role="cell">{item.deviceUid ?? '—'}</div>
@@ -913,7 +979,8 @@ export default function EventsExplorerPanel({
   navigationNonce,
   navigationRequest,
   onSelectEventForMap,
-  onDeviceFilterChange
+  onDeviceFilterChange,
+  onOpenRecoveredSession
 }: EventsExplorerPanelProps) {
   const queryClient = useQueryClient();
   const [source, setSource] = useState<'' | UnifiedEventSource>('');
@@ -931,6 +998,20 @@ export default function EventsExplorerPanel({
   const [detailSwapPending, setDetailSwapPending] = useState(false);
   const [allowHugePayloadRender, setAllowHugePayloadRender] = useState(false);
   const [copyEventIdState, setCopyEventIdState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [recoverySelectionIds, setRecoverySelectionIds] = useState<string[]>([]);
+  const [recoveryAnchorEventId, setRecoveryAnchorEventId] = useState<string | null>(null);
+  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false);
+  const [recoveryPreview, setRecoveryPreview] = useState<RecoverSessionFromEventsPreview | null>(
+    null
+  );
+  const [recoveryPreviewLoading, setRecoveryPreviewLoading] = useState(false);
+  const [recoveryPreviewError, setRecoveryPreviewError] = useState<string | null>(null);
+  const [recoverySessionName, setRecoverySessionName] = useState('');
+  const [recoverySessionNameEdited, setRecoverySessionNameEdited] = useState(false);
+  const [recoveryNotes, setRecoveryNotes] = useState('');
+  const [recoveryCreatePending, setRecoveryCreatePending] = useState(false);
+  const [recoveryCreateError, setRecoveryCreateError] = useState<string | null>(null);
+  const [recoveryToast, setRecoveryToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !isActive) {
@@ -992,6 +1073,12 @@ export default function EventsExplorerPanel({
     setSelectedEventId(requestedEventId || null);
     setDetailEventId(requestedEventId || null);
     setDetailSwapPending(false);
+    setRecoverySelectionIds([]);
+    setRecoveryAnchorEventId(null);
+    setRecoveryModalOpen(false);
+    setRecoveryPreview(null);
+    setRecoveryPreviewError(null);
+    setRecoveryCreateError(null);
   }, [navigationNonce, navigationRequest, isActive]);
 
   const devicesQuery = useDevices(true, { enabled: isActive && hasQueryApiKey });
@@ -1005,7 +1092,14 @@ export default function EventsExplorerPanel({
     Number(quickFilters.hasTelemetry) +
     Number(quickFilters.hasNodeInfo);
   const isSmallRange = timePreset === 'last15m' || timePreset === 'last1h';
-  const refreshInterval = isActive && hasQueryApiKey && isSmallRange ? AUTO_REFRESH_MS : false;
+  const refreshInterval =
+    isActive &&
+    hasQueryApiKey &&
+    isSmallRange &&
+    recoverySelectionIds.length === 0 &&
+    !recoveryModalOpen
+      ? AUTO_REFRESH_MS
+      : false;
   const refreshEnabled = typeof refreshInterval === 'number';
 
   const range = useMemo(() => {
@@ -1092,6 +1186,15 @@ export default function EventsExplorerPanel({
     () => fetchedEvents.filter((item) => matchesQuickFilters(item, quickFilters)),
     [fetchedEvents, quickFilters]
   );
+  const recoverySelectionSet = useMemo(
+    () => new Set(recoverySelectionIds),
+    [recoverySelectionIds]
+  );
+  const selectedRecoveryEvents = useMemo(
+    () => events.filter((item) => recoverySelectionSet.has(item.id)),
+    [events, recoverySelectionSet]
+  );
+  const selectedRecoveryCount = selectedRecoveryEvents.length;
 
   const portnumOptions = useMemo(() => {
     const values = new Set<string>();
@@ -1272,6 +1375,45 @@ export default function EventsExplorerPanel({
     setCopyEventIdState('idle');
   }, [selectedEventId]);
 
+  useEffect(() => {
+    const visibleIds = new Set(events.map((event) => event.id));
+    setRecoverySelectionIds((current) => {
+      const filtered = current.filter((id) => visibleIds.has(id));
+      return areSameStringArray(current, filtered) ? current : filtered;
+    });
+    setRecoveryAnchorEventId((current) => (current && visibleIds.has(current) ? current : null));
+  }, [events]);
+
+  useEffect(() => {
+    if (!recoveryModalOpen) {
+      return;
+    }
+    if (recoverySelectionIds.length > 0) {
+      return;
+    }
+    setRecoveryModalOpen(false);
+    setRecoveryPreview(null);
+    setRecoveryPreviewError(null);
+    setRecoveryCreateError(null);
+  }, [recoveryModalOpen, recoverySelectionIds]);
+
+  useEffect(() => {
+    if (!recoveryModalOpen || recoverySelectionIds.length === 0) {
+      return;
+    }
+    void fetchRecoveryPreview(recoverySelectionIds, { preserveEditedName: true });
+  }, [recoveryModalOpen, recoverySelectionIds.join(',')]);
+
+  useEffect(() => {
+    if (!recoveryToast) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setRecoveryToast(null);
+    }, 3200);
+    return () => window.clearTimeout(handle);
+  }, [recoveryToast]);
+
   const handlePrefetchDetail = (eventId: string) => {
     if (!hasQueryApiKey) {
       return;
@@ -1281,6 +1423,122 @@ export default function EventsExplorerPanel({
       queryFn: ({ signal }) => getUnifiedEventById(eventId, { signal }),
       staleTime: 30_000
     });
+  };
+
+  const fetchRecoveryPreview = async (
+    eventIds: string[],
+    options?: { preserveEditedName?: boolean }
+  ) => {
+    if (eventIds.length === 0) {
+      return;
+    }
+    setRecoveryPreviewLoading(true);
+    setRecoveryPreviewError(null);
+    try {
+      const preview = await previewSessionRecoveryFromEvents({ eventIds });
+      setRecoveryPreview(preview);
+      if (!options?.preserveEditedName || !recoverySessionNameEdited) {
+        setRecoverySessionName(preview.defaultSessionName ?? '');
+      }
+    } catch (error) {
+      const requestId = buildRequestId(error);
+      const baseMessage =
+        error instanceof ApiError ? error.message : 'Failed to validate selected events';
+      setRecoveryPreviewError(requestId ? `${baseMessage} (X-Request-Id: ${requestId})` : baseMessage);
+      setRecoveryPreview(null);
+    } finally {
+      setRecoveryPreviewLoading(false);
+    }
+  };
+
+  const computeContiguousSelection = (anchorEventId: string, targetEventId: string): string[] => {
+    const anchorIndex = events.findIndex((event) => event.id === anchorEventId);
+    const targetIndex = events.findIndex((event) => event.id === targetEventId);
+    if (anchorIndex < 0 || targetIndex < 0) {
+      return [targetEventId];
+    }
+    const start = Math.min(anchorIndex, targetIndex);
+    const end = Math.max(anchorIndex, targetIndex);
+    return events.slice(start, end + 1).map((event) => event.id);
+  };
+
+  const handleToggleRecoverySelection = (
+    eventItem: UnifiedEventListItem,
+    options?: { shiftKey?: boolean }
+  ) => {
+    const shiftKey = Boolean(options?.shiftKey);
+    if (shiftKey && recoveryAnchorEventId) {
+      setRecoverySelectionIds(computeContiguousSelection(recoveryAnchorEventId, eventItem.id));
+      return;
+    }
+
+    if (recoverySelectionIds.length === 1 && recoverySelectionIds[0] === eventItem.id) {
+      setRecoverySelectionIds([]);
+      setRecoveryAnchorEventId(null);
+      return;
+    }
+
+    setRecoverySelectionIds([eventItem.id]);
+    setRecoveryAnchorEventId(eventItem.id);
+  };
+
+  const handleOpenRecoveryModal = () => {
+    if (recoverySelectionIds.length === 0) {
+      return;
+    }
+    setRecoveryModalOpen(true);
+    setRecoveryPreview(null);
+    setRecoveryPreviewError(null);
+    setRecoveryCreateError(null);
+    setRecoverySessionName('');
+    setRecoverySessionNameEdited(false);
+    setRecoveryNotes('');
+    void fetchRecoveryPreview(recoverySelectionIds, { preserveEditedName: false });
+  };
+
+  const handleCloseRecoveryModal = () => {
+    if (recoveryCreatePending) {
+      return;
+    }
+    setRecoveryModalOpen(false);
+    setRecoveryPreviewError(null);
+    setRecoveryCreateError(null);
+  };
+
+  const handleCreateRecoveredSession = async () => {
+    if (!recoveryPreview || !recoveryPreview.canCreate || recoverySelectionIds.length === 0) {
+      return;
+    }
+    setRecoveryCreatePending(true);
+    setRecoveryCreateError(null);
+    try {
+      const result = await createSessionFromEventSelection({
+        eventIds: recoverySelectionIds,
+        name: recoverySessionName.trim() || undefined,
+        notes: recoveryNotes.trim() || undefined
+      });
+      setRecoveryModalOpen(false);
+      setRecoverySelectionIds([]);
+      setRecoveryAnchorEventId(null);
+      setRecoveryPreview(null);
+      setRecoveryPreviewError(null);
+      setRecoveryNotes('');
+      setRecoverySessionNameEdited(false);
+      setRecoveryToast(
+        `Recovered session created (${result.attachedEventCount} events attached).`
+      );
+      void queryClient.invalidateQueries({ queryKey: ['sessions', result.deviceId] });
+      void queryClient.invalidateQueries({ queryKey: ['session', result.sessionId] });
+      void queryClient.invalidateQueries({ queryKey: ['sessionStats', result.sessionId] });
+      onOpenRecoveredSession?.(result);
+    } catch (error) {
+      const requestId = buildRequestId(error);
+      const baseMessage =
+        error instanceof ApiError ? error.message : 'Failed to create recovered session';
+      setRecoveryCreateError(requestId ? `${baseMessage} (X-Request-Id: ${requestId})` : baseMessage);
+    } finally {
+      setRecoveryCreatePending(false);
+    }
   };
 
   const handleDeviceInputChange = (value: string) => {
@@ -1367,7 +1625,13 @@ export default function EventsExplorerPanel({
     writeSavedEventsViews(nextViews);
   };
 
-  const handleSelectEvent = (eventItem: UnifiedEventListItem) => {
+  const handleSelectEvent = (
+    eventItem: UnifiedEventListItem,
+    options?: { shiftKey?: boolean }
+  ) => {
+    if (options?.shiftKey) {
+      handleToggleRecoverySelection(eventItem, { shiftKey: true });
+    }
     setSelectedEventId(eventItem.id);
     const rowDeviceUid = normalizeInputText(eventItem.deviceUid);
     if (rowDeviceUid) {
@@ -1433,10 +1697,19 @@ export default function EventsExplorerPanel({
     () => ({
       events,
       selectedEventId,
+      selectedRecoveryEventIds: recoverySelectionSet,
       onSelectEvent: handleSelectEvent,
+      onToggleRecoverySelection: handleToggleRecoverySelection,
       onPrefetchDetail: handlePrefetchDetail
     }),
-    [events, selectedEventId, handleSelectEvent, handlePrefetchDetail]
+    [
+      events,
+      selectedEventId,
+      recoverySelectionSet,
+      handleSelectEvent,
+      handleToggleRecoverySelection,
+      handlePrefetchDetail
+    ]
   );
 
   return (
@@ -1444,6 +1717,11 @@ export default function EventsExplorerPanel({
       <div className="events-explorer__header">
         <h3>Events</h3>
       </div>
+      {recoveryToast ? (
+        <div className="events-explorer__recovery-toast" role="status" aria-live="polite">
+          {recoveryToast}
+        </div>
+      ) : null}
 
       {!hasQueryApiKey ? (
         <div className="events-explorer__message">Events requires QUERY key.</div>
@@ -1639,6 +1917,34 @@ export default function EventsExplorerPanel({
             </div>
           ) : null}
 
+          <div className="events-explorer__recovery-bar">
+            <div className="events-explorer__recovery-meta">
+              Recovery selection: <strong>{selectedRecoveryCount}</strong> row
+              {selectedRecoveryCount === 1 ? '' : 's'}
+            </div>
+            <div className="events-explorer__recovery-actions">
+              <button
+                type="button"
+                className="controls__button controls__button--compact events-explorer__recover-button"
+                onClick={handleOpenRecoveryModal}
+                disabled={selectedRecoveryCount === 0}
+              >
+                Create session from selection
+              </button>
+              <button
+                type="button"
+                className="controls__button controls__button--compact"
+                onClick={() => {
+                  setRecoverySelectionIds([]);
+                  setRecoveryAnchorEventId(null);
+                }}
+                disabled={selectedRecoveryCount === 0}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
           <div className="events-explorer__table-wrap">
             <div className="events-explorer__table" role="table" aria-label="Events">
               <div className="events-explorer__virtual-row events-explorer__virtual-row--header" role="row">
@@ -1695,6 +2001,132 @@ export default function EventsExplorerPanel({
           <option key={portnum} value={portnum} />
         ))}
       </datalist>
+
+      {recoveryModalOpen ? (
+        <div
+          className="events-explorer__modal-backdrop"
+          role="presentation"
+          onClick={handleCloseRecoveryModal}
+        >
+          <div
+            className="events-explorer__modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create session from selected events"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h4>Create Session from Selection</h4>
+            <div className="events-explorer__modal-summary">
+              <div>
+                <span>Selected</span>
+                <strong>{recoveryPreview?.selectedEventCount ?? selectedRecoveryCount}</strong>
+              </div>
+              <div>
+                <span>Eligible</span>
+                <strong>{recoveryPreview?.eligibleEventCount ?? '—'}</strong>
+              </div>
+              <div>
+                <span>Start</span>
+                <strong>{formatTimestamp(recoveryPreview?.startTime)}</strong>
+              </div>
+              <div>
+                <span>End</span>
+                <strong>{formatTimestamp(recoveryPreview?.endTime)}</strong>
+              </div>
+              <div>
+                <span>Duration</span>
+                <strong>{formatDurationLabel(recoveryPreview?.durationMs)}</strong>
+              </div>
+              <div>
+                <span>Device</span>
+                <strong>
+                  {recoveryPreview?.inferredDeviceUid
+                    ? recoveryPreview.inferredDeviceName
+                      ? `${recoveryPreview.inferredDeviceName} (${recoveryPreview.inferredDeviceUid})`
+                      : recoveryPreview.inferredDeviceUid
+                    : '—'}
+                </strong>
+              </div>
+              <div>
+                <span>Warnings</span>
+                <strong>{recoveryPreview?.warningCount ?? 0}</strong>
+              </div>
+            </div>
+
+            <label className="events-explorer__modal-field">
+              Session name
+              <input
+                value={recoverySessionName}
+                onChange={(event) => {
+                  setRecoverySessionName(event.target.value);
+                  setRecoverySessionNameEdited(true);
+                }}
+                placeholder="Recovered session"
+              />
+            </label>
+
+            <label className="events-explorer__modal-field">
+              Notes (optional)
+              <textarea
+                value={recoveryNotes}
+                onChange={(event) => setRecoveryNotes(event.target.value)}
+                rows={3}
+                placeholder="Recovery notes"
+              />
+            </label>
+
+            {recoveryPreviewLoading ? (
+              <div className="events-explorer__message">Validating selection…</div>
+            ) : null}
+            {recoveryPreviewError ? (
+              <div className="events-explorer__error">{recoveryPreviewError}</div>
+            ) : null}
+            {recoveryCreateError ? (
+              <div className="events-explorer__error">{recoveryCreateError}</div>
+            ) : null}
+
+            {recoveryPreview?.warnings?.length ? (
+              <ul className="events-explorer__modal-list">
+                {recoveryPreview.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            {recoveryPreview?.blockingErrors?.length ? (
+              <ul className="events-explorer__modal-list events-explorer__modal-list--blocking">
+                {recoveryPreview.blockingErrors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="events-explorer__modal-actions">
+              <button
+                type="button"
+                className="events-explorer__modal-cancel"
+                onClick={handleCloseRecoveryModal}
+                disabled={recoveryCreatePending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="events-explorer__modal-confirm"
+                onClick={() => void handleCreateRecoveredSession()}
+                disabled={
+                  recoveryCreatePending ||
+                  recoveryPreviewLoading ||
+                  !recoveryPreview ||
+                  !recoveryPreview.canCreate
+                }
+              >
+                {recoveryCreatePending ? 'Creating…' : 'Create recovered session'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectedEventId ? (
         <aside className="events-explorer__drawer" aria-label="Event detail">

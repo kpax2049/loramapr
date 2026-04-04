@@ -13,6 +13,7 @@ import {
 import type {
   CoverageBin,
   Measurement,
+  RecoverSessionFromEventsResult,
   Session,
   SessionWindowPoint,
   UnifiedEventListItem
@@ -1253,6 +1254,22 @@ function App() {
   const handleSessionStart = (sessionId: string) => {
     handleFilterModeChange('session');
     setSelectedSessionId(sessionId);
+  };
+
+  const handleOpenRecoveredSession = (result: RecoverSessionFromEventsResult) => {
+    handleFilterModeChange('session');
+    if (result.deviceId) {
+      setDeviceId(result.deviceId);
+    }
+    setSelectedSessionId(result.sessionId);
+    setSidebarTab('sessions');
+    setViewMode('explore');
+    setPlaybackIsPlaying(false);
+    setMapLayerMode('points');
+    setSelectedPointId(null);
+    setSessionSelectionNotice(
+      `Recovered session created (${result.attachedEventCount} events attached).`
+    );
   };
 
   const handleToggleCompareSelection = useCallback((sessionId: string) => {
@@ -3395,6 +3412,7 @@ function App() {
       eventsNavigationRequest={eventsNavigationRequest}
       onOpenEvents={handleOpenEvents}
       onSelectEventForMap={handleSelectEventForMap}
+      onOpenRecoveredSession={handleOpenRecoveredSession}
     />
   );
 
