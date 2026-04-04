@@ -15,6 +15,9 @@ describe('Events API e2e', () => {
   let queryKeyId: string | null = null;
   let ingestKeyId: string | null = null;
   let createdEventIds: string[] = [];
+  let createdMeasurementIds: string[] = [];
+  let createdSessionIds: string[] = [];
+  let createdDeviceIds: string[] = [];
 
   beforeAll(async () => {
     process.env.LORAWAN_WORKER_ENABLED = 'false';
@@ -51,18 +54,90 @@ describe('Events API e2e', () => {
   });
 
   afterEach(async () => {
-    if (createdEventIds.length === 0) {
-      return;
+    if (createdDeviceIds.length > 0) {
+      await prisma.coverageBin.deleteMany({
+        where: {
+          deviceId: { in: createdDeviceIds }
+        }
+      });
     }
-    await prisma.webhookEvent.deleteMany({
-      where: {
-        id: { in: createdEventIds }
-      }
-    });
+    if (createdSessionIds.length > 0) {
+      await prisma.coverageBin.deleteMany({
+        where: {
+          sessionId: { in: createdSessionIds }
+        }
+      });
+    }
+    if (createdMeasurementIds.length > 0) {
+      await prisma.measurement.deleteMany({
+        where: {
+          id: { in: createdMeasurementIds }
+        }
+      });
+    }
+    if (createdSessionIds.length > 0) {
+      await prisma.session.deleteMany({
+        where: {
+          id: { in: createdSessionIds }
+        }
+      });
+    }
+    if (createdDeviceIds.length > 0) {
+      await prisma.device.deleteMany({
+        where: {
+          id: { in: createdDeviceIds }
+        }
+      });
+    }
+    if (createdEventIds.length > 0) {
+      await prisma.webhookEvent.deleteMany({
+        where: {
+          id: { in: createdEventIds }
+        }
+      });
+    }
     createdEventIds = [];
+    createdMeasurementIds = [];
+    createdSessionIds = [];
+    createdDeviceIds = [];
   });
 
   afterAll(async () => {
+    if (createdDeviceIds.length > 0) {
+      await prisma.coverageBin.deleteMany({
+        where: {
+          deviceId: { in: createdDeviceIds }
+        }
+      });
+    }
+    if (createdSessionIds.length > 0) {
+      await prisma.coverageBin.deleteMany({
+        where: {
+          sessionId: { in: createdSessionIds }
+        }
+      });
+    }
+    if (createdMeasurementIds.length > 0) {
+      await prisma.measurement.deleteMany({
+        where: {
+          id: { in: createdMeasurementIds }
+        }
+      });
+    }
+    if (createdSessionIds.length > 0) {
+      await prisma.session.deleteMany({
+        where: {
+          id: { in: createdSessionIds }
+        }
+      });
+    }
+    if (createdDeviceIds.length > 0) {
+      await prisma.device.deleteMany({
+        where: {
+          id: { in: createdDeviceIds }
+        }
+      });
+    }
     if (createdEventIds.length > 0) {
       await prisma.webhookEvent.deleteMany({
         where: {
@@ -288,6 +363,180 @@ describe('Events API e2e', () => {
     expect(response.body.message).toContain('cursor must be formatted');
   });
 
+  it('previews and creates a recovered session from selected events', async () => {
+    const now = Date.now();
+    const deviceUid = `events-recover-device-${now}`;
+    const device = await createDevice(deviceUid);
+    const eventA = await createEvent({
+      source: WebhookEventSource.MESHTASTIC,
+      deviceUid,
+      portnum: 'POSITION_APP',
+      packetId: `events-recover-${now}-a`,
+      receivedAt: new Date(now + 1_000),
+      payloadJson: {
+        decoded: {
+          position: {
+            latitude: 49.4,
+            longitude: 7.6
+          }
+        }
+      }
+    });
+    const eventB = await createEvent({
+      source: WebhookEventSource.MESHTASTIC,
+      deviceUid,
+      portnum: 'POSITION_APP',
+      packetId: `events-recover-${now}-b`,
+      receivedAt: new Date(now + 4_000),
+      payloadJson: {
+        decoded: {
+          position: {
+            latitude: 49.401,
+            longitude: 7.602
+          }
+        }
+      }
+    });
+
+    await createMeasurementForEvent({
+      deviceId: device.id,
+      eventId: eventA.id,
+      capturedAt: new Date(now + 1_000),
+      lat: 49.4,
+      lon: 7.6
+    });
+    await createMeasurementForEvent({
+      deviceId: device.id,
+      eventId: eventB.id,
+      capturedAt: new Date(now + 4_000),
+      lat: 49.401,
+      lon: 7.602
+    });
+
+    const preview = await request(app.getHttpServer())
+      .post('/api/events/recover-session/preview')
+      .set('x-api-key', queryKeyPlaintext)
+      .send({
+        eventIds: [eventA.id, eventB.id]
+      })
+      .expect(201);
+
+    expect(preview.body).toMatchObject({
+      selectedEventCount: 2,
+      eligibleEventCount: 2,
+      eligibleMeasurementCount: 2,
+      alreadyAssignedEventCount: 0,
+      incompatibleEventCount: 0,
+      canCreate: true,
+      inferredDeviceId: device.id,
+      inferredDeviceUid: deviceUid
+    });
+    expect(preview.body.startTime).toBe(new Date(now + 1_000).toISOString());
+    expect(preview.body.endTime).toBe(new Date(now + 4_000).toISOString());
+
+    const created = await request(app.getHttpServer())
+      .post('/api/events/recover-session')
+      .set('x-api-key', queryKeyPlaintext)
+      .send({
+        eventIds: [eventA.id, eventB.id],
+        name: 'Recovered Walk',
+        notes: 'Recovered from missed start'
+      })
+      .expect(201);
+
+    expect(created.body).toMatchObject({
+      deviceId: device.id,
+      deviceUid,
+      sessionName: 'Recovered Walk',
+      selectedEventCount: 2,
+      attachedEventCount: 2,
+      attachedMeasurementCount: 2,
+      startTime: new Date(now + 1_000).toISOString(),
+      endTime: new Date(now + 4_000).toISOString(),
+      durationMs: 3_000
+    });
+    expect(typeof created.body.sessionId).toBe('string');
+    createdSessionIds.push(created.body.sessionId as string);
+
+    const createdSession = await prisma.session.findUnique({
+      where: { id: created.body.sessionId as string },
+      select: { id: true, name: true, notes: true, startedAt: true, endedAt: true }
+    });
+    expect(createdSession).not.toBeNull();
+    expect(createdSession?.name).toBe('Recovered Walk');
+    expect(createdSession?.notes).toBe('Recovered from missed start');
+    expect(createdSession?.startedAt.toISOString()).toBe(new Date(now + 1_000).toISOString());
+    expect(createdSession?.endedAt?.toISOString()).toBe(new Date(now + 4_000).toISOString());
+
+    const reassigned = await prisma.measurement.findMany({
+      where: { sourceEventId: { in: [eventA.id, eventB.id] } },
+      select: { sessionId: true }
+    });
+    expect(reassigned).toHaveLength(2);
+    expect(
+      reassigned.every((measurement) => measurement.sessionId === (created.body.sessionId as string))
+    ).toBe(true);
+  });
+
+  it('blocks recovered-session creation when selected events are already assigned', async () => {
+    const now = Date.now();
+    const device = await createDevice(`events-recover-blocked-${now}`);
+    const existingSession = await createSession(device.id, {
+      name: 'Existing',
+      startedAt: new Date(now - 60_000),
+      endedAt: new Date(now - 30_000)
+    });
+    const assignedEvent = await createEvent({
+      source: WebhookEventSource.MESHTASTIC,
+      deviceUid: device.deviceUid,
+      portnum: 'POSITION_APP',
+      packetId: `events-recover-assigned-${now}`,
+      receivedAt: new Date(now),
+      payloadJson: {
+        decoded: {
+          position: {
+            latitude: 49.5,
+            longitude: 7.7
+          }
+        }
+      }
+    });
+    await createMeasurementForEvent({
+      deviceId: device.id,
+      eventId: assignedEvent.id,
+      capturedAt: new Date(now),
+      lat: 49.5,
+      lon: 7.7,
+      sessionId: existingSession.id
+    });
+
+    const preview = await request(app.getHttpServer())
+      .post('/api/events/recover-session/preview')
+      .set('x-api-key', queryKeyPlaintext)
+      .send({
+        eventIds: [assignedEvent.id]
+      })
+      .expect(201);
+
+    expect(preview.body).toMatchObject({
+      selectedEventCount: 1,
+      alreadyAssignedEventCount: 1,
+      canCreate: false
+    });
+    expect(Array.isArray(preview.body.blockingErrors)).toBe(true);
+    expect(String(preview.body.blockingErrors[0])).toContain('already assigned');
+
+    const createAttempt = await request(app.getHttpServer())
+      .post('/api/events/recover-session')
+      .set('x-api-key', queryKeyPlaintext)
+      .send({
+        eventIds: [assignedEvent.id]
+      })
+      .expect(400);
+
+    expect(String(createAttempt.body.message)).toContain('already assigned');
+  });
+
   async function createEvent(input: {
     source: WebhookEventSource;
     deviceUid: string;
@@ -317,6 +566,65 @@ describe('Events API e2e', () => {
       }
     });
     createdEventIds.push(created.id);
+    return created;
+  }
+
+  async function createDevice(deviceUid: string) {
+    const created = await prisma.device.create({
+      data: {
+        deviceUid
+      },
+      select: {
+        id: true,
+        deviceUid: true
+      }
+    });
+    createdDeviceIds.push(created.id);
+    return created;
+  }
+
+  async function createSession(
+    deviceId: string,
+    input: {
+      name?: string;
+      startedAt: Date;
+      endedAt?: Date | null;
+    }
+  ) {
+    const created = await prisma.session.create({
+      data: {
+        deviceId,
+        name: input.name ?? null,
+        startedAt: input.startedAt,
+        endedAt: input.endedAt ?? null
+      },
+      select: { id: true }
+    });
+    createdSessionIds.push(created.id);
+    return created;
+  }
+
+  async function createMeasurementForEvent(input: {
+    deviceId: string;
+    eventId: string;
+    capturedAt: Date;
+    lat: number;
+    lon: number;
+    sessionId?: string | null;
+  }) {
+    const created = await prisma.measurement.create({
+      data: {
+        deviceId: input.deviceId,
+        sourceEventId: input.eventId,
+        sessionId: input.sessionId ?? null,
+        capturedAt: input.capturedAt,
+        lat: input.lat,
+        lon: input.lon,
+        source: 'meshtastic'
+      },
+      select: { id: true }
+    });
+    createdMeasurementIds.push(created.id);
     return created;
   }
 });

@@ -13,7 +13,8 @@ import type {
   Session,
   DeviceTelemetrySample,
   SessionStats,
-  UnifiedEventListItem
+  UnifiedEventListItem,
+  RecoverSessionFromEventsResult
 } from '../api/types';
 import { useApiDiagnosticsEntries } from '../api/diagnostics';
 import { ApiError } from '../api/http';
@@ -138,6 +139,7 @@ type ControlsProps = {
   eventsNavigationRequest: EventsNavigationInput | null;
   onOpenEvents: (input: EventsNavigationInput) => void;
   onSelectEventForMap: (event: UnifiedEventListItem) => void;
+  onOpenRecoveredSession: (result: RecoverSessionFromEventsResult) => void;
 };
 
 export default function Controls({
@@ -214,7 +216,8 @@ export default function Controls({
   eventsNavigationNonce,
   eventsNavigationRequest,
   onOpenEvents,
-  onSelectEventForMap
+  onSelectEventForMap,
+  onOpenRecoveredSession
 }: ControlsProps) {
   const { data: devicesData, isLoading } = useDevices();
   const devices = devicesData?.items ?? [];
@@ -1915,6 +1918,7 @@ export default function Controls({
             navigationRequest={eventsNavigationRequest}
             onSelectEventForMap={onSelectEventForMap}
             onDeviceFilterChange={handleEventsDeviceFilterChange}
+            onOpenRecoveredSession={onOpenRecoveredSession}
           />
           <div className="controls__group controls__system-status-panel">
             <span className="controls__label">System status</span>

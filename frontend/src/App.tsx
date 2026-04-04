@@ -13,6 +13,7 @@ import {
 import type {
   CoverageBin,
   Measurement,
+  RecoverSessionFromEventsResult,
   Session,
   SessionWindowPoint,
   UnifiedEventListItem
@@ -273,11 +274,18 @@ function buildHomeGeofenceStorageKey(deviceId: string): string {
   return `${SHOW_HOME_GEOFENCE_PREFIX}${deviceId}`;
 }
 
-function readStoredShowHomeGeofence(deviceId: string | null): boolean {
+function readStoredShowHomeGeofence(deviceId: string | null): boolean | null {
   if (typeof window === 'undefined' || !deviceId) {
+    return null;
+  }
+  const raw = window.localStorage.getItem(buildHomeGeofenceStorageKey(deviceId));
+  if (raw === 'true') {
+    return true;
+  }
+  if (raw === 'false') {
     return false;
   }
-  return window.localStorage.getItem(buildHomeGeofenceStorageKey(deviceId)) === 'true';
+  return null;
 }
 
 function readStoredBoolean(key: string): boolean {
@@ -801,7 +809,7 @@ function App() {
     readStoredShowCoverageTracks()
   );
   const [showDeviceMarkers, setShowDeviceMarkers] = useState<boolean>(() => readStoredShowDeviceMarkers());
-  const [showHomeGeofence, setShowHomeGeofence] = useState<boolean>(() =>
+  const [showHomeGeofenceOverride, setShowHomeGeofenceOverride] = useState<boolean | null>(() =>
     readStoredShowHomeGeofence(initial.deviceId)
   );
   const [pointDetailsCollapsed, setPointDetailsCollapsed] = useState<boolean>(() =>
@@ -1002,18 +1010,8 @@ function App() {
   }, [showCoverageTracks]);
 
   useEffect(() => {
-    setShowHomeGeofence(readStoredShowHomeGeofence(deviceId));
+    setShowHomeGeofenceOverride(readStoredShowHomeGeofence(deviceId));
   }, [deviceId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !deviceId) {
-      return;
-    }
-    window.localStorage.setItem(
-      buildHomeGeofenceStorageKey(deviceId),
-      showHomeGeofence ? 'true' : 'false'
-    );
-  }, [deviceId, showHomeGeofence]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1256,6 +1254,22 @@ function App() {
   const handleSessionStart = (sessionId: string) => {
     handleFilterModeChange('session');
     setSelectedSessionId(sessionId);
+  };
+
+  const handleOpenRecoveredSession = (result: RecoverSessionFromEventsResult) => {
+    handleFilterModeChange('session');
+    if (result.deviceId) {
+      setDeviceId(result.deviceId);
+    }
+    setSelectedSessionId(result.sessionId);
+    setSidebarTab('sessions');
+    setViewMode('explore');
+    setPlaybackIsPlaying(false);
+    setMapLayerMode('points');
+    setSelectedPointId(null);
+    setSessionSelectionNotice(
+      `Recovered session created (${result.attachedEventCount} events attached).`
+    );
   };
 
   const handleToggleCompareSelection = useCallback((sessionId: string) => {
@@ -2450,6 +2464,17 @@ function App() {
   ]);
   const latestMeasurementAt =
     latestDeviceQuery.data?.latestMeasurementAt ?? selectedDevice?.latestMeasurementAt ?? null;
+  const showHomeGeofence = showHomeGeofenceOverride ?? (autoSessionQuery.data?.enabled === true);
+  const handleShowHomeGeofenceChange = useCallback(
+    (value: boolean) => {
+      setShowHomeGeofenceOverride(value);
+      if (typeof window === 'undefined' || !deviceId) {
+        return;
+      }
+      window.localStorage.setItem(buildHomeGeofenceStorageKey(deviceId), value ? 'true' : 'false');
+    },
+    [deviceId]
+  );
   const homeGeofenceConfig = useMemo(() => {
     const config = autoSessionQuery.data;
     if (!config) {
@@ -3366,7 +3391,7 @@ function App() {
       onShowDeviceMarkersChange={setShowDeviceMarkers}
       showHomeGeofence={showHomeGeofence}
       homeGeofenceConfigured={isHomeGeofenceConfigured}
-      onShowHomeGeofenceChange={setShowHomeGeofence}
+      onShowHomeGeofenceChange={handleShowHomeGeofenceChange}
       onShowPointsChange={setShowPoints}
       onShowTrackChange={setShowTrack}
       onShowCoverageTracksChange={setShowCoverageTracks}
@@ -3387,6 +3412,7 @@ function App() {
       eventsNavigationRequest={eventsNavigationRequest}
       onOpenEvents={handleOpenEvents}
       onSelectEventForMap={handleSelectEventForMap}
+      onOpenRecoveredSession={handleOpenRecoveredSession}
     />
   );
 

@@ -30,7 +30,9 @@ import type {
   SystemStatus,
   UnifiedEventDetail,
   UnifiedEventsResponse,
-  UnifiedEventSource
+  UnifiedEventSource,
+  RecoverSessionFromEventsPreview,
+  RecoverSessionFromEventsResult
 } from './types';
 
 export type Bbox = {
@@ -741,4 +743,26 @@ export async function getUnifiedEventById(
   options?: RequestOptions
 ): Promise<UnifiedEventDetail> {
   return getJson<UnifiedEventDetail>(`/api/events/${id}`, withQueryApiKey(options));
+}
+
+export async function previewSessionRecoveryFromEvents(
+  input: { eventIds: string[] },
+  options?: RequestOptions
+): Promise<RecoverSessionFromEventsPreview> {
+  return requestJson<RecoverSessionFromEventsPreview>('/api/events/recover-session/preview', {
+    method: 'POST',
+    json: input,
+    ...withQueryApiKey(options)
+  });
+}
+
+export async function createSessionFromEventSelection(
+  input: { eventIds: string[]; name?: string; notes?: string },
+  options?: RequestOptions
+): Promise<RecoverSessionFromEventsResult> {
+  return requestJson<RecoverSessionFromEventsResult>('/api/events/recover-session', {
+    method: 'POST',
+    json: input,
+    ...withQueryApiKey(options)
+  });
 }

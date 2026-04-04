@@ -1,7 +1,20 @@
-import { BadRequestException, Controller, Get, NotFoundException, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards
+} from '@nestjs/common';
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { getOwnerIdFromRequest, type OwnerContextRequest } from '../../common/owner-context';
+import { RecoverSessionCreateDto, RecoverSessionPreviewDto } from './dto/recover-session.dto';
 import { decodeCursor, EventDetail, EventsListResponse, EventsService, EventsSource } from './events.service';
 
 @UseGuards(ApiKeyGuard)
@@ -53,6 +66,32 @@ export class EventsController {
       throw new NotFoundException('Event not found');
     }
     return event;
+  }
+
+  @Post('recover-session/preview')
+  async previewRecoverSession(
+    @Body() body: RecoverSessionPreviewDto,
+    @Req() request: OwnerContextRequest
+  ) {
+    const ownerId = getOwnerIdFromRequest(request);
+    return this.eventsService.previewRecoverSessionFromEvents({
+      eventIds: body.eventIds,
+      ownerId
+    });
+  }
+
+  @Post('recover-session')
+  async createRecoveredSession(
+    @Body() body: RecoverSessionCreateDto,
+    @Req() request: OwnerContextRequest
+  ) {
+    const ownerId = getOwnerIdFromRequest(request);
+    return this.eventsService.createSessionFromSelectedEvents({
+      eventIds: body.eventIds,
+      ownerId,
+      name: body.name,
+      notes: body.notes
+    });
   }
 }
 
