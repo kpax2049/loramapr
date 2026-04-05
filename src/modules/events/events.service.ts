@@ -25,6 +25,7 @@ export type EventListItem = {
   id: string;
   source: EventsSource;
   receivedAt: Date;
+  sessionId: string | null;
   deviceUid: string | null;
   portnum: string | null;
   packetId: string | null;
@@ -144,7 +145,12 @@ export class EventsService {
 
     const hasMore = rows.length > params.limit;
     const sliced = hasMore ? rows.slice(0, params.limit) : rows;
-    const items = sliced.map((row) => formatListItem(row));
+    const sessionIdByEventId = await this.loadAssignedSessionIds(
+      sliced.map((row) => row.id)
+    );
+    const items = sliced.map((row) =>
+      formatListItem(row, sessionIdByEventId.get(row.id) ?? null)
+    );
 
     if (!hasMore || items.length === 0) {
       return {
@@ -239,7 +245,12 @@ export class EventsService {
 
     const hasMore = rows.length > params.limit;
     const sliced = hasMore ? rows.slice(0, params.limit) : rows;
-    const items = sliced.map((row) => formatListItem(row));
+    const sessionIdByEventId = await this.loadAssignedSessionIds(
+      sliced.map((row) => row.id)
+    );
+    const items = sliced.map((row) =>
+      formatListItem(row, sessionIdByEventId.get(row.id) ?? null)
+    );
 
     if (!hasMore || items.length === 0) {
       return {
@@ -581,6 +592,36 @@ export class EventsService {
     };
 
     return preview;
+  }
+
+  private async loadAssignedSessionIds(eventIds: string[]): Promise<Map<string, string>> {
+    const lookup = new Map<string, string>();
+    if (eventIds.length === 0) {
+      return lookup;
+    }
+
+    const assignments = await this.prisma.measurement.findMany({
+      where: {
+        sourceEventId: { in: eventIds },
+        sessionId: { not: null }
+      },
+      orderBy: {
+        capturedAt: 'desc'
+      },
+      select: {
+        sourceEventId: true,
+        sessionId: true
+      }
+    });
+
+    for (const assignment of assignments) {
+      if (!assignment.sourceEventId || !assignment.sessionId || lookup.has(assignment.sourceEventId)) {
+        continue;
+      }
+      lookup.set(assignment.sourceEventId, assignment.sessionId);
+    }
+
+    return lookup;
   }
 
   private async assertRecoverSelectionOwnerScope(
@@ -1001,7 +1042,7 @@ function formatListItem(row: {
   portnum: string | null;
   packetId: string | null;
   payloadJson: Prisma.JsonValue;
-}): EventListItem {
+}, sessionId: string | null = null): EventListItem {
   const payload = toRecord(row.payloadJson);
   const candidates = payload ? collectCandidateRecords(payload) : [];
   const position = extractPositionSummary(payload, candidates);
@@ -1016,6 +1057,7 @@ function formatListItem(row: {
     id: row.id,
     source: normalizeSourceForApi(row.source),
     receivedAt: row.receivedAt,
+    sessionId,
     deviceUid: row.deviceUid,
     portnum,
     packetId,
