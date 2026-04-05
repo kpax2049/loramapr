@@ -410,6 +410,7 @@ export type UnifiedEventListItem = {
   id: string;
   source: UnifiedEventSource;
   receivedAt: string;
+  sessionId: string | null;
   deviceUid: string | null;
   portnum: string | null;
   packetId: string | null;

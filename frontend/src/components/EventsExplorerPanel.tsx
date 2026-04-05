@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { List, type RowComponentProps } from 'react-window';
 import {
@@ -88,8 +88,9 @@ const TIME_PRESETS: Array<{ value: TimePreset; label: string }> = [
 const EVENT_COLUMN_HEADERS = [
   'Select',
   'Time',
-  'Source',
+  'In Session',
   'Device',
+  'Source',
   'Portnum',
   'rxRssi',
   'rxSnr',
@@ -416,8 +417,18 @@ function EventsVirtualRow({
         />
       </div>
       <div role="cell">{formatTimestamp(item.receivedAt)}</div>
-      <div role="cell">{item.source}</div>
+      <div role="cell" className="events-explorer__session-cell">
+        {item.sessionId ? (
+          <span
+            className="events-explorer__session-indicator"
+            title={`Already part of session ${item.sessionId}`}
+          >
+            In session
+          </span>
+        ) : null}
+      </div>
       <div role="cell">{item.deviceUid ?? '—'}</div>
+      <div role="cell">{item.source}</div>
       <div role="cell">{item.portnum ?? '—'}</div>
       <div role="cell">{item.rxRssi ?? '—'}</div>
       <div role="cell">{item.rxSnr ?? '—'}</div>
@@ -1012,6 +1023,8 @@ export default function EventsExplorerPanel({
   const [recoveryCreatePending, setRecoveryCreatePending] = useState(false);
   const [recoveryCreateError, setRecoveryCreateError] = useState<string | null>(null);
   const [recoveryToast, setRecoveryToast] = useState<string | null>(null);
+  const [tableScrollbarWidth, setTableScrollbarWidth] = useState(0);
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !isActive) {
@@ -1232,6 +1245,8 @@ export default function EventsExplorerPanel({
 
   const requestId = buildRequestId(eventsQuery.error);
   const isLoadingMoreRows = events.length > 0 && eventsQuery.isFetchingNextPage;
+  const headerScrollbarCompensationStyle =
+    tableScrollbarWidth > 0 ? { paddingRight: `${tableScrollbarWidth}px` } : undefined;
   const selectedEvent = detailQuery.data;
   const selectedEventListItem = useMemo(
     () => fetchedEvents.find((item) => item.id === selectedEventId) ?? null,
@@ -1267,6 +1282,46 @@ export default function EventsExplorerPanel({
     selectedEventDetail?.id !== selectedEventId;
   const detailError = detailEventId === selectedEventId ? detailQuery.error : null;
   const detailRequestId = buildRequestId(detailError);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const root = tableWrapRef.current;
+    if (!root) {
+      setTableScrollbarWidth(0);
+      return;
+    }
+
+    const measure = () => {
+      const listElement = root.querySelector<HTMLElement>('.events-explorer__virtual-list');
+      if (!listElement) {
+        setTableScrollbarWidth(0);
+        return;
+      }
+      const nextWidth = Math.max(0, listElement.offsetWidth - listElement.clientWidth);
+      setTableScrollbarWidth((current) => (current === nextWidth ? current : nextWidth));
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => measure());
+      resizeObserver.observe(root);
+      const listElement = root.querySelector<HTMLElement>('.events-explorer__virtual-list');
+      if (listElement) {
+        resizeObserver.observe(listElement);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('resize', measure);
+      resizeObserver?.disconnect();
+    };
+  }, [events.length, isLoadingMoreRows, isActive]);
 
   const payloadSerialization = useMemo(
     () => serializePayload(selectedEventDetail?.payloadJson),
@@ -1917,37 +1972,41 @@ export default function EventsExplorerPanel({
             </div>
           ) : null}
 
-          <div className="events-explorer__recovery-bar">
-            <div className="events-explorer__recovery-meta">
-              Recovery selection: <strong>{selectedRecoveryCount}</strong> row
-              {selectedRecoveryCount === 1 ? '' : 's'}
+          {selectedRecoveryCount > 0 ? (
+            <div className="events-explorer__recovery-bar">
+              <div className="events-explorer__recovery-meta">
+                Recovery selection: <strong>{selectedRecoveryCount}</strong> row
+                {selectedRecoveryCount === 1 ? '' : 's'}
+              </div>
+              <div className="events-explorer__recovery-actions">
+                <button
+                  type="button"
+                  className="controls__button controls__button--compact events-explorer__recover-button"
+                  onClick={handleOpenRecoveryModal}
+                >
+                  Create session from selection
+                </button>
+                <button
+                  type="button"
+                  className="controls__button controls__button--compact"
+                  onClick={() => {
+                    setRecoverySelectionIds([]);
+                    setRecoveryAnchorEventId(null);
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
             </div>
-            <div className="events-explorer__recovery-actions">
-              <button
-                type="button"
-                className="controls__button controls__button--compact events-explorer__recover-button"
-                onClick={handleOpenRecoveryModal}
-                disabled={selectedRecoveryCount === 0}
-              >
-                Create session from selection
-              </button>
-              <button
-                type="button"
-                className="controls__button controls__button--compact"
-                onClick={() => {
-                  setRecoverySelectionIds([]);
-                  setRecoveryAnchorEventId(null);
-                }}
-                disabled={selectedRecoveryCount === 0}
-              >
-                Clear
-              </button>
-            </div>
-          </div>
+          ) : null}
 
-          <div className="events-explorer__table-wrap">
+          <div className="events-explorer__table-wrap" ref={tableWrapRef}>
             <div className="events-explorer__table" role="table" aria-label="Events">
-              <div className="events-explorer__virtual-row events-explorer__virtual-row--header" role="row">
+              <div
+                className="events-explorer__virtual-row events-explorer__virtual-row--header"
+                role="row"
+                style={headerScrollbarCompensationStyle}
+              >
                 {EVENT_COLUMN_HEADERS.map((label) => (
                   <div key={label} role="columnheader">
                     {label}
