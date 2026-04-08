@@ -837,6 +837,7 @@ function App() {
   const [tourForceRightPanelExpanded, setTourForceRightPanelExpanded] = useState(false);
   const tourForceRightPanelExpandedRef = useRef(tourForceRightPanelExpanded);
   const tourMenuRef = useRef<HTMLDivElement | null>(null);
+  const [limitBannerDismissed, setLimitBannerDismissed] = useState(false);
 
   useEffect(() => {
     sidebarTabRef.current = sidebarTab;
@@ -3126,6 +3127,20 @@ function App() {
     hasRecentLorawanEvent &&
     isMissingGps &&
     (latestMeasurementAt === null || noMeasurementsReturned);
+  const isResultLimited =
+    !zenMode &&
+    !isCompareMode &&
+    Boolean(activeMeasurementsQuery.data) &&
+    activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit;
+  const showLimitBanner = isResultLimited && !limitBannerDismissed;
+  useEffect(() => {
+    if (!isResultLimited && limitBannerDismissed) {
+      setLimitBannerDismissed(false);
+    }
+  }, [isResultLimited, limitBannerDismissed]);
+  const handleDismissLimitBanner = useCallback(() => {
+    setLimitBannerDismissed(true);
+  }, []);
   const statusDeviceLabel = selectedDevice
     ? buildDeviceIdentityLabel(selectedDevice)
     : 'No device';
@@ -3508,12 +3523,19 @@ function App() {
               : `Points: ${renderedPointCount}`}
           </div>
         )}
-        {!zenMode &&
-          !isCompareMode &&
-          activeMeasurementsQuery.data &&
-          activeMeasurementsQuery.data.items.length === activeMeasurementsQuery.data.limit && (
-            <div className="limit-banner">Result limited; zoom in or narrow filters</div>
-          )}
+        {showLimitBanner && (
+          <div className="limit-banner" role="alert">
+            <div className="limit-banner__message">Result limited; zoom in or narrow filters</div>
+            <button
+              type="button"
+              className="limit-banner__close"
+              onClick={handleDismissLimitBanner}
+              aria-label="Dismiss result limit notice"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         {!zenMode && !isCompareMode && shouldShowLorawanBanner && (
           <div className="diagnostic-banner">
             LoRaWAN uplinks received, but decoded payload has no lat/lon. Configure payload formatter

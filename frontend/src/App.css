@@ -4324,19 +4324,57 @@
 
 .limit-banner {
   position: absolute;
-  top: 1.5rem;
+  top: 5.35rem;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
-  padding: 0.45rem 0.75rem;
-  border-radius: 999px;
+  z-index: 1060;
+  max-width: min(720px, 90vw);
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
   border: 1px solid var(--accent-border);
   background: var(--panel-bg);
-  color: var(--accent-fg);
+  color: var(--panel-text);
   font-size: 0.75rem;
   font-family: var(--font-mono);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.limit-banner__message {
+  min-width: 0;
+  line-height: 1.35;
   text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--panel-text);
+}
+
+.limit-banner__close {
+  flex-shrink: 0;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--panel-text);
+  font: inherit;
+  font-size: 0.69rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0.22rem 0.52rem;
+}
+
+.limit-banner__close:hover,
+.limit-banner__close:focus-visible {
+  border-color: var(--panel-accent);
+  color: var(--panel-text);
+  background: var(--accent-bg-soft);
+}
+
+.limit-banner__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--panel-accent) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .diagnostic-banner {
@@ -4360,6 +4398,17 @@
 .diagnostic-banner a {
   color: var(--accent-fg);
   text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .limit-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .limit-banner__close {
+    align-self: flex-end;
+  }
 }
 
 .point-details {
@@ -6849,7 +6898,8 @@
   }
 
   .limit-banner {
-    top: 1rem;
+    top: 5.1rem;
+    max-width: min(92vw, 760px);
   }
 
   .diagnostic-banner {
