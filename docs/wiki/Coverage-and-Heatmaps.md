@@ -1,6 +1,6 @@
 # Coverage and Heatmaps
 
-Coverage in LoRaMapr is designed for Meshtastic coverage runs: leave one node at a fixed base location and carry another through the field.
+Coverage in LoRaMapr follows a fixed-location workflow with Meshtastic devices: leave one node at a fixed base location and carry another through the field.
 
 The default example is a home node + field node, but any fixed-base + mobile-field setup is valid.
 

@@ -1,6 +1,6 @@
 # LoRaMapr Wiki
 
-LoRaMapr is a Meshtastic app for mapping real-world coverage around a fixed location such as your home.
+LoRaMapr maps real-world coverage around a fixed location with Meshtastic devices.
 
 Position one node at that location, use a second field node to explore the surrounding area, and build coverage maps from real packet data.
 

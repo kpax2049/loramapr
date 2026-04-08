@@ -12,7 +12,7 @@
 > LoRaMapr has reached **v1.2.0** and is ready for self-hosted use.  
 > Development continues for new features and refinements, with changes tracked through normal release/version notes.
 
-LoRaMapr is a Meshtastic app for mapping real-world coverage.
+LoRaMapr is an app for mapping real-world coverage around a fixed location with Meshtastic devices.
 
 Position one node at that location, use a second field node to explore the surrounding area, and build coverage maps from real packet data.
 

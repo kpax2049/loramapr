@@ -1,6 +1,6 @@
 # Quickstart
 
-LoRaMapr is a Meshtastic app for mapping real-world coverage around a fixed location such as your home. It uses one node at the base location and a second field node to build coverage maps from real packet data.
+LoRaMapr maps real-world coverage around a fixed location with Meshtastic devices and builds replay, telemetry, and measured coverage from recorded packet reception.
 
 This quickstart sets up that workflow.
 

@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Backend API for LoRaMapr, a Meshtastic app for mapping real-world coverage.",
+  "description": "Backend API for LoRaMapr fixed-location coverage mapping with Meshtastic devices.",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",

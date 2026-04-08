@@ -14,7 +14,7 @@
   - `POST /api/meshtastic/event`
 - Backend stores payloads as `WebhookEvent` (`source: 'meshtastic'`) and processes them in `LorawanService` worker.
 - Forwarder should send full packet JSON as received (plus `_forwarder` metadata). Do not pre-normalize GPS fields in the forwarder.
-- Worker promotion rules for common Meshtastic app ports:
+- Worker promotion rules for common Meshtastic portnum values:
   - `NODEINFO_APP` + `decoded.user`: updates `Device` metadata (no `Measurement` row created).
   - `TELEMETRY_APP` + `decoded.telemetry.deviceMetrics`: inserts `DeviceTelemetrySample` (no `Measurement` row created).
 

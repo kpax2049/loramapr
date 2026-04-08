@@ -1,6 +1,6 @@
 # Home Auto Session (HAS)
 
-Home Auto Session (HAS) is LoRaMapr's hands-free coverage-run workflow for Meshtastic fixed-base + mobile-field testing.
+Home Auto Session (HAS) is LoRaMapr's hands-free coverage-run workflow for fixed-base + mobile-field testing with Meshtastic devices.
 
 Default example:
 
