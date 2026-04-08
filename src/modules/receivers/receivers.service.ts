@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 
 type ReceiverSource = 'lorawan' | 'meshtastic';
@@ -84,7 +85,9 @@ function buildMeasurementWhere(params: {
   from?: Date;
   to?: Date;
 }) {
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    device: buildNonHomeDeviceWhere()
+  };
   if (params.deviceId) {
     where.deviceId = params.deviceId;
   }

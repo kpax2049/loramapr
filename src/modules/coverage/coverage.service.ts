@@ -1,4 +1,5 @@
 import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BIN_SIZE_DEG } from './coverage.constants';
 
@@ -49,6 +50,7 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
 
   async listBins(params: CoverageQueryParams) {
     const where: Record<string, unknown> = {};
+    where.device = buildNonHomeDeviceWhere();
 
     if (params.day) {
       where.day = params.day;
@@ -104,6 +106,7 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
     const measurements = await this.prisma.measurement.findMany({
       where: {
         deviceId,
+        device: buildNonHomeDeviceWhere(),
         capturedAt: { gte: dayStart, lt: dayEnd }
       },
       select: {
@@ -221,14 +224,15 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   private async loadMeasurements() {
-    const where = this.cursor
-      ? {
-          OR: [
-            { ingestedAt: { gt: this.cursor.ingestedAt } },
-            { ingestedAt: this.cursor.ingestedAt, id: { gt: this.cursor.id } }
-          ]
-        }
-      : undefined;
+    const where: Record<string, unknown> = {
+      device: buildNonHomeDeviceWhere()
+    };
+    if (this.cursor) {
+      where.OR = [
+        { ingestedAt: { gt: this.cursor.ingestedAt } },
+        { ingestedAt: this.cursor.ingestedAt, id: { gt: this.cursor.id } }
+      ];
+    }
 
     const measurements = await this.prisma.measurement.findMany({
       where,
@@ -272,6 +276,7 @@ export class CoverageService implements OnApplicationBootstrap, OnModuleDestroy 
     const aggregate = await this.prisma.measurement.aggregate({
       where: {
         deviceId: bin.deviceId,
+        device: buildNonHomeDeviceWhere(),
         sessionId: bin.sessionId,
         gatewayId: bin.gatewayId,
         capturedAt: { gte: dayStart, lt: dayEnd },

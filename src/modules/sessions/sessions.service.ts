@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { buildNonHomeDeviceWhere, isHomeDeviceRole } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { StopSessionDto } from './dto/stop-session.dto';
@@ -175,7 +176,8 @@ export class SessionsService {
   async list(deviceId?: string, includeArchived = false) {
     const where = {
       ...(deviceId ? { deviceId } : {}),
-      ...(includeArchived ? {} : { isArchived: false })
+      ...(includeArchived ? {} : { isArchived: false }),
+      device: buildNonHomeDeviceWhere()
     };
     return this.prisma.session.findMany({
       where,
@@ -197,6 +199,11 @@ export class SessionsService {
         isArchived: true,
         archivedAt: true,
         updatedAt: true,
+        device: {
+          select: {
+            role: true
+          }
+        },
         _count: {
           select: {
             measurements: true
@@ -220,7 +227,9 @@ export class SessionsService {
       isArchived: session.isArchived,
       archivedAt: session.archivedAt,
       updatedAt: session.updatedAt,
-      measurementCount: session._count.measurements
+      measurementCount: isHomeDeviceRole(session.device?.role)
+        ? 0
+        : session._count.measurements
     };
   }
 
@@ -231,11 +240,27 @@ export class SessionsService {
         id: true,
         deviceId: true,
         startedAt: true,
-        endedAt: true
+        endedAt: true,
+        device: {
+          select: {
+            role: true
+          }
+        }
       }
     });
     if (!session) {
       throw new NotFoundException('Session not found');
+    }
+    if (isHomeDeviceRole(session.device?.role)) {
+      return {
+        sessionId: session.id,
+        deviceId: session.deviceId,
+        startedAt: session.startedAt.toISOString(),
+        endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+        minCapturedAt: null,
+        maxCapturedAt: null,
+        count: 0
+      };
     }
 
     const aggregate = await this.prisma.measurement.aggregate({
@@ -266,6 +291,27 @@ export class SessionsService {
     const halfWindow = params.windowMs / 2;
     const from = new Date(params.cursor.getTime() - halfWindow);
     const to = new Date(params.cursor.getTime() + halfWindow);
+    const session = await this.prisma.session.findUnique({
+      where: { id: params.sessionId },
+      select: {
+        device: {
+          select: {
+            role: true
+          }
+        }
+      }
+    });
+    if (session && isHomeDeviceRole(session.device?.role)) {
+      return {
+        sessionId: params.sessionId,
+        cursor: params.cursor.toISOString(),
+        from: from.toISOString(),
+        to: to.toISOString(),
+        totalBeforeSample: 0,
+        returnedAfterSample: 0,
+        items: []
+      };
+    }
 
     const items = await this.prisma.measurement.findMany({
       where: {
@@ -311,10 +357,23 @@ export class SessionsService {
   async getOverview(id: string, sample: number) {
     const session = await this.prisma.session.findUnique({
       where: { id },
-      select: { id: true }
+      select: {
+        id: true,
+        device: {
+          select: {
+            role: true
+          }
+        }
+      }
     });
     if (!session) {
       throw new NotFoundException('Session not found');
+    }
+    if (isHomeDeviceRole(session.device?.role)) {
+      return {
+        sessionId: session.id,
+        items: []
+      };
     }
 
     const items = await this.prisma.measurement.findMany({
@@ -346,11 +405,36 @@ export class SessionsService {
         id: true,
         deviceId: true,
         startedAt: true,
-        endedAt: true
+        endedAt: true,
+        device: {
+          select: {
+            role: true
+          }
+        }
       }
     });
     if (!session) {
       throw new NotFoundException('Session not found');
+    }
+    if (isHomeDeviceRole(session.device?.role)) {
+      return {
+        sessionId: session.id,
+        deviceId: session.deviceId,
+        startedAt: session.startedAt.toISOString(),
+        endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+        minCapturedAt: null,
+        maxCapturedAt: null,
+        pointCount: 0,
+        distanceMeters: null,
+        bbox: null,
+        home: null,
+        farthestPoint: null,
+        lastRangePoint: null,
+        rssi: null,
+        snr: null,
+        signalSourceUsed: null,
+        receiversCount: null
+      };
     }
 
     const aggregate = await this.prisma.measurement.aggregate({
@@ -415,10 +499,25 @@ export class SessionsService {
   }) {
     const session = await this.prisma.session.findUnique({
       where: { id: params.sessionId },
-      select: { id: true }
+      select: {
+        id: true,
+        device: {
+          select: {
+            role: true
+          }
+        }
+      }
     });
     if (!session) {
       throw new NotFoundException('Session not found');
+    }
+    if (isHomeDeviceRole(session.device?.role)) {
+      return {
+        sessionId: params.sessionId,
+        metric: params.metric,
+        sourceUsed: params.source === 'auto' ? 'measurement' : params.source,
+        items: []
+      };
     }
 
     const sourceUsed =
@@ -459,10 +558,25 @@ export class SessionsService {
   }) {
     const session = await this.prisma.session.findUnique({
       where: { id: params.sessionId },
-      select: { id: true }
+      select: {
+        id: true,
+        device: {
+          select: {
+            role: true
+          }
+        }
+      }
     });
     if (!session) {
       throw new NotFoundException('Session not found');
+    }
+    if (isHomeDeviceRole(session.device?.role)) {
+      return {
+        sessionId: params.sessionId,
+        metric: params.metric,
+        sourceUsed: params.source === 'auto' ? 'measurement' : params.source,
+        bins: []
+      };
     }
 
     const sourceUsed =

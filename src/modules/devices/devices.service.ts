@@ -1,5 +1,6 @@
 import { Prisma, WebhookEventSource } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
+import { isHomeDeviceRole } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export type LatestWebhookSource = 'lorawan' | 'meshtastic' | 'agent';
@@ -133,6 +134,16 @@ export type AgentAutoSessionConfig = {
 const DEFAULT_RADIUS_METERS = 20;
 const DEFAULT_MIN_OUTSIDE_SECONDS = 30;
 const DEFAULT_MIN_INSIDE_SECONDS = 120;
+const LATEST_POSITION_EVENT_SCAN_LIMIT = 250;
+
+type LatestDeviceLocation = {
+  capturedAt: Date;
+  lat: number;
+  lon: number;
+  rssi: number | null;
+  snr: number | null;
+  gatewayId: string | null;
+};
 
 @Injectable()
 export class DevicesService {
@@ -217,14 +228,14 @@ export class DevicesService {
     // TODO: enforce owner scoping once auth context is available.
     const device = await this.prisma.device.findFirst({
       where: ownerId ? { id: deviceId, ownerId } : { id: deviceId },
-      select: { id: true, deviceUid: true }
+      select: { id: true, deviceUid: true, role: true }
     });
 
     if (!device) {
       return null;
     }
 
-    return this.getLatestStatusForDevice(device.id, device.deviceUid);
+    return this.getLatestStatusForDevice(device.id, device.deviceUid, device.role);
   }
 
   async getByUid(deviceUid: string, ownerId?: string): Promise<DeviceSummary | null> {
@@ -272,21 +283,8 @@ export class DevicesService {
       return null;
     }
 
-    // lat/lon are required in the current schema, so latest by capturedAt already satisfies
-    // "latest measurement with lat/lon not null".
     const [latestMeasurement, latestTelemetry, latestStatus] = await Promise.all([
-      this.prisma.measurement.findFirst({
-        where: { deviceId: device.id },
-        orderBy: { capturedAt: 'desc' },
-        select: {
-          capturedAt: true,
-          lat: true,
-          lon: true,
-          rssi: true,
-          snr: true,
-          gatewayId: true
-        }
-      }),
+      this.getLatestOperationalLocation(device.id, device.deviceUid, device.role),
       this.prisma.deviceTelemetrySample.findFirst({
         where: { deviceId: device.id },
         orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }],
@@ -299,7 +297,7 @@ export class DevicesService {
           uptimeSeconds: true
         }
       }),
-      this.getLatestStatusForDevice(device.id, device.deviceUid)
+      this.getLatestStatusForDevice(device.id, device.deviceUid, device.role)
     ]);
 
     return {
@@ -342,14 +340,11 @@ export class DevicesService {
 
   private async getLatestStatusForDevice(
     deviceId: string,
-    deviceUid: string
+    deviceUid: string,
+    role: string | null
   ): Promise<DeviceLatestStatus> {
-    const [latestMeasurement, latestWebhook] = await Promise.all([
-      this.prisma.measurement.findFirst({
-        where: { deviceId },
-        orderBy: { capturedAt: 'desc' },
-        select: { capturedAt: true }
-      }),
+    const [latestLocation, latestWebhook] = await Promise.all([
+      this.getLatestOperationalLocation(deviceId, deviceUid, role),
       this.prisma.webhookEvent.findFirst({
         where: { deviceUid },
         orderBy: { receivedAt: 'desc' },
@@ -358,11 +353,81 @@ export class DevicesService {
     ]);
 
     return {
-      latestMeasurementAt: latestMeasurement?.capturedAt ?? null,
+      latestMeasurementAt: latestLocation?.capturedAt ?? null,
       latestWebhookReceivedAt: latestWebhook?.receivedAt ?? null,
       latestWebhookError: latestWebhook?.error ?? null,
       latestWebhookSource: normalizeWebhookSource(latestWebhook?.source)
     };
+  }
+
+  private async getLatestOperationalLocation(
+    deviceId: string,
+    deviceUid: string,
+    role: string | null
+  ): Promise<LatestDeviceLocation | null> {
+    const latestMeasurement = await this.getLatestMeasurementLocation(deviceId);
+    if (!isHomeDeviceRole(role)) {
+      return latestMeasurement;
+    }
+
+    const latestWebhookPosition = await this.getLatestPositionFromEvents(deviceUid);
+    if (!latestWebhookPosition) {
+      return latestMeasurement;
+    }
+    if (!latestMeasurement || latestWebhookPosition.capturedAt >= latestMeasurement.capturedAt) {
+      return latestWebhookPosition;
+    }
+    return latestMeasurement;
+  }
+
+  private async getLatestMeasurementLocation(deviceId: string): Promise<LatestDeviceLocation | null> {
+    const row = await this.prisma.measurement.findFirst({
+      where: { deviceId },
+      orderBy: { capturedAt: 'desc' },
+      select: {
+        capturedAt: true,
+        lat: true,
+        lon: true,
+        rssi: true,
+        snr: true,
+        gatewayId: true
+      }
+    });
+    if (!row) {
+      return null;
+    }
+    return {
+      capturedAt: row.capturedAt,
+      lat: row.lat,
+      lon: row.lon,
+      rssi: row.rssi,
+      snr: row.snr,
+      gatewayId: row.gatewayId
+    };
+  }
+
+  private async getLatestPositionFromEvents(deviceUid: string): Promise<LatestDeviceLocation | null> {
+    const rows = await this.prisma.webhookEvent.findMany({
+      where: {
+        deviceUid,
+        source: { in: [WebhookEventSource.MESHTASTIC, WebhookEventSource.LORAWAN] }
+      },
+      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
+      take: LATEST_POSITION_EVENT_SCAN_LIMIT,
+      select: {
+        receivedAt: true,
+        payloadJson: true
+      }
+    });
+
+    for (const row of rows) {
+      const position = extractPositionFromPayload(row.payloadJson, row.receivedAt);
+      if (position) {
+        return position;
+      }
+    }
+
+    return null;
   }
 
   async updateMutableFields(
@@ -517,17 +582,13 @@ export class DevicesService {
   async getLatestPositionByUid(deviceUid: string): Promise<DeviceLatestPosition | null> {
     const device = await this.prisma.device.findUnique({
       where: { deviceUid },
-      select: { id: true }
+      select: { id: true, role: true }
     });
     if (!device) {
       return null;
     }
 
-    const latest = await this.prisma.measurement.findFirst({
-      where: { deviceId: device.id },
-      orderBy: { capturedAt: 'desc' },
-      select: { capturedAt: true, lat: true, lon: true }
-    });
+    const latest = await this.getLatestOperationalLocation(device.id, deviceUid, device.role);
 
     return {
       deviceId: device.id,
@@ -647,6 +708,247 @@ function normalizeWebhookSource(
   }
   if (source === 'agent' || source === WebhookEventSource.AGENT) {
     return 'agent';
+  }
+  return null;
+}
+
+function extractPositionFromPayload(
+  payload: Prisma.JsonValue,
+  fallbackCapturedAt: Date
+): LatestDeviceLocation | null {
+  const root = toRecord(payload);
+  if (!root) {
+    return null;
+  }
+
+  const candidates = collectCandidateRecords(root);
+  for (const candidate of candidates) {
+    const latRaw = extractNumber(candidate, ['lat', 'latitude', 'latitudeI', 'latitude_i']);
+    const lonRaw = extractNumber(candidate, ['lon', 'longitude', 'longitudeI', 'longitude_i']);
+    if (latRaw === null || lonRaw === null) {
+      continue;
+    }
+
+    const lat = normalizeCoordinate(latRaw, 90);
+    const lon = normalizeCoordinate(lonRaw, 180);
+    if (lat === null || lon === null) {
+      continue;
+    }
+
+    const capturedAt = resolveCapturedAt(candidates, fallbackCapturedAt);
+    const rssi = extractNumberFromCandidates(candidates, ['rxRssi', 'rx_rssi', 'rssi']);
+    const snr = extractNumberFromCandidates(candidates, ['rxSnr', 'rx_snr', 'snr']);
+    const gatewayId = extractStringFromCandidates(candidates, [
+      'gatewayId',
+      'gateway_id',
+      'rxNodeId',
+      'rx_node_id',
+      'receiver',
+      'via',
+      'relayNode',
+      'relay_node'
+    ]);
+
+    return {
+      capturedAt,
+      lat,
+      lon,
+      rssi: typeof rssi === 'number' && Number.isFinite(rssi) ? Math.round(rssi) : null,
+      snr: typeof snr === 'number' && Number.isFinite(snr) ? snr : null,
+      gatewayId
+    };
+  }
+
+  return null;
+}
+
+function resolveCapturedAt(candidates: Array<Record<string, unknown>>, fallback: Date): Date {
+  for (const candidate of candidates) {
+    const isoLike = extractString(candidate, ['capturedAt', 'captured_at', 'receivedAt', 'time', 'timestamp']);
+    if (isoLike) {
+      const parsed = new Date(isoLike);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
+    const seconds = extractNumber(candidate, [
+      'capturedAt',
+      'captured_at',
+      'time',
+      'timestamp',
+      'rxTime',
+      'rx_time'
+    ]);
+    if (seconds !== null) {
+      return new Date(toEpochMs(seconds));
+    }
+  }
+  return fallback;
+}
+
+function collectCandidateRecords(root: Record<string, unknown>): Array<Record<string, unknown>> {
+  const stack: unknown[] = [root];
+  const seen = new Set<Record<string, unknown>>();
+  const results: Array<Record<string, unknown>> = [];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const entry of current) {
+        stack.push(entry);
+      }
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    if (seen.has(record)) {
+      continue;
+    }
+    seen.add(record);
+    results.push(record);
+
+    for (const value of Object.values(record)) {
+      if (value && typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+  }
+
+  return results;
+}
+
+function extractNumberFromCandidates(
+  candidates: Array<Record<string, unknown>>,
+  keys: string[]
+): number | null {
+  for (const candidate of candidates) {
+    const value = extractNumber(candidate, keys);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function extractStringFromCandidates(
+  candidates: Array<Record<string, unknown>>,
+  keys: string[]
+): string | null {
+  for (const candidate of candidates) {
+    const value = extractString(candidate, keys);
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function extractNumber(payload: Record<string, unknown> | null, keys: string[]): number | null {
+  if (!payload) {
+    return null;
+  }
+
+  for (const key of keys) {
+    const direct = toFiniteNumber(payload[key]);
+    if (direct !== null) {
+      return direct;
+    }
+
+    const nestedPayload = payload.payload;
+    if (nestedPayload && typeof nestedPayload === 'object' && !Array.isArray(nestedPayload)) {
+      const nested = toFiniteNumber((nestedPayload as Record<string, unknown>)[key]);
+      if (nested !== null) {
+        return nested;
+      }
+    }
+
+    const decoded = payload.decoded;
+    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
+      const nested = toFiniteNumber((decoded as Record<string, unknown>)[key]);
+      if (nested !== null) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractString(payload: Record<string, unknown> | null, keys: string[]): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  for (const key of keys) {
+    const direct = toNonEmptyString(payload[key]);
+    if (direct) {
+      return direct;
+    }
+
+    const nestedPayload = payload.payload;
+    if (nestedPayload && typeof nestedPayload === 'object' && !Array.isArray(nestedPayload)) {
+      const nested = toNonEmptyString((nestedPayload as Record<string, unknown>)[key]);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    const decoded = payload.decoded;
+    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
+      const nested = toNonEmptyString((decoded as Record<string, unknown>)[key]);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
+function toRecord(value: Prisma.JsonValue): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function normalizeCoordinate(value: number, limit: number): number | null {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const abs = Math.abs(value);
+  if (abs > limit || (Number.isInteger(value) && abs >= 1_000_000)) {
+    return value / 1e7;
+  }
+  return value;
+}
+
+function toEpochMs(value: number): number {
+  return Math.abs(value) >= 1_000_000_000_000 ? value : value * 1000;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
   }
   return null;
 }

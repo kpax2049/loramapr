@@ -1,6 +1,7 @@
 import { BadRequestException, Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
 import { ApiKeyScope } from '@prisma/client';
 import { RequireApiKeyScope } from '../../common/decorators/api-key-scopes.decorator';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -35,13 +36,17 @@ export class ExportController {
     @Param('sessionId') sessionId: string,
     @Res() res: any
   ): Promise<void> {
-    const total = await this.prisma.measurement.count({ where: { sessionId } });
+    const measurementWhere = {
+      sessionId,
+      device: buildNonHomeDeviceWhere()
+    };
+    const total = await this.prisma.measurement.count({ where: measurementWhere });
     if (total > MAX_POINTS) {
       throw new BadRequestException('Too many points; apply narrower filters');
     }
 
     const measurements = await this.prisma.measurement.findMany({
-      where: { sessionId },
+      where: measurementWhere,
       orderBy: { capturedAt: 'asc' },
       take: MAX_POINTS,
       select: {

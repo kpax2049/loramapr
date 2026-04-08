@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export type TrackQueryParams = {
@@ -66,10 +67,10 @@ export class TracksService {
     if (params.rxGatewayId) {
       where.rxMetadataRows = { some: { gatewayId: params.rxGatewayId } };
     }
-    if (params.ownerId) {
-      // TODO: confirm owner scoping logic once auth exists.
-      where.device = { ownerId: params.ownerId };
-    }
+    where.device = {
+      ...buildNonHomeDeviceWhere(),
+      ...(params.ownerId ? { ownerId: params.ownerId } : {})
+    };
 
     const items = await this.prisma.measurement.findMany({
       where,

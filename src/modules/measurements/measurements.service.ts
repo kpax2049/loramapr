@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { buildNonHomeDeviceWhere, isHomeDeviceRole } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeasurementIngestDto } from './dto/measurement-ingest.dto';
 
@@ -165,8 +166,16 @@ export class MeasurementsService {
         where: { deviceUid },
         update: { lastSeenAt: timestamp },
         create: { deviceUid, lastSeenAt: timestamp },
-        select: { id: true }
+        select: { id: true, role: true }
       });
+
+      if (isHomeDeviceRole(device.role)) {
+        return {
+          inserted: 0,
+          deviceId: device.id,
+          measurementIds: []
+        };
+      }
 
       let fallbackSessionId: string | null = null;
       const hasAnySessionId = items.some((item) => Boolean(item.sessionId));
@@ -302,10 +311,10 @@ export class MeasurementsService {
     } else if (params.sessionBoundOnly) {
       where.sessionId = { not: null };
     }
-    if (params.ownerId) {
-      // TODO: confirm owner scoping logic (device owner vs session owner) once auth exists.
-      where.device = { ownerId: params.ownerId };
-    }
+    where.device = {
+      ...buildNonHomeDeviceWhere(),
+      ...(params.ownerId ? { ownerId: params.ownerId } : {})
+    };
 
     if (params.from || params.to) {
       const capturedAt: Record<string, Date> = {};
@@ -437,10 +446,10 @@ export class MeasurementsService {
       }
       where.capturedAt = capturedAt;
     }
-    if (params.ownerId) {
-      // TODO: confirm owner scoping logic once auth exists.
-      where.device = { ownerId: params.ownerId };
-    }
+    where.device = {
+      ...buildNonHomeDeviceWhere(),
+      ...(params.ownerId ? { ownerId: params.ownerId } : {})
+    };
 
     const [aggregate, gatewayGroups] = await Promise.all([
       this.prisma.measurement.aggregate({

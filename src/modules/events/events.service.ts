@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma, WebhookEventSource } from '@prisma/client';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { BIN_SIZE_DEG } from '../coverage/coverage.constants';
 
 export type EventsSource = 'meshtastic' | 'lorawan' | 'agent' | 'sim';
@@ -421,6 +422,7 @@ export class EventsService {
 
     const measurements = await tx.measurement.findMany({
       where: {
+        device: buildNonHomeDeviceWhere(),
         sourceEventId: {
           in: eventIds
         }
@@ -602,6 +604,7 @@ export class EventsService {
 
     const assignments = await this.prisma.measurement.findMany({
       where: {
+        device: buildNonHomeDeviceWhere(),
         sourceEventId: { in: eventIds },
         sessionId: { not: null }
       },

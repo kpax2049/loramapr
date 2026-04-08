@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { PrismaService } from '../../prisma/prisma.service';
 
 type GatewayQueryParams = {
@@ -14,7 +15,9 @@ export class GatewaysService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(params: GatewayQueryParams) {
-    const measurementWhere: Record<string, unknown> = {};
+    const measurementWhere: Record<string, unknown> = {
+      device: buildNonHomeDeviceWhere()
+    };
     if (params.deviceId) {
       measurementWhere.deviceId = params.deviceId;
     }
@@ -52,7 +55,9 @@ export class GatewaysService {
   }
 
   async stats(params: GatewayQueryParams & { gatewayId: string }) {
-    const measurementWhere: Record<string, unknown> = {};
+    const measurementWhere: Record<string, unknown> = {
+      device: buildNonHomeDeviceWhere()
+    };
     if (params.deviceId) {
       measurementWhere.deviceId = params.deviceId;
     }

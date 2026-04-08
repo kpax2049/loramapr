@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, WebhookEventSource } from '@prisma/client';
 import { createHash } from 'crypto';
+import { buildNonHomeDeviceWhere } from '../../common/device-role';
 import { logError, logInfo } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildWebhookPayloadText } from '../events/payload-text';
@@ -141,7 +142,8 @@ export class MeshtasticService {
     limit: number;
   }) {
     const where: Record<string, unknown> = {
-      gatewayId: { not: null }
+      gatewayId: { not: null },
+      device: buildNonHomeDeviceWhere()
     };
     if (params.deviceId) {
       where.deviceId = params.deviceId;
