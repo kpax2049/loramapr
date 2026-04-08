@@ -2399,7 +2399,7 @@ function App() {
   const markerCandidateDevices = useMemo(() => {
     const items = deviceMarkerDevicesQuery.data?.items ?? [];
     return items
-      .filter((device) => Boolean(device.latestMeasurementAt))
+      .filter((device) => Boolean(device.latestMeasurementAt ?? device.latestWebhookReceivedAt))
       .sort((a, b) => getDeviceMarkerSortTimestamp(b) - getDeviceMarkerSortTimestamp(a))
       .slice(0, 200);
   }, [deviceMarkerDevicesQuery.data?.items]);
@@ -2807,11 +2807,13 @@ function App() {
     [mapMeasurements]
   );
 
+  const latestLocationPoint = useMemo(
+    () => toLatLonPoint(latestLocationMarker?.lat, latestLocationMarker?.lon),
+    [latestLocationMarker?.lat, latestLocationMarker?.lon]
+  );
+
   useEffect(() => {
     if (isCompareMode) {
-      return;
-    }
-    if (!measurementBounds || !isValidLatLonBounds(measurementBounds)) {
       return;
     }
     if (activeMeasurementsQuery.isFetching) {
@@ -2823,13 +2825,31 @@ function App() {
     if (hasAutoFitRef.current) {
       return;
     }
+    const hasValidMeasurementBounds =
+      measurementBounds !== null && isValidLatLonBounds(measurementBounds);
+
+    if (!hasValidMeasurementBounds) {
+      if (!latestLocationPoint) {
+        return;
+      }
+      mapRef.current?.focusPoint(latestLocationPoint, 16);
+      hasAutoFitRef.current = true;
+      return;
+    }
+
     if (isDegenerateBounds(measurementBounds)) {
       mapRef.current?.focusPoint(measurementBounds[0], 16);
     } else {
       mapRef.current?.fitBounds(measurementBounds, { padding: [24, 24], maxZoom: 17 });
     }
     hasAutoFitRef.current = true;
-  }, [isCompareMode, measurementBounds, userInteractedWithMap, activeMeasurementsQuery.isFetching]);
+  }, [
+    isCompareMode,
+    measurementBounds,
+    latestLocationPoint,
+    userInteractedWithMap,
+    activeMeasurementsQuery.isFetching
+  ]);
 
   useEffect(() => {
     if (!isCompareMode) {
@@ -2904,6 +2924,13 @@ function App() {
           : { points: activeScopePoints, bounds: buildBoundsFromPoints(activeScopePoints) };
 
     if (target.points.length === 0) {
+      if (latestLocationPoint) {
+        setFitFeedback(null);
+        mapRef.current?.focusPoint(latestLocationPoint, 16);
+        setUserInteractedWithMap(true);
+        hasAutoFitRef.current = true;
+        return;
+      }
       setFitFeedback('No data to fit');
       return;
     }
