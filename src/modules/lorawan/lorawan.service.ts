@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma, WebhookEventSource } from '@prisma/client';
+import { isHomeDeviceRole } from '../../common/device-role';
 import { logError, logInfo, logWarn } from '../../common/logging/structured-logger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildWebhookPayloadText } from '../events/payload-text';
@@ -24,10 +25,12 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
+    await this.prisma.$queryRaw`SELECT 1`;
+    await this.backfillHomeRolesFromForwarderHints();
+
     if (!this.workerEnabled) {
       return;
     }
-    await this.prisma.$queryRaw`SELECT 1`;
     if (this.workerTimer) {
       return;
     }
@@ -40,6 +43,65 @@ export class LorawanService implements OnApplicationBootstrap, OnModuleDestroy {
     if (this.workerTimer) {
       clearInterval(this.workerTimer);
       this.workerTimer = null;
+    }
+  }
+
+  private async backfillHomeRolesFromForwarderHints(): Promise<void> {
+    type CandidateRow = { deviceUid: string };
+    const candidates = await this.prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
+      SELECT DISTINCT w."deviceUid"
+      FROM "WebhookEvent" w
+      WHERE w."deviceUid" IS NOT NULL
+        AND (
+          LOWER(
+            REGEXP_REPLACE(
+              COALESCE(w."payload" #>> '{_forwarder,deviceHint}', ''),
+              '[^a-z0-9]+',
+              ' ',
+              'g'
+            )
+          ) LIKE '%home%'
+          OR LOWER(
+            REGEXP_REPLACE(
+              COALESCE(w."payload" #>> '{_forwarder,deviceHint}', ''),
+              '[^a-z0-9]+',
+              ' ',
+              'g'
+            )
+          ) LIKE '%base%'
+        )
+        AND UPPER(
+          COALESCE(
+            w."portnum",
+            w."payload" #>> '{portnum}',
+            w."payload" #>> '{decoded,portnum}',
+            ''
+          )
+        ) IN ('POSITION_APP', 'TELEMETRY_APP')
+        AND (w."payload" #>> '{rxRssi}') IS NULL
+        AND (w."payload" #>> '{rxSnr}') IS NULL
+        AND (w."payload" #>> '{raw,rx_rssi}') IS NULL
+        AND (w."payload" #>> '{raw,rx_snr}') IS NULL
+    `);
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const result = await this.prisma.device.updateMany({
+      where: {
+        deviceUid: { in: candidates.map((candidate) => candidate.deviceUid) },
+        OR: [{ role: null }, { role: '' }]
+      },
+      data: {
+        role: 'HOME_NODE'
+      }
+    });
+
+    if (result.count > 0) {
+      logInfo('meshtastic.home_role_backfill.applied', {
+        count: result.count
+      });
     }
   }
 
@@ -935,12 +997,36 @@ function extractMeshtasticNodeInfo(payload: Prisma.JsonValue): MeshtasticNodeInf
   if (role !== undefined) {
     fields.role = role;
   }
+  if (fields.role === undefined) {
+    const forwarderDeviceHint = findFirstString(candidates, ['devicehint']);
+    if (
+      forwarderDeviceHint !== undefined &&
+      isHomeDeviceRole(forwarderDeviceHint) &&
+      isLocalMeshtasticOperationalPacket(record)
+    ) {
+      // Receiver/home packets forwarded locally do not include RX metrics.
+      // Promote this existing home hint into role so non-home history filters apply.
+      fields.role = 'HOME_NODE';
+    }
+  }
 
   return {
     found: foundHint || Object.keys(fields).length > 0,
     deviceUid: getMeshtasticDeviceUid(record),
     fields
   };
+}
+
+function isLocalMeshtasticOperationalPacket(record: Record<string, unknown>): boolean {
+  const portnumRaw = findFirstMeshtasticString(record, ['portnum']);
+  const portnum = portnumRaw ? portnumRaw.trim().toUpperCase() : '';
+  if (portnum !== 'POSITION_APP' && portnum !== 'TELEMETRY_APP') {
+    return false;
+  }
+
+  return (
+    findFirstMeshtasticNumber(record, ['rxRssi', 'rx_rssi', 'rxSnr', 'rx_snr']) === null
+  );
 }
 
 function collectNodeInfoCandidates(root: Record<string, unknown>): {
