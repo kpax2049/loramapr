@@ -1,7 +1,10 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: help up down logs ps reset demo keys prod-up prod-down prod-logs wait-ready check backup restore
+PYTHON_TOOLS_VENV := .venv-pytools
+PYTHON_TOOLS_PY := $(PYTHON_TOOLS_VENV)/bin/python
+
+.PHONY: help up down logs ps reset demo keys prod-up prod-down prod-logs wait-ready check backup restore py-tools-install py-lint-ruff py-lint-ruff-fix py-deadcode-vulture py-deadcode
 
 help:
 	@echo "Usage: make <target>"
@@ -21,6 +24,11 @@ help:
 	@echo "  check      Fast non-destructive stack health check"
 	@echo "  backup     Run DB backup (optional: OUTPUT=backups/name.sql.gz)"
 	@echo "  restore    Run DB restore (requires BACKUP_FILE=...)"
+	@echo "  py-tools-install   Install Python lint/dead-code tools"
+	@echo "  py-lint-ruff       Run Ruff (unused imports/variables and F-series lint)"
+	@echo "  py-lint-ruff-fix   Run Ruff autofix for safe fixes"
+	@echo "  py-deadcode-vulture Run Vulture dead-code scan"
+	@echo "  py-deadcode        Run Ruff then Vulture"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make backup OUTPUT=backups/test.sql.gz"
@@ -68,3 +76,23 @@ backup:
 
 restore:
 	@./bin/loramapr restore $(if $(DROP_FIRST),--drop-first,) $(if $(NO_STOP_API),--no-stop-api,) $(BACKUP_FILE)
+
+py-tools-install:
+	@test -x $(PYTHON_TOOLS_PY) || python3 -m venv $(PYTHON_TOOLS_VENV)
+	@$(PYTHON_TOOLS_PY) -m pip install -r requirements-python-tools.txt
+
+py-lint-ruff:
+	@test -x $(PYTHON_TOOLS_PY) || (echo "Missing $(PYTHON_TOOLS_VENV). Run: make py-tools-install" && exit 1)
+	@$(PYTHON_TOOLS_PY) -m ruff check .
+
+py-lint-ruff-fix:
+	@test -x $(PYTHON_TOOLS_PY) || (echo "Missing $(PYTHON_TOOLS_VENV). Run: make py-tools-install" && exit 1)
+	@$(PYTHON_TOOLS_PY) -m ruff check . --fix
+
+py-deadcode-vulture:
+	@test -x $(PYTHON_TOOLS_PY) || (echo "Missing $(PYTHON_TOOLS_VENV). Run: make py-tools-install" && exit 1)
+	@$(PYTHON_TOOLS_PY) -m vulture
+
+py-deadcode:
+	@$(MAKE) py-lint-ruff
+	@$(MAKE) py-deadcode-vulture

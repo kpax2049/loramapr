@@ -1,0 +1,25 @@
+name: Python Dead-Code Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  deadcode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python tooling
+        run: make py-tools-install
+
+      - name: Ruff + Vulture
+        run: make py-deadcode

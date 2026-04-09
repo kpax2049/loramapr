@@ -219,6 +219,42 @@ npm run db:migrate
 npm run start:dev
 ```
 
+## Python dead-code checks (contributors)
+
+This repo has one Python bridge script at `apps/pi-forwarder/scripts/meshtastic-json-bridge.py`.
+
+Install Python lint/dead-code tooling:
+
+```bash
+make py-tools-install
+```
+
+This creates/uses a repo-local virtual environment at `.venv-pytools`.
+
+Run Ruff (fast lint for unused imports/variables and obvious issues):
+
+```bash
+make py-lint-ruff
+make py-lint-ruff-fix
+```
+
+Run Vulture (conservative dead-code scan):
+
+```bash
+make py-deadcode-vulture
+```
+
+Combined pass:
+
+```bash
+make py-deadcode
+```
+
+Notes:
+- Ruff is configured for linting only (`F` checks), not formatting.
+- Vulture uses a conservative baseline (`min_confidence = 90`) and is intended for review, not blind deletion.
+- For dynamic Python usage (framework registration, decorators, CLI discovery, reflection), prefer narrow Vulture whitelist/ignore updates over broad global ignores.
+
 ## Full-stack dev (backend + frontend)
 
 Run both servers together:

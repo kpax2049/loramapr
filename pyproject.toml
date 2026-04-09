@@ -1,0 +1,56 @@
+[tool.ruff]
+include = ["*.py"]
+extend-exclude = [
+  ".git",
+  ".venv",
+  "venv",
+  "__pycache__",
+  "node_modules",
+  "dist",
+  "build",
+  "tmp",
+  ".tmp",
+  "backups",
+  "frontend",
+  "prisma",
+]
+
+[tool.ruff.lint]
+select = ["F"]
+
+[tool.vulture]
+paths = ["apps/pi-forwarder/scripts"]
+exclude = [
+  ".git",
+  ".venv",
+  "venv",
+  "__pycache__",
+  "node_modules",
+  "dist",
+  "build",
+  "tmp",
+  ".tmp",
+  "backups",
+  "frontend",
+  "prisma",
+  "test",
+  "tests",
+  "migrations",
+  "generated",
+  "vendor",
+]
+min_confidence = 90
+sort_by_size = true
+ignore_names = ["test_*", "setUp", "tearDown", "__all__"]
+ignore_decorators = [
+  "@app.route",
+  "@app.*",
+  "@router.*",
+  "@bp.route",
+  "@click.command",
+  "@click.group",
+  "@click.option",
+  "@click.argument",
+  "@pytest.fixture",
+  "@pytest.mark.*",
+]

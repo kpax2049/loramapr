@@ -69,6 +69,8 @@ def unwrap_packet(packet=None, **kwargs):
 
 
 def on_receive(packet=None, interface=None, **kwargs):
+    # Meshtastic pubsub may pass `interface`; keep signature for compatibility.
+    del interface
     resolved = unwrap_packet(packet=packet, **kwargs)
     if resolved is None:
         return
