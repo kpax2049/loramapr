@@ -800,6 +800,9 @@ function App() {
   const [coverageMetric, setCoverageMetric] = useState<'count' | 'rssiAvg' | 'snrAvg'>('count');
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() => readInitialSidebarTab());
   const sidebarTabRef = useRef<SidebarTab>(sidebarTab);
+  const filterModeRef = useRef(filterMode);
+  const viewModeRef = useRef(viewMode);
+  const mapLayerModeRef = useRef(mapLayerMode);
   const [zenMode, setZenMode] = useState<boolean>(() => readStoredZenMode());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [systemTheme, setSystemTheme] = useState<EffectiveTheme>(() => readSystemTheme());
@@ -844,6 +847,18 @@ function App() {
   }, [sidebarTab]);
 
   useEffect(() => {
+    filterModeRef.current = filterMode;
+  }, [filterMode]);
+
+  useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
+
+  useEffect(() => {
+    mapLayerModeRef.current = mapLayerMode;
+  }, [mapLayerMode]);
+
+  useEffect(() => {
     tourMenuOpenRef.current = tourMenuOpen;
   }, [tourMenuOpen]);
 
@@ -862,6 +877,24 @@ function App() {
       });
     };
     window.tourGetActiveTab = () => sidebarTabRef.current;
+    window.tourSetFilterMode = (mode) => {
+      flushSync(() => {
+        setFilterMode(mode);
+      });
+    };
+    window.tourGetFilterMode = () => filterModeRef.current;
+    window.tourSetViewMode = (mode) => {
+      flushSync(() => {
+        setViewMode(mode);
+      });
+    };
+    window.tourGetViewMode = () => viewModeRef.current;
+    window.tourSetMapLayerMode = (mode) => {
+      flushSync(() => {
+        setMapLayerMode(mode);
+      });
+    };
+    window.tourGetMapLayerMode = () => mapLayerModeRef.current;
     window.tourSetHelpPopoverOpen = (open: boolean) => {
       flushSync(() => {
         setTourMenuOpen(open);
@@ -881,6 +914,12 @@ function App() {
     return () => {
       delete window.tourSetActiveTab;
       delete window.tourGetActiveTab;
+      delete window.tourSetFilterMode;
+      delete window.tourGetFilterMode;
+      delete window.tourSetViewMode;
+      delete window.tourGetViewMode;
+      delete window.tourSetMapLayerMode;
+      delete window.tourGetMapLayerMode;
       delete window.tourSetHelpPopoverOpen;
       delete window.tourGetHelpPopoverOpen;
       delete window.tourSetRightPanelExpanded;

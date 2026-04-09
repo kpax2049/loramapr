@@ -1,6 +1,6 @@
 {
   "name": "loramapr-frontend",
-  "version": "1.2.12",
+  "version": "1.2.13",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Frontend for LoRaMapr fixed-location coverage mapping with Meshtastic devices.",

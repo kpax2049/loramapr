@@ -1768,7 +1768,7 @@ export default function EventsExplorerPanel({
   );
 
   return (
-    <section className="events-explorer" aria-label="Unified events explorer">
+    <section className="events-explorer" aria-label="Unified events explorer" data-tour="events-explorer">
       <div className="events-explorer__header">
         <h3>Events</h3>
       </div>

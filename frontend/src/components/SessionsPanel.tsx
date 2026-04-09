@@ -598,6 +598,7 @@ export default function SessionsPanel({
       <div
         className={`sessions-panel__compare-bar ${compareBarState}`.trim()}
         aria-label="Session comparison selection"
+        data-tour="session-compare-bar"
       >
         <div className="sessions-panel__compare-copy">
           <span className="sessions-panel__compare-eyebrow">

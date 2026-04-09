@@ -1,6 +1,9 @@
 import type { Alignment, DriveStep, Side } from 'driver.js';
 
 export type TourSidebarTabKey = 'device' | 'sessions' | 'playback' | 'coverage' | 'debug';
+export type TourFilterModeKey = 'time' | 'session';
+export type TourViewModeKey = 'explore' | 'playback';
+export type TourMapLayerModeKey = 'points' | 'coverage';
 export type TourSectionKey =
   | 'orientation'
   | 'devices'
@@ -18,6 +21,9 @@ type TourStepSpec = {
   content: string;
   selector: string;
   tab?: TourSidebarTabKey;
+  filterMode?: TourFilterModeKey;
+  viewMode?: TourViewModeKey;
+  mapLayerMode?: TourMapLayerModeKey;
   side?: Side;
   align?: Alignment;
   condition?: () => boolean;
@@ -33,6 +39,12 @@ declare global {
   interface Window {
     tourSetActiveTab?: (tab: TourSidebarTabKey) => void;
     tourGetActiveTab?: () => TourSidebarTabKey | null;
+    tourSetFilterMode?: (mode: TourFilterModeKey) => void;
+    tourGetFilterMode?: () => TourFilterModeKey | null;
+    tourSetViewMode?: (mode: TourViewModeKey) => void;
+    tourGetViewMode?: () => TourViewModeKey | null;
+    tourSetMapLayerMode?: (mode: TourMapLayerModeKey) => void;
+    tourGetMapLayerMode?: () => TourMapLayerModeKey | null;
     tourSetHelpPopoverOpen?: (open: boolean) => void;
     tourGetHelpPopoverOpen?: () => boolean;
     tourSetRightPanelExpanded?: (expanded: boolean) => void;
@@ -78,8 +90,18 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="selected-device-header"]',
     title: 'Selected device',
     content:
-      'Shows the selected device identity, online status, and quick actions like Copy deviceUid.',
+      'Shows the selected device identity, status, and quick actions like copy device UID and fit to data.',
     side: 'right',
+    align: 'start'
+  },
+  {
+    id: 'orientation-status-strip',
+    section: 'orientation',
+    selector: '[data-tour="status-strip"]',
+    title: 'Status strip',
+    content:
+      'Use this strip to confirm active device, recent measurement/ingest activity, and current session at a glance.',
+    side: 'top',
     align: 'start'
   },
   {
@@ -98,7 +120,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="map"]',
     title: 'Map',
     content:
-      'This is the main map canvas for points, tracks, coverage bins, and device markers. Click a point or marker for details.',
+      'This map is where you validate coverage around your home/base setup using field-test points, tracks, and overlays.',
     side: 'left',
     align: 'start'
   },
@@ -127,13 +149,13 @@ const TOUR_STEPS: TourStepSpec[] = [
     align: 'start'
   },
   {
-    id: 'devices-online-dot',
+    id: 'devices-manager',
     section: 'devices',
-    selector: '[data-tour="device-online-dot"]',
+    selector: '[data-tour="devices-manager"]',
     tab: 'device',
-    title: 'Device status dot',
+    title: 'Device manager',
     content:
-      'Dot color reflects measurement recency, and the ring shows ingest recency when it is newer. Hover for last-seen details.',
+      'Search, sort, and manage your device list here, including archive/edit actions and quick access to auto-session config.',
     side: 'right',
     align: 'start'
   },
@@ -144,7 +166,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     tab: 'device',
     title: 'Latest location actions',
     content:
-      'Center on the latest known location and toggle device markers on the map.',
+      'Center on the latest known location and toggle device markers while validating field-test routes.',
     side: 'right',
     align: 'start'
   },
@@ -155,6 +177,8 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-picker"]',
     tab: 'sessions',
+    filterMode: 'session',
+    viewMode: 'explore',
     title: 'Sessions panel',
     content:
       'Manage recording sessions for the selected device.',
@@ -166,9 +190,11 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-start-stop"]',
     tab: 'sessions',
+    filterMode: 'session',
+    viewMode: 'explore',
     title: 'Start and stop session',
     content:
-      'Start a session before a run and stop it when finished.',
+      'Start a session before leaving your home/base area and stop it when the run is complete.',
     side: 'right',
     align: 'start'
   },
@@ -177,23 +203,27 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'sessions',
     selector: '[data-tour="session-list"]',
     tab: 'sessions',
+    filterMode: 'session',
+    viewMode: 'explore',
     title: 'Session list',
     content:
-      'Select past sessions for analysis and export.',
+      'Pick past runs to inspect stats, fit the map to that run, and export GeoJSON.',
     side: 'right',
     align: 'start'
   },
   {
-    id: 'sessions-actions',
+    id: 'sessions-compare',
     section: 'sessions',
-    selector: '[data-tour="session-actions"]',
+    selector: '[data-tour="session-compare-bar"]',
     tab: 'sessions',
-    title: 'Session actions',
+    filterMode: 'session',
+    viewMode: 'explore',
+    title: 'Session comparison',
     content:
-      'Rename, archive, unarchive, or safely delete sessions when QUERY access is available.',
+      'Select multiple runs and open compare mode to review range and edge-signal results side by side.',
     side: 'right',
     align: 'start',
-    condition: () => Boolean(document.querySelector('[data-tour="session-actions"]'))
+    condition: () => Boolean(document.querySelector('[data-tour="session-compare-bar"]'))
   },
 
   // 4) Playback
@@ -202,6 +232,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'playback',
     selector: '[data-tour="playback-controls"]',
     tab: 'playback',
+    viewMode: 'playback',
     title: 'Playback controls',
     content:
       'Replay a selected session timeline with play/pause, speed, and window controls.',
@@ -213,20 +244,10 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'playback',
     selector: '[data-tour="playback-scrubber"]',
     tab: 'playback',
+    viewMode: 'playback',
     title: 'Playback scrubber',
     content:
       'Drag the scrubber to inspect any timestamp in the selected session.',
-    side: 'left',
-    align: 'start'
-  },
-  {
-    id: 'playback-speed',
-    section: 'playback',
-    selector: '[data-tour="playback-speed"]',
-    tab: 'playback',
-    title: 'Playback speed',
-    content:
-      'Change replay speed from slow review to fast scan.',
     side: 'left',
     align: 'start'
   },
@@ -237,9 +258,10 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'coverage',
     selector: '[data-tour="coverage-toggle"]',
     tab: 'coverage',
+    viewMode: 'explore',
     title: 'Coverage toggle',
     content:
-      'Toggle between raw points and aggregated coverage.',
+      'Use Points for raw path review, then switch to Coverage to see aggregated range patterns.',
     side: 'left',
     align: 'start'
   },
@@ -248,9 +270,11 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'coverage',
     selector: '[data-tour="coverage-metric"]',
     tab: 'coverage',
+    viewMode: 'explore',
+    mapLayerMode: 'coverage',
     title: 'Coverage metric',
     content:
-      'Choose the metric used to color coverage bins.',
+      'Set scope (device/session), choose bins or heatmap, and pick the metric used for coloring.',
     side: 'left',
     align: 'start'
   },
@@ -259,9 +283,23 @@ const TOUR_STEPS: TourStepSpec[] = [
     section: 'coverage',
     selector: '[data-tour="coverage-legend"]',
     tab: 'coverage',
+    viewMode: 'explore',
+    mapLayerMode: 'coverage',
     title: 'Coverage legend',
     content:
       'Read the current color buckets for the selected coverage metric.',
+    side: 'left',
+    align: 'start'
+  },
+  {
+    id: 'coverage-compare',
+    section: 'coverage',
+    selector: '[data-tour="gateway-receiver-compare"]',
+    tab: 'coverage',
+    viewMode: 'explore',
+    title: 'Receiver/gateway analysis',
+    content:
+      'Filter and compare gateways or receivers to isolate path quality differences in your test area.',
     side: 'left',
     align: 'start'
   },
@@ -273,18 +311,7 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="right-panel"]',
     title: 'Stats overview',
     content:
-      'Point Details and Stats summarize the active map selection and filtered dataset.',
-    side: 'left',
-    align: 'start'
-  },
-  {
-    id: 'stats-compare',
-    section: 'stats',
-    selector: '[data-tour="gateway-receiver-compare"]',
-    tab: 'coverage',
-    title: 'Gateway/Receiver compare',
-    content:
-      'Compare controls filter by gateway or receiver and support side-by-side analysis.',
+      'Point Details and Stats summarize the selected point and the currently filtered dataset.',
     side: 'left',
     align: 'start'
   },
@@ -306,35 +333,35 @@ const TOUR_STEPS: TourStepSpec[] = [
     selector: '[data-tour="shortcuts-help"]',
     title: 'Keyboard shortcuts',
     content:
-      'This panel lists available keyboard shortcuts for sidebar and playback navigation.',
+      'This help menu lists shortcuts and gives you Start tour / Reset tour controls any time.',
     side: 'left',
     align: 'start'
   },
 
   // 8) Debug (optional)
   {
+    id: 'debug-events-explorer',
+    section: 'debug',
+    selector: '[data-tour="events-explorer"]',
+    tab: 'debug',
+    title: 'Events explorer',
+    content:
+      'Filter raw ingest events, inspect payload details, and recover a session from selected events when needed.',
+    side: 'left',
+    align: 'start',
+    condition: () => Boolean(document.querySelector('[data-tour="events-explorer"]'))
+  },
+  {
     id: 'debug-events',
     section: 'debug',
     selector: '[data-tour="debug-events"]',
     tab: 'debug',
-    title: 'Debug events',
+    title: 'Live ingest panels',
     content:
-      'Inspect recent ingest events and processing errors for troubleshooting.',
+      'Use these live event streams for quick troubleshooting of recent ingest and decode issues.',
     side: 'left',
     align: 'start',
     condition: () => Boolean(document.querySelector('[data-tour="debug-events"]'))
-  },
-  {
-    id: 'debug-gateways',
-    section: 'debug',
-    selector: '[data-tour="debug-gateways"]',
-    tab: 'debug',
-    title: 'Receiver and gateway stats',
-    content:
-      'Gateway and receiver stats help validate source behavior in the current scope.',
-    side: 'left',
-    align: 'start',
-    condition: () => Boolean(document.querySelector('[data-tour="debug-gateways"]'))
   }
 ];
 
@@ -343,6 +370,27 @@ function setActiveTab(tab: TourSidebarTabKey | undefined): void {
     return;
   }
   window.tourSetActiveTab?.(tab);
+}
+
+function setFilterMode(mode: TourFilterModeKey | undefined): void {
+  if (!mode || typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetFilterMode?.(mode);
+}
+
+function setViewMode(mode: TourViewModeKey | undefined): void {
+  if (!mode || typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetViewMode?.(mode);
+}
+
+function setMapLayerMode(mode: TourMapLayerModeKey | undefined): void {
+  if (!mode || typeof window === 'undefined') {
+    return;
+  }
+  window.tourSetMapLayerMode?.(mode);
 }
 
 function setHelpPopoverOpen(open: boolean): void {
@@ -371,6 +419,9 @@ function resolveStepTarget(step: TourStepSpec): Element | null {
     return null;
   }
   setActiveTab(step.tab);
+  setFilterMode(step.filterMode);
+  setViewMode(step.viewMode);
+  setMapLayerMode(step.mapLayerMode);
   if (step.section === 'shortcuts') {
     setHelpPopoverOpen(true);
   }
@@ -388,10 +439,14 @@ function resolveStepTarget(step: TourStepSpec): Element | null {
 }
 
 function shouldIncludeStep(step: TourStepSpec): boolean {
+  const target = resolveStepTarget(step);
+  if (!target) {
+    return false;
+  }
   if (step.condition && !step.condition()) {
     return false;
   }
-  return resolveStepTarget(step) !== null;
+  return true;
 }
 
 function buildDriveStep(step: TourStepSpec): DriveStep {
@@ -423,6 +478,9 @@ export function buildCoreTourPlan(): TourPlan {
   }
 
   const previousTab = window.tourGetActiveTab?.() ?? null;
+  const previousFilterMode = window.tourGetFilterMode?.() ?? null;
+  const previousViewMode = window.tourGetViewMode?.() ?? null;
+  const previousMapLayerMode = window.tourGetMapLayerMode?.() ?? null;
   const previousHelpPopoverOpen = window.tourGetHelpPopoverOpen?.() ?? null;
   const previousRightPanelExpanded = window.tourGetRightPanelExpanded?.() ?? null;
   const steps: DriveStep[] = [];
@@ -442,6 +500,15 @@ export function buildCoreTourPlan(): TourPlan {
 
   if (previousTab) {
     setActiveTab(previousTab);
+  }
+  if (previousFilterMode) {
+    setFilterMode(previousFilterMode);
+  }
+  if (previousViewMode) {
+    setViewMode(previousViewMode);
+  }
+  if (previousMapLayerMode) {
+    setMapLayerMode(previousMapLayerMode);
   }
   if (typeof previousHelpPopoverOpen === 'boolean') {
     setHelpPopoverOpen(previousHelpPopoverOpen);

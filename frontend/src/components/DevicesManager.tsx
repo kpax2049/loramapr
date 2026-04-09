@@ -391,6 +391,7 @@ export default function DevicesManager({
         isTightLayout ? ' devices-manager--tight' : ''
       }`}
       aria-label="Device list and actions"
+      data-tour="devices-manager"
     >
       <div className="devices-manager__toolbar">
         <input
