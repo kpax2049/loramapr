@@ -2,10 +2,10 @@
 
 ## Components
 
-- Frontend (`frontend/`): React + Vite UI (map, sessions, playback, coverage, debug panels).
+- Frontend (`frontend/`): React + Vite UI (map, device manager, sessions, playback, coverage, events explorer, debug panels).
 - Backend API (`src/modules/*`): NestJS HTTP API for ingestion, querying, sessions, devices, and exports.
 - PostgreSQL: primary datastore for `Device`, `Session`, `Measurement`, `RxMetadata`, `WebhookEvent`, `CoverageBin`, and related models.
-- Webhook worker (`LorawanService`): background processor for queued `WebhookEvent` rows (`source` in `tts|meshtastic`) into canonical measurements.
+- Webhook worker (`LorawanService`): background processor for queued `WebhookEvent` rows from ingest sources into canonical measurements.
 - Coverage worker (`CoverageService`): background aggregation of measurements into `CoverageBin`.
 - Pi Forwarder (`apps/pi-forwarder`): edge process forwarding Meshtastic JSON events to backend.
 - Home Auto Session (HAS) agent (`scripts/home-session-agent.ts`): polling automation for geofence-driven start/stop coverage runs.
@@ -15,7 +15,7 @@
 ### LoRaWAN
 
 1. TTS webhook hits `POST /api/lorawan/uplink`.
-2. Backend enqueues raw payload into `WebhookEvent` (`source: 'tts'`, `eventType: 'uplink'`).
+2. Backend enqueues raw payload into `WebhookEvent` (`source: 'lorawan'`, `eventType: 'uplink'`).
 3. `LorawanService` worker claims unprocessed events.
 4. Worker normalizes payload and writes canonical rows via `MeasurementsService.ingestCanonical(...)`.
 5. Data lands in `Measurement` (+ `RxMetadata` rows when `rxMetadata` is present).
@@ -53,7 +53,7 @@ HAS agent loop:
 flowchart LR
   subgraph LoRaWAN
     TTS[The Things Stack Webhook] --> UPLINK["POST /api/lorawan/uplink"]
-    UPLINK --> WEVT1[(WebhookEvent source=tts)]
+    UPLINK --> WEVT1[(WebhookEvent source=lorawan)]
   end
 
   subgraph Meshtastic

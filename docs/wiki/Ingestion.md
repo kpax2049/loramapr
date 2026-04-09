@@ -219,6 +219,8 @@ Raw Events Explorer:
 
 - `GET /api/events`
 - `GET /api/events/:id`
+- `POST /api/events/recover-session/preview`
+- `POST /api/events/recover-session`
 
 List endpoint pagination and limits:
 
@@ -246,6 +248,13 @@ RxMetadata-derived receiver/gateway lists (QUERY scope):
   - response: `{ items, count, limit }`
 
 These debug endpoints require `X-API-Key` with `QUERY` scope (frontend typically via `VITE_QUERY_API_KEY`).
+
+Recovered-session workflow notes:
+
+- In Debug -> Events, operators can multi-select rows and create a recovered session.
+- `preview` validates the selected event range and returns eligibility/warnings.
+- `recover-session` creates a session and attaches recoverable events to that session.
+- This is intended for recovery/debug workflows when normal session capture was missed or interrupted.
 
 ## 5) Raw payload retention note (v0.10.0)
 

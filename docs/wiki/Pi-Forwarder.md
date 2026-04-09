@@ -8,9 +8,9 @@ For standard fixed-base + field-node coverage mapping, run this service on a Lin
 
 - Fixed-location node: receives packets from your field node
 - Receiver host: runs the Receiver service (`Pi Forwarder`)
-- Network: receiver host must reach your LoRaMapr Cloud endpoint (or self-hosted API endpoint)
+- Network: receiver host must reach your self-hosted LoRaMapr API endpoint
 
-The Receiver service ingests Meshtastic data from your fixed-location node and forwards it to LoRaMapr Cloud, where sessions, playback, and coverage maps are generated.
+The Receiver service ingests Meshtastic data from your fixed-location node and forwards it to your LoRaMapr deployment, where sessions, playback, and coverage maps are generated.
 
 Baseline:
 

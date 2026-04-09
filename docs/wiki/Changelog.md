@@ -8,6 +8,12 @@ For releases with dedicated notes files, those files are linked directly.
 - Use your repository milestones/issues board for planned work.
 - For release-specific details, start with the entries below and linked docs.
 
+## v1.2.13 (2026-04-09)
+
+- Onboarding tour refresh: updated step targets/copy/order to match current UI, including status strip, device manager, session comparison, and events explorer coverage.
+- Tour gating hardening: tour now switches required UI state (`filterMode`, `viewMode`, `mapLayerMode`) so major sections do not silently disappear based on prior state.
+- Wiki refresh pass: updated self-hosted wording, fixed CORS docs, and added a dedicated UI workflow reference page.
+
 ## v1.2.0 (2026-04-03)
 
 - Session Comparison release: added a dedicated compare workflow from Sessions for selecting and comparing `2-4` runs together.

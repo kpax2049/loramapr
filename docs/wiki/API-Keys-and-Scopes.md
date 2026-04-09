@@ -48,6 +48,11 @@ These endpoints are read/admin/debug/export style operations:
 - `GET /api/meshtastic/events`
 - `GET /api/meshtastic/events/:id`
 - `GET /api/meshtastic/receivers`
+- Unified events explorer APIs:
+- `GET /api/events`
+- `GET /api/events/:id`
+- `POST /api/events/recover-session/preview`
+- `POST /api/events/recover-session`
 - Device admin/agent config APIs:
 - `PATCH /api/devices/:id`
 - `DELETE /api/devices/:id`
@@ -62,6 +67,7 @@ These endpoints are read/admin/debug/export style operations:
 - `GET /api/gateways/:gatewayId/stats`
 - `GET /api/receivers`
 - `GET /api/export/session/:sessionId.geojson`
+- `GET /api/status`
 
 ## UI vs scope usage
 
@@ -72,8 +78,9 @@ Current frontend behavior (`frontend/src/api/endpoints.ts`):
 - `/api/measurements`, `/api/tracks`, `/api/stats`, `/api/coverage/bins`
 - `/api/sessions`, `/api/sessions/start`, `/api/sessions/stop`, `/api/sessions/:id`, `/api/sessions/:id/timeline`, `/api/sessions/:id/window`
 - QUERY-protected UI features attach `X-API-Key` from `VITE_QUERY_API_KEY`:
-- debug panels (`/api/lorawan/*`, `/api/meshtastic/events*`)
+- debug panels (`/api/lorawan/*`, `/api/meshtastic/events*`, `/api/events*`)
 - gateway/receiver endpoints
+- system status (`/api/status`)
 - device/session admin mutations and auto-session config
 
 Note: `OwnerGuard` is currently permissive (TODO auth), so several read endpoints are not API-key protected yet.
@@ -85,7 +92,7 @@ Note: `OwnerGuard` is currently permissive (TODO auth), so several read endpoint
 - Keep `QUERY` keys scoped to trusted operator UIs; avoid exposing them on public internet deployments.
 - Rotate keys regularly and immediately on suspected leak.
 - Mint distinct keys per component/use-case and label them clearly.
-- For cloud hosting, require HTTPS/TLS end-to-end so keys are never sent over plaintext HTTP.
+- For any internet-exposed self-hosted deployment, require HTTPS/TLS end-to-end so keys are never sent over plaintext HTTP.
 
 Useful key mint command:
 
@@ -98,16 +105,22 @@ npm run apikey:mint -- --scopes QUERY --label "ops-ui"
 
 CORS is enabled in `src/main.ts` with:
 
-- `origin`: `FRONTEND_ORIGIN` or `CORS_ORIGIN` (comma-separated), otherwise localhost regex fallback
-- `credentials: true`
-- `allowedHeaders`: `X-API-Key`, `Content-Type`
-- `methods`: `GET`, `POST`, `PATCH`, `OPTIONS`
+- allowlist env: `CORS_ORIGINS` (comma-separated origins)
+- production behavior:
+  - if request has no `Origin` header, allow
+  - if `Origin` exists, allow only when it matches `CORS_ORIGINS`
+  - if `CORS_ORIGINS` is empty, cross-origin browser requests are denied
+- non-production behavior:
+  - permissive for browser origins (developer convenience)
+- `credentials: false`
+- `allowedHeaders`: `X-API-Key`, `Content-Type`, `Authorization`
+- `methods`: `GET`, `HEAD`, `PUT`, `PATCH`, `POST`, `DELETE`, `OPTIONS`
 
-Implications for browser clients:
+Operational note:
 
-- Cross-origin `PUT`/`DELETE` requests are not currently listed in allowed methods.
-- Cross-origin custom headers beyond the allowed list (for example `X-Confirm-Delete`, `X-Idempotency-Key`) are not currently listed.
-- If you split frontend/backend across origins and need those operations from browser, update CORS config accordingly.
+- For production self-hosting, explicitly set `CORS_ORIGINS` to your UI origin(s), for example:
+  - `CORS_ORIGINS=https://map.example.com`
+  - `CORS_ORIGINS=https://map.example.com,https://ops.example.com`
 
 ## Special case: LoRaWAN webhook auth
 

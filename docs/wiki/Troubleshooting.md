@@ -29,6 +29,8 @@ How to use it:
 ```bash
 # Example: search backend container logs for one request ID
 docker compose logs backend --since=30m --no-log-prefix | rg "req-12345"
+# For production compose:
+docker compose -f docker-compose.prod.yml logs api --since=30m --no-log-prefix | rg "req-12345"
 ```
 
 If you run backend locally with `npm run start:dev`, search your terminal output for the same request id.
@@ -279,7 +281,7 @@ curl -s -H "X-API-Key: $QUERY_API_KEY" \
 
 Symptoms:
 
-- backend startup failures
+- backend/api startup failures
 - `readyz` returns `503`
 - Prisma connection errors
 
@@ -289,6 +291,8 @@ Checks:
 docker compose ps
 docker compose logs postgres -n 200 --no-log-prefix
 docker compose logs backend -n 200 --no-log-prefix
+# For production compose:
+docker compose -f docker-compose.prod.yml logs api -n 200 --no-log-prefix
 curl -i http://localhost:3000/readyz
 ```
 
@@ -296,11 +300,14 @@ Fixes:
 
 - Ensure Postgres container is healthy and reachable in compose network.
 - Ensure `.env` has valid `DATABASE_URL` for containerized backend (`@postgres:5432` host in compose).
-- Re-run migration service and restart stack if schema/app drift exists:
+- Restart stack and inspect API startup migration output (`api-entrypoint`) if schema/app drift exists:
 
 ```bash
 docker compose up -d --build
-docker compose logs migrate -n 100 --no-log-prefix
+docker compose logs backend -n 120 --no-log-prefix | rg "api-entrypoint|prisma migrate|Waiting for database"
+# For production compose:
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs api -n 120 --no-log-prefix | rg "api-entrypoint|prisma migrate|Waiting for database"
 ```
 
 If you suspect local dev DB drift:
@@ -313,7 +320,7 @@ npx prisma migrate status
 
 Symptoms:
 
-- `migrate` service exits with code 1 during `docker compose up -d`
+- `backend` (dev compose) or `api` (prod compose) exits during `docker compose up -d`
 - Prisma error: `P1001: Can't reach database server at localhost:5432`
 
 Why this happens:
@@ -323,13 +330,15 @@ Why this happens:
 Checks:
 
 ```bash
-docker compose logs migrate --no-log-prefix --tail=200
+docker compose logs backend --no-log-prefix --tail=200
+# For production compose:
+docker compose -f docker-compose.prod.yml logs api --no-log-prefix --tail=200
 grep '^DATABASE_URL=' .env
 ```
 
 Fixes:
 
-- For docker compose backend/migrate, use service host `postgres`:
+- For docker compose backend/api, use service host `postgres`:
 
 ```bash
 # macOS
@@ -337,7 +346,11 @@ sed -i '' 's#^DATABASE_URL=.*#DATABASE_URL=postgresql://postgres:postgres@postgr
 
 docker compose down
 docker compose up -d --build
-docker compose logs migrate --no-log-prefix --tail=80
+docker compose logs backend --no-log-prefix --tail=80
+# For production compose:
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs api --no-log-prefix --tail=80
 ```
 
 - For host-run backend (`npm run start:dev`), use `localhost` instead:

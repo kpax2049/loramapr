@@ -1,36 +1,38 @@
 # LoRaMapr Wiki
 
-LoRaMapr maps real-world coverage around a fixed location with Meshtastic devices.
+LoRaMapr is a self-hosted app for recording, replaying, and analyzing real-world radio coverage.
 
-Position one node at that location, use a second field node to explore the surrounding area, and build coverage maps from real packet data.
+Primary workflow: fixed base + mobile field testing (commonly home node + field node).
 
-By recording the same route multiple times, you can compare antennas, placement, and other setup changes under real-world conditions.
+Ingestion paths currently documented in this wiki:
 
-Best fit: fixed base + mobile field testing (most commonly a home node + field node).
+- Meshtastic via Pi Forwarder (`POST /api/meshtastic/event`)
+- LoRaWAN via TTS webhook (`POST /api/lorawan/uplink`)
 
-Home Auto Session (HAS) is the supporting automation workflow for repeated home-node + field-node coverage runs.
+Core product workflows include sessions, playback, coverage (bins/heatmap), session comparison, events explorer debugging, device management, and GeoJSON export.
 
 ## Start Here
 
 - [[Quickstart]]
-- [[Coverage-and-Heatmaps|Coverage and Heatmaps]]
-- [[Architecture]]
-- [[Data-Model|Data Model]]
+- [[Deploy-Self-Hosted|Deploy Self Hosted]]
+- [[UI-Workflows|UI Workflows]]
 - [[Ingestion]]
+- [[Coverage-and-Heatmaps|Coverage and Heatmaps]]
+- [[Playback-and-Time|Playback and Time]]
 
 ## Operations
 
-- [[Deploy-Self-Hosted|Deploy Self Hosted]]
+- [[API-Keys-and-Scopes|API Keys and Scopes]]
 - [[Backup-Restore|Backup Restore]]
+- [[Data-Retention|Data Retention]]
 - [[Troubleshooting]]
 
-## Components
+## Product Components
 
 - [[Pi-Forwarder|Pi Forwarder]]
 - [[Hands-Free-Sessions|Home Auto Session (HAS)]]
-- [[Playback-and-Time|Playback and Time]]
-- [[Coverage-and-Heatmaps|Coverage and Heatmaps]]
-- [[API-Keys-and-Scopes|API Keys and Scopes]]
+- [[Architecture]]
+- [[Data-Model|Data Model]]
 
 ## Release History
 

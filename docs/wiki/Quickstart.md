@@ -16,9 +16,9 @@ For the standard home/base + field-node workflow, you need:
 - one node left at a fixed location (home/base/relay)
 - one field node for walks or drives
 - a Linux machine or Raspberry Pi at the fixed location running the Receiver service (`Pi Forwarder`)
-- network access from that Receiver host to your LoRaMapr Cloud endpoint (or self-hosted API endpoint)
+- network access from that Receiver host to your self-hosted LoRaMapr API endpoint
 
-The Receiver service ingests Meshtastic packets from your fixed-location node and forwards them to LoRaMapr Cloud for sessions, playback, and coverage maps.
+The Receiver service ingests Meshtastic packets from your fixed-location node and forwards them to your LoRaMapr deployment for sessions, playback, and coverage maps.
 
 Receiver host baseline:
 
@@ -79,6 +79,18 @@ make up
 - Health: `http://localhost:3000/health`
 - Healthz: `http://localhost:3000/healthz`
 - Readiness: `http://localhost:3000/readyz`
+
+## First product pass (recommended)
+
+After first startup:
+
+1. Open **Device** tab and select a device.
+2. Open **Sessions** tab and start/stop a test run.
+3. Open **Playback** tab to scrub a recorded run.
+4. Open **Coverage** tab for bins/heatmap and receiver/gateway analysis.
+5. Open **Debug -> Events** to inspect raw packets when data looks wrong.
+
+For detailed UI behavior (device manager, session comparison, export, tour/help), see [[UI-Workflows|UI Workflows]].
 
 ### 6) Optional: enable Home Auto Session (HAS)
 
