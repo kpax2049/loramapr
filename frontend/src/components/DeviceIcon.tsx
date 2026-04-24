@@ -1,17 +1,15 @@
-import type { ComponentType } from 'react';
-import {
-  IconAccessPoint,
-  IconAntennaBars5,
-  IconCircuitCapacitor,
-  IconCpu,
-  IconHelpCircle,
-  IconHomeSignal,
-  IconMapPin,
-  IconMapPinBolt,
-  IconPhone,
-  IconRadio,
-  IconSatellite
-} from '@tabler/icons-react';
+import type { ComponentType, CSSProperties } from 'react';
+import autoIconUrl from '../assets/device-icons/auto.png';
+import gatewayIconUrl from '../assets/device-icons/gateway.png';
+import heltecIconUrl from '../assets/device-icons/heltec.png';
+import homeIconUrl from '../assets/device-icons/home.png';
+import nodeIconUrl from '../assets/device-icons/node.png';
+import phoneIconUrl from '../assets/device-icons/phone.png';
+import rakIconUrl from '../assets/device-icons/rak.png';
+import tbeamIconUrl from '../assets/device-icons/tbeam.png';
+import trackerIconUrl from '../assets/device-icons/tracker.png';
+import unknownIconUrl from '../assets/device-icons/unknown.png';
+import wioIconUrl from '../assets/device-icons/wio.png';
 
 export type DeviceIdentityInput = {
   deviceUid?: string | null;
@@ -54,18 +52,100 @@ export type DeviceIconDefinition = {
   badgeText: string | null;
 };
 
+function createMaskIcon(src: string): DeviceIconComponent {
+  function MaskDeviceIcon({
+    className,
+    'aria-hidden': ariaHidden
+  }: {
+    size?: string | number;
+    stroke?: string | number;
+    className?: string;
+    'aria-hidden'?: boolean;
+  }) {
+    const style: CSSProperties = {
+      WebkitMaskImage: `url(${src})`,
+      maskImage: `url(${src})`
+    };
+
+    return (
+      <span
+        className={['device-icon-mask', className].filter(Boolean).join(' ')}
+        style={style}
+        aria-hidden={ariaHidden}
+      />
+    );
+  }
+
+  return MaskDeviceIcon;
+}
+
 export const DEVICE_ICON_REGISTRY: Record<DeviceIconKey, DeviceIconDefinition> = {
-  auto: { key: 'auto', label: 'Auto resolve', badgeText: null, IconComponent: IconMapPinBolt },
-  unknown: { key: 'unknown', label: 'Unknown device', badgeText: null, IconComponent: IconHelpCircle },
-  heltec: { key: 'heltec', label: 'Heltec', badgeText: 'HL', IconComponent: IconRadio },
-  tbeam: { key: 'tbeam', label: 'LilyGO T-Beam', badgeText: 'TB', IconComponent: IconSatellite },
-  rak: { key: 'rak', label: 'RAK/WisBlock', badgeText: 'RAK', IconComponent: IconAntennaBars5 },
-  wio: { key: 'wio', label: 'Wio', badgeText: 'WIO', IconComponent: IconCircuitCapacitor },
-  tracker: { key: 'tracker', label: 'Tracker/client', badgeText: 'TRK', IconComponent: IconMapPin },
-  gateway: { key: 'gateway', label: 'Gateway', badgeText: 'GW', IconComponent: IconAccessPoint },
-  node: { key: 'node', label: 'Node', badgeText: 'ND', IconComponent: IconCpu },
-  phone: { key: 'phone', label: 'Phone', badgeText: 'PH', IconComponent: IconPhone },
-  home: { key: 'home', label: 'Home node', badgeText: 'HM', IconComponent: IconHomeSignal }
+  auto: {
+    key: 'auto',
+    label: 'Auto resolve',
+    badgeText: null,
+    IconComponent: createMaskIcon(autoIconUrl)
+  },
+  unknown: {
+    key: 'unknown',
+    label: 'Unknown device',
+    badgeText: null,
+    IconComponent: createMaskIcon(unknownIconUrl)
+  },
+  heltec: {
+    key: 'heltec',
+    label: 'Heltec',
+    badgeText: 'HL',
+    IconComponent: createMaskIcon(heltecIconUrl)
+  },
+  tbeam: {
+    key: 'tbeam',
+    label: 'LilyGO T-Beam',
+    badgeText: 'TB',
+    IconComponent: createMaskIcon(tbeamIconUrl)
+  },
+  rak: {
+    key: 'rak',
+    label: 'RAK/WisBlock',
+    badgeText: 'RAK',
+    IconComponent: createMaskIcon(rakIconUrl)
+  },
+  wio: {
+    key: 'wio',
+    label: 'Wio',
+    badgeText: 'WIO',
+    IconComponent: createMaskIcon(wioIconUrl)
+  },
+  tracker: {
+    key: 'tracker',
+    label: 'Tracker/client',
+    badgeText: 'TRK',
+    IconComponent: createMaskIcon(trackerIconUrl)
+  },
+  gateway: {
+    key: 'gateway',
+    label: 'Gateway',
+    badgeText: 'GW',
+    IconComponent: createMaskIcon(gatewayIconUrl)
+  },
+  node: {
+    key: 'node',
+    label: 'Node',
+    badgeText: 'ND',
+    IconComponent: createMaskIcon(nodeIconUrl)
+  },
+  phone: {
+    key: 'phone',
+    label: 'Phone',
+    badgeText: 'PH',
+    IconComponent: createMaskIcon(phoneIconUrl)
+  },
+  home: {
+    key: 'home',
+    label: 'Home node',
+    badgeText: 'HM',
+    IconComponent: createMaskIcon(homeIconUrl)
+  }
 };
 
 export const DEVICE_ICON_CATALOG: DeviceIconDefinition[] = DEVICE_ICON_KEYS.map(

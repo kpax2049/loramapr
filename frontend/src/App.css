@@ -585,6 +585,24 @@
 .device-identity-icon__glyph {
   width: 0.9rem;
   height: 0.9rem;
+  display: block;
+}
+
+.device-icon-mask {
+  flex: 0 0 auto;
+  display: block;
+  background: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+
+.device-identity-icon__glyph.device-icon-mask {
+  width: 1.08rem;
+  height: 1.08rem;
 }
 
 .device-identity-icon__badge {
@@ -6450,6 +6468,11 @@
   transform: translateZ(0);
 }
 
+.lm-device-marker__icon.device-icon-mask {
+  width: 72%;
+  height: 72%;
+}
+
 .lm-device-marker__status {
   position: absolute;
   top: -0.14rem;
@@ -6752,8 +6775,13 @@
 }
 
 .device-icon-gallery__card .device-identity-icon {
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 4rem;
+  height: 4rem;
+}
+
+.device-icon-gallery__card .device-identity-icon__glyph.device-icon-mask {
+  width: 3.2rem;
+  height: 3.2rem;
 }
 
 .device-icon-gallery__card-title {

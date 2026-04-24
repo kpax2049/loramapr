@@ -48,7 +48,11 @@ export default function DeviceIconGallery() {
         <div className="device-icon-gallery__grid">
           {DEVICE_ICON_CATALOG.map((family) => (
             <article key={family.key} className="device-icon-gallery__card">
-              <DeviceIcon device={FAMILY_PREVIEW_INPUTS[family.key]} title={family.label} />
+              <DeviceIcon
+                device={FAMILY_PREVIEW_INPUTS[family.key]}
+                iconKey={family.key}
+                title={family.label}
+              />
               <div className="device-icon-gallery__card-title">{family.label}</div>
               <div className="device-icon-gallery__card-subtitle">
                 {family.badgeText ? `badge: ${family.badgeText}` : 'badge: none'}
