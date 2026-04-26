@@ -314,7 +314,9 @@ export default function DeviceIcon({
   const resolvedKey = iconKey ?? getEffectiveIconKey(device);
   const iconDefinition = getDeviceIconDefinition(resolvedKey);
   const iconTitle = title ?? iconDefinition.label;
-  const classes = ['device-identity-icon', className].filter(Boolean).join(' ');
+  const classes = ['device-identity-icon', 'device-identity-icon--mask', className]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <span className={classes} title={iconTitle} aria-hidden="true">
